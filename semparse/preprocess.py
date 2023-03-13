@@ -66,11 +66,13 @@ def encode_dataset(dataset, vocab, tokenizer, test = False):
             programs.append(program)
             answers.append(vocab['answer_token_to_idx'].get(item['answer']))
 
-    input_ids = tokenizer.batch_encode_plus(questions, max_length = max_seq_length, pad_to_max_length = True, truncation = True)
+    input_ids = tokenizer(questions, padding='max_length', max_length=max_seq_length, truncation=True)
+    # input_ids = tokenizer.batch_encode_plus(questions, max_length = max_seq_length, pad_to_max_length = True, truncation = True)
     source_ids = np.array(input_ids['input_ids'], dtype = np.int32)
     source_mask = np.array(input_ids['attention_mask'], dtype = np.int32)
     if not test:
-        target_ids = tokenizer.batch_encode_plus(programs, max_length = max_seq_length, pad_to_max_length = True, truncation = True)
+        target_ids = tokenizer(programs, padding='max_length', max_length=max_seq_length, truncation=True)
+        # target_ids = tokenizer.batch_encode_plus(programs, max_length = max_seq_length, pad_to_max_length = True, truncation = True)
         target_ids = np.array(target_ids['input_ids'], dtype = np.int32)
     else:
         target_ids = np.array([], dtype = np.int32)
