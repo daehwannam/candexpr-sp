@@ -1,0 +1,5 @@
+transformers==4.16.2
+sentencepiece==0.1.97
+kopl==0.0.5
+nltk==3.8.1
+termcolor==2.2.0

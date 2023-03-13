@@ -1,0 +1,71 @@
+
+* Base directory
+#+begin_src sh
+if [ ! -d '.git' ]; then
+    echo 'The current directory is NOT the project root.'
+fi
+#+end_src
+
+* Setup
+** Dataset
+#+begin_src sh
+DOWNLOAD_PATH=../download
+DATA_PATH=../data
+
+wget -P $DOWNLOAD_PATH https://cloud.tsinghua.edu.cn/seafhttp/files/86d59269-0621-47b9-98b2-cf6909f5d06d/KQAPro.IID.zip
+unzip $DOWNLOAD_PATH/KQAPro.IID.zip -d $DATA_PATH
+ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset
+#+end_src
+
+** Pre-trained model
+#+begin_src sh
+DOWNLOAD_PATH=../download
+PRETRAINED_PATH=../pretrained
+
+wget -P $DOWNLOAD_PATH https://cloud.tsinghua.edu.cn/seafhttp/files/50719726-7d3f-48e8-b3a8-15a2b84f8d86/bart-base.zip
+unzip $DOWNLOAD_PATH/bart-base.zip -d $PRETRAINED_PATH
+ln -s $(realpath $PRETRAINED_PATH) ./pretrained
+#+end_src
+
+** Environment
+#+begin_src sh
+ENV_NAME=kqapro
+conda create -y -n $ENV_NAME python=3
+conda activate $ENV_NAME
+
+# pytorch for CUDA 11.6
+pip install torch==1.12.0+cu116 torchvision==0.13.0+cu116 torchaudio==0.12.0 --extra-index-url https://download.pytorch.org/whl/cu116
+pip install -r requirements.txt
+#+end_src
+
+* Running
+** Common configuration
+#+begin_src sh
+MODULE=semparse
+DATE=$(date '+%Y-%m-%d_%H=%M=%S')
+
+# MODEL_NAME_OR_PATH='facebook/bart-base'
+MODEL_NAME_OR_PATH=./pretrained/bart-base
+PROCESSED_PATH=./processed/bart-program
+OUTPUT_DIR_PATH=./output/bart-program-$DATE
+TRAIN_LOG_PATH=./log/bart-train-program-$DATE
+PREDICT_LOG_PATH=./log/bart-predict-program-$DATE
+#+end_src
+
+** Preprocessing
+#+begin_src sh
+python -m $MODULE.preprocess --input_dir ./dataset --output_dir $PROCESSED_PATH --model_name_or_path "$MODEL_NAME_OR_PATH"
+ln -s $(realpath ./dataset/kb.json) $PROCESSED_PATH/kb.json
+#+end_src
+
+** Training
+#+begin_src sh
+python -m $MODULE.train --input_dir $PROCESSED_PATH --output_dir $OUTPUT_DIR_PATH --save_dir $TRAIN_LOG_PATH --model_name_or_path "$MODEL_NAME_OR_PATH"
+#+end_src
+
+** Prediction
+#+begin_src sh
+CKPT_NUM=<number>
+CHECKPOINT_PATH=./checkpoint/bart-program-$DATE/checkpoint-$CKPT_NUM
+python -m $MODULE.predict --input_dir $PROCESSED_PATH --save_dir $PREDICT_LOG_PATH --ckpt $CHECKPOINT_PATH
+#+end_src
