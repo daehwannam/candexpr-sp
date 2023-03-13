@@ -12,7 +12,8 @@ fi
 DOWNLOAD_PATH=../download
 DATA_PATH=../data
 
-wget -P $DOWNLOAD_PATH https://cloud.tsinghua.edu.cn/seafhttp/files/86d59269-0621-47b9-98b2-cf6909f5d06d/KQAPro.IID.zip
+mkdir -p $DOWNLOAD_PATH
+wget -O $DOWNLOAD_PATH/KQAPro.IID.zip https://cloud.tsinghua.edu.cn/f/04ce81541e704a648b03/?dl=1
 unzip $DOWNLOAD_PATH/KQAPro.IID.zip -d $DATA_PATH
 ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset
 #+end_src
@@ -22,7 +23,7 @@ ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset
 DOWNLOAD_PATH=../download
 PRETRAINED_PATH=../pretrained
 
-wget -P $DOWNLOAD_PATH https://cloud.tsinghua.edu.cn/seafhttp/files/50719726-7d3f-48e8-b3a8-15a2b84f8d86/bart-base.zip
+wget -O $DOWNLOAD_PATH/bart-base.zip https://cloud.tsinghua.edu.cn/f/3b59ec6c43034cfc8841/?dl=1
 unzip $DOWNLOAD_PATH/bart-base.zip -d $PRETRAINED_PATH
 ln -s $(realpath $PRETRAINED_PATH) ./pretrained
 #+end_src
