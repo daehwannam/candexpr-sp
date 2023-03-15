@@ -7,16 +7,14 @@ import json
 import pickle
 import argparse
 import numpy as np
-from nltk import word_tokenize
-from collections import Counter
 from itertools import chain
 from tqdm import tqdm
-import re
 
-from utils.misc import init_vocab
-from transformers import *
+from transformers import BartTokenizer
+
 
 new_tokens = ['<func>', '<arg>']
+
 
 def get_program_seq(program):
     seq = []
@@ -29,6 +27,7 @@ def get_program_seq(program):
         seq.append(func + args)
     seq = ' <func> '.join(seq)
     return seq
+
 
 def encode_dataset(dataset, vocab, tokenizer, test = False):
     questions = []
@@ -81,7 +80,6 @@ def encode_dataset(dataset, vocab, tokenizer, test = False):
     return source_ids, source_mask, target_ids, choices, answers
 
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_dir', required=True)
@@ -122,5 +120,7 @@ def main():
             for o in outputs:
                 print(o.shape)
                 pickle.dump(o, f)
+
+
 if __name__ == '__main__':
     main()

@@ -1,7 +1,7 @@
 import json
 import pickle
 import torch
-from utils.misc import invert_dict
+from kqapro_utils.misc import invert_dict
 
 def load_vocab(path):
     vocab = json.load(open(path))

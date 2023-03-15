@@ -1,4 +1,10 @@
 
+* Project
+Initialize the project by:
+#+begin_src sh
+git submodule update --init --recursive
+#+end_src
+
 * Base directory
 #+begin_src sh
 if [ ! -d '.git' ]; then
@@ -43,7 +49,7 @@ pip install -r requirements.txt
 ** Common configuration
 #+begin_src sh
 MODULE=semparse
-DATE=$(date '+%Y-%m-%d_%H=%M=%S')
+DATE=$(date '+%Y-%m-%d_%H:%M:%S')
 
 # MODEL_NAME_OR_PATH='facebook/bart-base'
 MODEL_NAME_OR_PATH=./pretrained/bart-base
@@ -70,3 +76,6 @@ CKPT_NUM=<number>
 CHECKPOINT_PATH=./checkpoint/bart-program-$DATE/checkpoint-$CKPT_NUM
 python -m $MODULE.predict --input_dir $PROCESSED_PATH --save_dir $PREDICT_LOG_PATH --ckpt $CHECKPOINT_PATH
 #+end_src
+
+* Acknowledgements
+We thank to the authors of [[https://github.com/shijx12/][KQA Pro]] dataset. Our code also exploits the [[https://github.com/shijx12/KQAPro_Baselines][BART seq2seq program parser]] they released.

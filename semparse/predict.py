@@ -1,26 +1,28 @@
 import os
-import torch
+import time
 # import torch.optim as optim
 # import torch.nn as nn
 import argparse
 import json
+import re
+import warnings
+
+import torch
 from tqdm import tqdm
 # from datetime import date
-# from utils.misc import MetricLogger, seed_everything, ProgressBar
-from utils.misc import seed_everything
-from .data import DataLoader
+# from kqapro_utils.misc import MetricLogger, seed_everything, ProgressBar
 from transformers import BartConfig, BartForConditionalGeneration, BartTokenizer
 # import torch.optim as optim
-import logging
-import time
-# from utils.lr_scheduler import get_linear_schedule_with_warmup
-import re
+# from kqapro_utils.lr_scheduler import get_linear_schedule_with_warmup
 from kopl.kopl import KoPLEngine
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-8s %(message)s')
-logFormatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
-rootLogger = logging.getLogger()
-import warnings
-warnings.simplefilter("ignore")  # hide warnings that caused by invalid sparql query
+from kqapro_utils.misc import seed_everything
+
+from dhnamlib.pylib.filesys import make_logger
+
+from .data import DataLoader
+from utils import common
+
+# warnings.simplefilter("ignore")  # hide warnings that caused by invalid sparql query
 # from termcolor import colored
 
 
@@ -149,7 +151,7 @@ def validate(model, data, device, tokenizer, executor):
                 correct += 1
             count += 1
         acc = correct / count
-        logging.info('acc: {}'.format(acc))
+        common.logger.info('acc: {}'.format(acc))
 
         return acc
 
@@ -157,16 +159,16 @@ def validate(model, data, device, tokenizer, executor):
 def train(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    logging.info("Create train_loader and val_loader.........")
+    common.logger.info("Create train_loader and val_loader.........")
     vocab_json = os.path.join(args.input_dir, 'vocab.json')
     val_pt = os.path.join(args.input_dir, 'test.pt')
     val_loader = DataLoader(vocab_json, val_pt, args.batch_size)
-    logging.info("Create model.........")
+    common.logger.info("Create model.........")
     config_class, model_class, tokenizer_class = (BartConfig, BartForConditionalGeneration, BartTokenizer)
     tokenizer = tokenizer_class.from_pretrained(os.path.join(args.ckpt))
     model = model_class.from_pretrained(os.path.join(args.ckpt))
     model = model.to(device)
-    logging.info(model)
+    common.logger.info(model)
     engine = KoPLEngine(json.load(open(os.path.join(args.input_dir, 'kb.json'))))
     # validate(model, val_loader, device, tokenizer, engine)
 
@@ -194,13 +196,13 @@ def main():
 
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
-    time_ = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
-    fileHandler = logging.FileHandler(os.path.join(args.save_dir, '{}.predict.log'.format(time_)))
-    fileHandler.setFormatter(logFormatter)
-    rootLogger.addHandler(fileHandler)
+    current_time = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())
+
+    common.register(logger=make_logger('train', os.path.join(args.save_dir, '{}.log'.format(current_time))))
+
     # args display
     for k, v in vars(args).items():
-        logging.info(k+':'+str(v))
+        common.logger.info(k+':'+str(v))
 
     seed_everything(42)
 
