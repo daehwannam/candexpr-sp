@@ -1,15 +1,4 @@
-
-import re
 import functools
-
-
-# dsl-definition helper function
-split_lisp_regex = re.compile(r'([\(\)\[\] ])')
-
-
-def split_lisp(text):
-    tokens = split_lisp_regex.split(text)
-    return tuple(token for token in tokens if token)
 
 
 class LispFunc:

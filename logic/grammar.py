@@ -12,7 +12,8 @@ from dhnamlib.pylib.constant import Abstract
 
 # token
 class Action:
-    def __init__(self, name,
+    def __init__(self,
+                 name,
                  act_type,
                  param_types,
                  expr_dict: Dict[str, List[str]],
@@ -20,7 +21,7 @@ class Action:
                  rest_idx=None):
         self.name = name
 
-        assert isinstance(param_types, list)
+        assert isinstance(param_types, (list, tuple))
 
         self.act_type = act_type
         self.param_types = param_types
@@ -52,12 +53,13 @@ class Action:
 
 
 class Grammar:
-    def __init__(self, default_expr_key='default'):
+    def __init__(self, default_expr_key='default', placeholder_prefix='@'):
         self.default_expr_key = default_expr_key
         self.reduce_action = Action(name='reduce',
                                     act_type='<reduce>',
                                     param_types=[],
                                     expr_dict={self.default_expr_key: []})
+        self.placeholder_prefix = placeholder_prefix
 
     @staticmethod
     def check_action_name_overlap(actions):
@@ -229,6 +231,28 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
                 tree = tree.children[-1]
         return subtrees
 
+    def get_expr_str(self, expr_key=None):
+        if expr_key is None:
+            expr_key = self.grammar.default_expr_key
+
+        def get_expr_pieces(action):
+            return action.expr_dict.get(expr_key) or action.expr_dict.get(self.grammar.default_expr_key)
+            return action.expr_pieces
+
+        program_expr_pieces = []
+
+        def tree_to_pieces(tree):
+            for piece in get_expr_pieces(tree.value):
+                if piece.startswith(self.grammar.placeholder_prefix):
+                    param_idx = int(piece[1:])
+                    tree_to_pieces(tree.children[param_idx])
+                else:
+                    program_expr_pieces.append(piece)
+
+        tree_to_pieces(self)
+
+        return ''.join(program_expr_pieces)
+
 
 def make_program_tree_cls(grammar: Grammar, name=None):
     class NewProgramTree(ProgramTree):
@@ -240,29 +264,6 @@ def make_program_tree_cls(grammar: Grammar, name=None):
         NewProgramTree.__name__ = NewProgramTree.__qualname__ = name
 
     return NewProgramTree
-
-
-# compile implementations
-def tree_to_expr_str(program_tree: TreeStructure, expr_key, default_expr_key):
-
-    def get_expr_pieces(action):
-        return action.expr_dict.get(expr_key) or action.expr_dict.get(default_expr_key)
-        return action.expr_pieces
-
-    program_expr_pieces = []
-
-    def tree_to_pieces(tree):
-        for piece in get_expr_pieces(tree.value):
-            if piece.startswith('@'):
-                param_idx = int(piece[1:])
-                tree_to_pieces(tree.children[param_idx])
-            else:
-                program_expr_pieces.append(piece)
-
-    tree_to_pieces(program_tree)
-
-    return ''.join(program_expr_pieces)
-
 
 # search state
 class SearchState(metaclass=ABCMeta):

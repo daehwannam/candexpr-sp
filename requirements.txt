@@ -4,3 +4,5 @@ sentencepiece==0.1.97
 nltk==3.8.1
 termcolor==2.2.0
 bidict==0.22.1
+hissp==0.3.0
+# hy==0.26.0
