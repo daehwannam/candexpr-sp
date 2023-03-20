@@ -1,0 +1,12 @@
+
+* Contrained decoding
+** inference
+- [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_utils.py::def generate(][generate]]
+  - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_utils.py::def _get_logits_processor(][_get_logits_processor]]
+    - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_logits_process.py::class LogitsProcessorList(list):][LogitsProcessorList]]
+    - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_logits_process.py::class PrefixConstrainedLogitsProcessor(LogitsProcessor):][PrefixConstrainedLogitsProcessor]]
+  - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_utils.py::def greedy_search(][greedy_search]]
+  - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_utils.py::def beam_search(][beam_search]]
+
+** training (calculating loss)
+- [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/models/bart/modeling_bart.py::1291][forward]] of [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/models/bart/modeling_bart.py::class BartForConditionalGeneration(BartPretrainedModel):][BartForConditionalGeneration]]
