@@ -4,7 +4,8 @@
 import re
 from itertools import chain
 
-from dhnamlib.pylib.iteration import partition, split_by_indices
+from dhnamlib.pylib.iteration import split_by_indices
+from dhnamlib.pylib.lisp import parse_hy_args
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
 
@@ -68,19 +69,21 @@ def preprocess_quotes(text):
     region_index_pairs = tuple((i - 1, j + 1)for i, j in quoted_paren_index_pairs)
     region_start_indices = set(start for start, end in region_index_pairs)
     region_indices = sorted(set(chain(*region_index_pairs)))
-    regions = split_by_indices(text, region_indices)
-    new_regions = []
-    for start_idx, region in zip(chain([0], region_indices), regions):
+    splits = split_by_indices(text, region_indices)
+    regions = []
+    for start_idx, split in zip(chain([0], region_indices), splits):
         if start_idx in region_start_indices:
-            if region.startswith("'("):
-                new_region = '"{}"'.format(region[1:])
+            if split.startswith("'("):
+                # e.g. '(some symbols)
+                region = '"{}"'.format(split[1:])
             else:
-                assert region.startswith("'[")
-                new_region = "'({})".format(region[2:-1])
+                # e.g. '[some symbols]
+                assert split.startswith("'[")
+                region = "'({})".format(split[2:-1])
         else:
-            new_region = region
-        new_regions.append(new_region)
-    return ''.join(new_regions)
+            region = split
+        regions.append(region)
+    return ''.join(regions)
 
 
 split_lisp_regex = re.compile(r'([\(\)\[\] ])')
@@ -98,17 +101,19 @@ def read_dsl(file_path):
         text = preprocess_quotes(text)
         text = '(entuple {})'.format(text)
 
-    def get_kwargs(args):
-        return dict((k[1:], v) for k, v in partition(args, 2))
+    def parse_kwargs(symbols):
+        args, kwargs = parse_hy_args(symbols)
+        assert len(args) == 0
+        return kwargs
 
-    def make_action(*args):
-        kwargs = get_kwargs(args)
+    def make_action(*symbols):
+        kwargs = parse_kwargs(symbols)
         kwargs['expr_dict'] = dict([k, split_lisp(v)]
                                    for k, v in kwargs['expr_dict'].items())
         return Action(**kwargs)
 
-    def make_dict(*args):
-        return get_kwargs(args)
+    def make_dict(*symbols):
+        return parse_kwargs(symbols)
 
     actions = eval_lissp(text, extra_ns=dict(defaction=make_action, dict=make_dict))
     return actions

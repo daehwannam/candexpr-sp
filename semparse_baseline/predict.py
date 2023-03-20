@@ -69,6 +69,7 @@ def predict(args, model, data, device, tokenizer, executor):
         all_outputs = []
         for batch in tqdm(data, total=len(data)):
             source_ids = batch[0].to(device)
+            breakpoint()
             outputs = model.generate(
                 input_ids=source_ids,
                 max_length = 500,
@@ -165,8 +166,8 @@ def train(args):
     val_loader = DataLoader(vocab_json, val_pt, args.batch_size)
     common.logger.info("Create model.........")
     config_class, model_class, tokenizer_class = (BartConfig, BartForConditionalGeneration, BartTokenizer)
-    tokenizer = tokenizer_class.from_pretrained(os.path.join(args.ckpt))
-    model = model_class.from_pretrained(os.path.join(args.ckpt))
+    tokenizer = tokenizer_class.from_pretrained(args.ckpt)
+    model = model_class.from_pretrained(args.ckpt)
     model = model.to(device)
     common.logger.info(model)
     engine = KoPLEngine(json.load(open(os.path.join(args.input_dir, 'kb.json'))))
