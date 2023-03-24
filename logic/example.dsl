@@ -1,5 +1,20 @@
 ;;; -*- mode: hy -*-
 
+(deftypes
+  '[:object
+    bool
+    [:sequence
+     tuple
+     list]
+    [:string
+     rawstring
+     formatstring]])
+
+(deftypes
+  '[:object
+    [:immutable
+     tuple]])
+
 (defaction
   :name 'and
   :act_type 'bool

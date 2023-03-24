@@ -1,6 +1,0 @@
-
-;;; prelude objects from itertools and make basic macros accessible
-(hissp.basic.._macro_.prelude)
-
-
-(defmacro defaction (name :/ :* args))

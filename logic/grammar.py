@@ -1,4 +1,5 @@
 from itertools import chain
+from collections import deque
 from typing import List, Dict
 from abc import ABCMeta, abstractmethod
 import copy
@@ -80,13 +81,15 @@ class Grammar:
                    for name_to_action_dict in name_to_action_dicts)
 
     @staticmethod
-    def make_type_to_actions_dict(actions, parent_type_dict, constructor=dict):
+    def make_type_to_actions_dict(actions, parent_types_dict, constructor=dict):
         dic = {}
         for action in actions:
-            typ = action.act_type
-            while typ is not None:
-                dic.setdefault(typ, []).append(action)
-                typ = parent_type_dict.get(typ)
+            type_q = deque([action.act_type])
+            while type_q:
+                typ = type_q.popleft()
+                dic.setdefault(typ, set()).add(action)
+                if typ in parent_types_dict:
+                    type_q.extend(parent_types_dict[typ])
         if constructor == dict:
             return dic
         else:

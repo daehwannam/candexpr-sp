@@ -2,10 +2,9 @@
 'Tools for domain specific languages'
 
 import re
-from itertools import chain
 
-from dhnamlib.pylib.iteration import split_by_indices
-from dhnamlib.pylib.lisp import parse_hy_args
+from dhnamlib.pylib.lisp import remove_comments, preprocess_quotes, parse_hy_args
+from dhnamlib.pylib.iteration import dicts2pairs
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
 
@@ -13,77 +12,6 @@ from .grammar import Action
 
 
 prelude()
-
-
-def get_quoted_paren_index_pairs(s, recursive=False):
-    # https://stackoverflow.com/a/29992019
-
-    '''
-    e.g.
-    >>> s = "(a b '(c d '(e f)))"
-    >>> pairs = get_quoted_paren_index_pairs(s)
-    >>> pair = pairs[0]
-    >>> s[pair[0]: pair[1]]
-
-    "(c d '(e f)"
-    '''
-
-    opening_stack = []  # stack of indices of opening parentheses
-    pairs = []
-    is_last_char_quote = False
-    num_quoted_exprs_under_parsing = 0
-
-    for i, c in enumerate(s):
-        if c == "'":
-            is_last_char_quote = True
-        else:
-            if c in ['(', '[']:
-                opening_stack.append((i, c, is_last_char_quote))
-                if is_last_char_quote:
-                    num_quoted_exprs_under_parsing += 1
-            elif c in [')', ']']:
-                try:
-                    idx, char, quoted = opening_stack.pop()
-                    assert (char == '(' and c == ')') or (char == '[' and c == ']')
-                    if quoted:
-                        num_quoted_exprs_under_parsing -= 1
-                        if recursive or num_quoted_exprs_under_parsing == 0:
-                            pairs.append((idx, i))
-                except IndexError:
-                    print('Too many closing parentheses')
-            is_last_char_quote = False
-    if opening_stack:  # check if stack is empty afterwards
-        print('Too many opening parentheses')
-
-    return pairs
-
-
-def preprocess_comments(text):
-    splits = text.split('\n')
-    # only remove lines that starts with comments
-    return '\n'.join(split for split in splits if not split.lstrip().startswith(';'))
-
-
-def preprocess_quotes(text):
-    quoted_paren_index_pairs = get_quoted_paren_index_pairs(text)
-    region_index_pairs = tuple((i - 1, j + 1)for i, j in quoted_paren_index_pairs)
-    region_start_indices = set(start for start, end in region_index_pairs)
-    region_indices = sorted(set(chain(*region_index_pairs)))
-    splits = split_by_indices(text, region_indices)
-    regions = []
-    for start_idx, split in zip(chain([0], region_indices), splits):
-        if start_idx in region_start_indices:
-            if split.startswith("'("):
-                # e.g. '(some symbols)
-                region = '"{}"'.format(split[1:])
-            else:
-                # e.g. '[some symbols]
-                assert split.startswith("'[")
-                region = "'({})".format(split[2:-1])
-        else:
-            region = split
-        regions.append(region)
-    return ''.join(regions)
 
 
 split_lisp_regex = re.compile(r'([\(\)\[\] ])')
@@ -94,13 +22,10 @@ def split_lisp(text):
     return tuple(token for token in tokens if token)
 
 
-def read_dsl(file_path):
-    with open(file_path) as f:
-        text = f.read()
-        text = preprocess_comments(text)
-        text = preprocess_quotes(text)
-        text = '(entuple {})'.format(text)
+dsl_read_form = '(entuple {})'
 
+
+def read_dsl(file_path):
     def parse_kwargs(symbols):
         args, kwargs = parse_hy_args(symbols)
         assert len(args) == 0
@@ -110,10 +35,68 @@ def read_dsl(file_path):
         kwargs = parse_kwargs(symbols)
         kwargs['expr_dict'] = dict([k, split_lisp(v)]
                                    for k, v in kwargs['expr_dict'].items())
-        return Action(**kwargs)
+        return dict(action=Action(**kwargs))
+
+    def make_type_hierarchy(type_hierarchy_tuple):
+        parent_types_dict = {}
+
+        def update_parent_types_dict(parent_type, children):
+            for child in children:
+                if isinstance(child, tuple):
+                    child_kw, *grandchildren = child
+                    child_type = child_kw[1:]
+                    update_parent_types_dict(child_type, grandchildren)
+                else:
+                    child_type = child
+                parent_types_dict.setdefault(child_type, set()).add(parent_type)
+
+        root_kw, *children = type_hierarchy_tuple
+        root_type = root_kw[1:]
+        update_parent_types_dict(root_type, children)
+
+        return dict(type=parent_types_dict)
 
     def make_dict(*symbols):
         return parse_kwargs(symbols)
 
-    actions = eval_lissp(text, extra_ns=dict(defaction=make_action, dict=make_dict))
-    return actions
+    def make_dsl(text):
+        text = remove_comments(text)
+        text = preprocess_quotes(text, round_to_string=True, square_to_round=True)
+        text = dsl_read_form.format(text)
+
+        def_list = eval_lissp(
+            text, extra_ns=dict(defaction=make_action,
+                                dict=make_dict,
+                                deftypes=make_type_hierarchy))
+
+        types_defs = []
+        action_defs = []
+
+        for definition in def_list:
+            for def_type, def_value in definition.items():
+                if def_type == 'type':
+                    types_defs.append(def_value)
+                else:
+                    assert def_type == 'action'
+                    action_defs.append(def_value)
+
+        def merge_parent_types_dicts(parent_types_dicts):
+            new_parent_types_dict = {}
+            for parent_types_dict in parent_types_dicts:
+                for child, parents in parent_types_dict.items():
+                    new_parent_types_dict.setdefault(child, set()).update(parents)
+            return new_parent_types_dict
+
+        dsl = dict(type_hierarchy=merge_parent_types_dicts(types_defs),
+                   actions=action_defs)
+        return dsl
+
+    with open(file_path) as f:
+        text = f.read()
+        return make_dsl(text)
+
+
+if __name__ == '__main__':
+    dsl = read_dsl('./logic/example.dsl')
+    breakpoint()
+    ()
