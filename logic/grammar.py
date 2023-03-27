@@ -14,6 +14,7 @@ from dhnamlib.pylib.constant import Abstract
 # token
 class Action:
     def __init__(self,
+                 *,
                  name,
                  act_type,
                  param_types,
@@ -31,8 +32,14 @@ class Action:
         self.rest_idx = rest_idx
         self.num_min_args = self.get_min_num_args()
 
+    name_fn = None
+
     def __repr__(self):
-        return self.name
+        if self.name_fn is not None:
+            assert self.name is None
+            self.name_fn()
+        else:
+            return self.name
 
     def has_param(self):
         return bool(self.param_types)
@@ -51,6 +58,44 @@ class Action:
             return additional_idx + 1
         else:
             return len(self.param_types)
+
+
+class MetaAction:
+    def __init__(self,
+                 *,
+                 meta_name,
+                 name_fn=None,
+                 expr_dict_fn=None,
+                 **action_kwargs):
+        self.meta_name = meta_name
+        meta_action = self
+
+        class SpecificAction(Action):
+            def __init__(self, *, meta_args, **kwargs):
+                self.meta_action = meta_action
+
+                for k, v in action_kwargs.items():
+                    if k in kwargs:
+                        assert v is None
+                    else:
+                        kwargs[k] = v
+                assert 'name' not in kwargs
+                kwargs['name'] = None
+
+                assert 'expr_dict' not in kwargs
+                kwargs['expr_dict'] = expr_dict_fn(meta_args)
+
+                super().__init__(**kwargs)
+
+        SpecificAction.name_fn = name_fn
+
+        self.action_cls = SpecificAction
+
+    def __repr__(self):
+        return self.meta_name
+
+    def __call__(self, *, meta_args, **kwargs):
+        return self.action_cls(meta_args=meta_args, **kwargs)
 
 
 class Grammar:
@@ -81,15 +126,15 @@ class Grammar:
                    for name_to_action_dict in name_to_action_dicts)
 
     @staticmethod
-    def make_type_to_actions_dict(actions, parent_types_dict, constructor=dict):
+    def make_type_to_actions_dict(actions, super_types_dict, constructor=dict):
         dic = {}
         for action in actions:
             type_q = deque([action.act_type])
             while type_q:
                 typ = type_q.popleft()
                 dic.setdefault(typ, set()).add(action)
-                if typ in parent_types_dict:
-                    type_q.extend(parent_types_dict[typ])
+                if typ in super_types_dict:
+                    type_q.extend(super_types_dict[typ])
         if constructor == dict:
             return dic
         else:

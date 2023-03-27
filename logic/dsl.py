@@ -4,7 +4,7 @@
 import re
 
 from dhnamlib.pylib.lisp import remove_comments, preprocess_quotes, parse_hy_args
-from dhnamlib.pylib.iteration import dicts2pairs
+from dhnamlib.pylib.iteration import merge_dicts, chainelems
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
 
@@ -22,6 +22,11 @@ def split_lisp(text):
     return tuple(token for token in tokens if token)
 
 
+def split_expr_dict(expr_dict):
+    return dict([k, split_lisp(v)]
+                for k, v in expr_dict.items())
+
+
 dsl_read_form = '(entuple {})'
 
 
@@ -33,67 +38,74 @@ def read_dsl(file_path):
 
     def make_action(*symbols):
         kwargs = parse_kwargs(symbols)
-        kwargs['expr_dict'] = dict([k, split_lisp(v)]
-                                   for k, v in kwargs['expr_dict'].items())
-        return dict(action=Action(**kwargs))
+        kwargs['expr_dict'] = split_expr_dict(kwargs['expr_dict'])
+        return dict(_action_=Action(**kwargs))
 
-    def make_type_hierarchy(type_hierarchy_tuple):
-        parent_types_dict = {}
+    def make_meta_action(*symbols):
+        pass
 
-        def update_parent_types_dict(parent_type, children):
+    def make_super_types_dict(type_hierarchy_tuple):
+        super_types_dict = {}
+
+        def update_super_types_dict(parent_type, children):
             for child in children:
                 if isinstance(child, tuple):
                     child_kw, *grandchildren = child
+                    assert child_kw[0] == ':'
                     child_type = child_kw[1:]
-                    update_parent_types_dict(child_type, grandchildren)
+                    update_super_types_dict(child_type, grandchildren)
                 else:
                     child_type = child
-                parent_types_dict.setdefault(child_type, set()).add(parent_type)
+                super_types_dict.setdefault(child_type, set()).add(parent_type)
 
         root_kw, *children = type_hierarchy_tuple
         root_type = root_kw[1:]
-        update_parent_types_dict(root_type, children)
+        update_super_types_dict(root_type, children)
 
-        return dict(type=parent_types_dict)
+        return dict(_types_=super_types_dict)
 
     def make_dict(*symbols):
         return parse_kwargs(symbols)
 
     def make_dsl(text):
         text = remove_comments(text)
-        text = preprocess_quotes(text, round_to_string=True, square_to_round=True)
+        text = preprocess_quotes(text, round_to_string='$', square_to_round=True)
         text = dsl_read_form.format(text)
 
         def_list = eval_lissp(
             text, extra_ns=dict(defaction=make_action,
-                                dict=make_dict,
-                                deftypes=make_type_hierarchy))
+                                mapkv=make_dict,
+                                deftypes=make_super_types_dict))
 
-        types_defs = []
-        action_defs = []
-
-        for definition in def_list:
-            for def_type, def_value in definition.items():
-                if def_type == 'type':
-                    types_defs.append(def_value)
-                else:
-                    assert def_type == 'action'
-                    action_defs.append(def_value)
-
-        def merge_parent_types_dicts(parent_types_dicts):
-            new_parent_types_dict = {}
-            for parent_types_dict in parent_types_dicts:
-                for child, parents in parent_types_dict.items():
-                    new_parent_types_dict.setdefault(child, set()).update(parents)
-            return new_parent_types_dict
-
-        dsl = dict(type_hierarchy=merge_parent_types_dicts(types_defs),
-                   actions=action_defs)
+        merged_def_dict = merge_dicts(def_list)
+        dsl = dict(actions=merged_def_dict['_action_'],
+                   super_types_dict=merge_dicts(merged_def_dict['_types_'],
+                                                merge_values=lambda values: set(chainelems(values))))
         return dsl
 
     with open(file_path) as f:
         text = f.read()
         return make_dsl(text)
+
+
+def postprocess_denotation(denotation):
+    if isinstance(denotation, list):
+        new_denotation = [str(_) for _ in denotation]
+    else:
+        new_denotation = str(denotation)
+    return new_denotation
+
+
+def postprocess_answer(answer):
+    if answer is None:
+        new_answer = 'no'
+    elif isinstance(answer, list) and len(answer) > 0:
+        new_answer = answer[0]
+    elif isinstance(answer, list) and len(answer) == 0:
+        new_answer = 'None'
+    else:
+        new_answer = answer
+    return new_answer
 
 
 if __name__ == '__main__':

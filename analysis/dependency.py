@@ -1,5 +1,6 @@
 
 from itertools import chain
+from pprint import pprint as pp
 
 
 def parse_program_into_tree_form(labeled_program):
@@ -57,6 +58,10 @@ if __name__ == '__main__':
     #     breakpoint()
 
     tree_form_reprs = tuple(map(check_dependencies, (example['program'] for example in dataset)))
+    pp(dependencies)
+
+    output_functions = set(example['program'][-1]['function'] for example in dataset)
+    pp(output_functions)
 
     breakpoint()
     a = 100

@@ -1,34 +1,34 @@
-;;; -*- mode: hy -*-
+;;; -*- mode: lisp -*-
 
 (deftypes
-  '[:object
+  '(:object
     bool
-    [:sequence
+    (:sequence
      tuple
-     list]
-    [:string
+     list)
+    (:string
      rawstring
-     formatstring]])
+     formatstring)))
 
 (deftypes
-  '[:object
-    [:immutable
-     tuple]])
+  '(:object
+    (:immutable
+     tuple)))
 
 (defaction
   :name 'and
   :act_type 'bool
-  :param_types '[bool bool bool]
-  :expr_dict (dict :default '(and_func @0 @1 @2)
-                   :visual '(and @0 @1 @2))
+  :param_types '(bool bool bool)
+  :expr_dict (mapkv :default $'(and_func @0 @1 @2)
+                    :visual $'(and @0 @1 @2))
   :optional_idx None
   :rest_idx 2)
 
 (defaction
   :name 'or
   :act_type 'bool
-  :param_types '[bool bool bool]
-  :expr_dict (dict :default '(or_func @0 @1 @2)
-                   :visual '(or @0 @1 @2))
+  :param_types '(bool bool bool)
+  :expr_dict (mapkv :default $'(or_func @0 @1 @2)
+                    :visual $'(or @0 @1 @2))
   :optional_idx None
   :rest_idx 2)
