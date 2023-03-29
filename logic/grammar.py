@@ -6,9 +6,15 @@ import copy
 from bidict import bidict, ValueDuplicationError
 
 from dhnamlib.pylib.structure import TreeStructure
-from dhnamlib.pylib.iteration import any_not_none
+from dhnamlib.pylib.iteration import any_not_none, iterate
 from dhnamlib.pylib.decorators import abstractfunction
 from dhnamlib.pylib.constant import Abstract
+
+from dhnamlib.hissplib.compile import eval_lissp
+from dhnamlib.hissplib.macro import prelude
+
+
+prelude()
 
 
 # token
@@ -32,14 +38,8 @@ class Action:
         self.rest_idx = rest_idx
         self.num_min_args = self.get_min_num_args()
 
-    name_fn = None
-
     def __repr__(self):
-        if self.name_fn is not None:
-            assert self.name is None
-            self.name_fn()
-        else:
-            return self.name
+        return self.name
 
     def has_param(self):
         return bool(self.param_types)
@@ -77,17 +77,15 @@ class MetaAction:
                 for k, v in action_kwargs.items():
                     if k in kwargs:
                         assert v is None
-                    else:
-                        kwargs[k] = v
+                    kwargs[k] = v
+
                 assert 'name' not in kwargs
-                kwargs['name'] = None
+                kwargs['name'] = name_fn(*meta_args)
 
                 assert 'expr_dict' not in kwargs
-                kwargs['expr_dict'] = expr_dict_fn(meta_args)
+                kwargs['expr_dict'] = expr_dict_fn(*meta_args)
 
                 super().__init__(**kwargs)
-
-        SpecificAction.name_fn = name_fn
 
         self.action_cls = SpecificAction
 
@@ -99,13 +97,14 @@ class MetaAction:
 
 
 class Grammar:
-    def __init__(self, default_expr_key='default', placeholder_prefix='@'):
+    def __init__(self, default_expr_key='default', placeholder_prefix='@', injection_prefix='#'):
         self.default_expr_key = default_expr_key
         self.reduce_action = Action(name='reduce',
                                     act_type='<reduce>',
                                     param_types=[],
                                     expr_dict={self.default_expr_key: []})
         self.placeholder_prefix = placeholder_prefix
+        self.injection_prefix = injection_prefix
 
     @staticmethod
     def check_action_name_overlap(actions):
@@ -279,25 +278,62 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
                 tree = tree.children[-1]
         return subtrees
 
-    def get_expr_str(self, expr_key=None):
+    def get_expr_str(self, expr_key=None, extra_ns=None):
         if expr_key is None:
             expr_key = self.grammar.default_expr_key
 
         def get_expr_pieces(action):
-            return action.expr_dict.get(expr_key) or action.expr_dict.get(self.grammar.default_expr_key)
-            return action.expr_pieces
+            return action.expr_dict.get(expr_key)
 
         program_expr_pieces = []
 
-        def tree_to_pieces(tree):
-            for piece in get_expr_pieces(tree.value):
+        def get_idx(text):
+            if text == '':
+                return None
+            else:
+                return int(text)
+
+        paren_pairs = ['()', '[]']
+        l_to_r_paren = dict(paren_pairs)
+        l_parens, r_parens = map(set, zip(*paren_pairs))
+
+        def tree_to_pieces(tree, total_expr_pieces, in_injection):
+            it = iterate(get_expr_pieces(tree.value))
+            while it:
+                piece = next(it)
                 if piece.startswith(self.grammar.placeholder_prefix):
                     param_idx = int(piece[1:])
-                    tree_to_pieces(tree.children[param_idx])
+                    tree_to_pieces(tree.children[param_idx], total_expr_pieces, in_injection)
+                elif piece == self.grammar.injection_prefix and not in_injection:
+                    eval_pieces = []
+                    paren_stack = [next(it)]
+                    assert paren_stack == ['(']
+                    while paren_stack:
+                        piece = next(it)
+                        if piece.startswith(self.grammar.placeholder_prefix):
+                            if ':' in piece:
+                                eval_pieces.append('(entuple')
+                                beg_idx, end_idx = map(get_idx, piece[1:].split(':'))
+                                for param_idx in range(beg_idx, end_idx):
+                                    tree_to_pieces(tree.children[param_idx], eval_pieces, True)
+                                    if param_idx < end_idx - 1:
+                                        eval_pieces.append(' ')
+                                eval_pieces.append(')')  # end of entuple
+                            else:
+                                param_idx = int(piece[1:])
+                                tree_to_pieces(tree.children[param_idx], eval_pieces, True)
+                        else:
+                            if piece in l_parens:
+                                paren_stack.append(piece)
+                            elif piece in r_parens:
+                                left_paren = paren_stack.pop()
+                                assert l_to_r_paren[left_paren] == piece
+                            eval_pieces.append(piece)
+                    total_expr_pieces.append(eval_lissp(''.join(eval_pieces), extra_ns=extra_ns))
                 else:
-                    program_expr_pieces.append(piece)
+                    total_expr_pieces.append(piece)
 
-        tree_to_pieces(self)
+        tree_to_pieces(self, program_expr_pieces, False)
 
         return ''.join(program_expr_pieces)
 

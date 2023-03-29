@@ -3,12 +3,14 @@
 
 import re
 
-from dhnamlib.pylib.lisp import remove_comments, preprocess_quotes, parse_hy_args
+from hissp.munger import munge, demunge
+
+from dhnamlib.pylib.lisp import remove_comments, replace_prefixed_parens, parse_hy_args
 from dhnamlib.pylib.iteration import merge_dicts, chainelems
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
 
-from .grammar import Action
+from .grammar import Action, MetaAction
 
 
 prelude()
@@ -34,15 +36,59 @@ def read_dsl(file_path):
     def parse_kwargs(symbols):
         args, kwargs = parse_hy_args(symbols)
         assert len(args) == 0
-        return kwargs
+        return dict([k.replace('-', '_'), v] for k, v in kwargs.items())
+
+    def parse_params(raw_params):
+        munged_optional = munge('&optional')
+        munged_rest = munge('&rest')
+
+        optional_idx = None
+        rest_idx = None
+        params = []
+
+        idx = 0
+        for raw_param in raw_params:
+            if raw_param == munged_optional:
+                assert optional_idx is None
+                assert rest_idx is None
+                optional_idx = idx
+            elif raw_param == munged_rest:
+                assert rest_idx is None
+                rest_idx = idx
+            else:
+                params.append(demunge(raw_param))
+                idx += 1
+
+        return tuple(params), optional_idx, rest_idx
 
     def make_action(*symbols):
         kwargs = parse_kwargs(symbols)
-        kwargs['expr_dict'] = split_expr_dict(kwargs['expr_dict'])
+
+        expr_dict = split_expr_dict(kwargs['expr_dict'])
+        param_types, optional_idx, rest_idx = parse_params(kwargs['param_types'])
+
+        kwargs.update(dict(
+            name=demunge(kwargs['name']),
+            act_type=demunge(kwargs['act_type']),
+            expr_dict=expr_dict,
+            param_types=param_types,
+            optional_idx=optional_idx,
+            rest_idx=rest_idx))
+
         return dict(_action_=Action(**kwargs))
 
     def make_meta_action(*symbols):
-        pass
+        kwargs = parse_kwargs(symbols)
+        param_types, optional_idx, rest_idx = parse_params(kwargs['param_types'])
+
+        kwargs.update(dict(
+            meta_name=demunge(kwargs['meta_name']),
+            act_type=demunge(kwargs['act_type']),
+            param_types=param_types,
+            optional_idx=optional_idx,
+            rest_idx=rest_idx))
+
+        return dict(_meta_action_=MetaAction(**kwargs))
 
     def make_super_types_dict(type_hierarchy_tuple):
         super_types_dict = {}
@@ -55,7 +101,7 @@ def read_dsl(file_path):
                     child_type = child_kw[1:]
                     update_super_types_dict(child_type, grandchildren)
                 else:
-                    child_type = child
+                    child_type = demunge(child)
                 super_types_dict.setdefault(child_type, set()).add(parent_type)
 
         root_kw, *children = type_hierarchy_tuple
@@ -67,18 +113,29 @@ def read_dsl(file_path):
     def make_dict(*symbols):
         return parse_kwargs(symbols)
 
-    def make_dsl(text):
+    def make_dsl(text, string_expr_prefix='$', injection_prefix='#'):
+        def expr_to_str(prefix, expr_repr):
+            return '"{}{}"'.format(prefix, expr_repr.replace('"', r'\"'))
+
         text = remove_comments(text)
-        text = preprocess_quotes(text, round_to_string='$', square_to_round=True)
+        text = replace_prefixed_parens(
+            text,
+            info_dicts=[dict(prefix=string_expr_prefix, paren_pair='()',
+                             fn=lambda x: expr_to_str(string_expr_prefix, x)),
+                        dict(prefix=injection_prefix, paren_pair='()',
+                             fn=lambda x: expr_to_str(injection_prefix, x))])
         text = dsl_read_form.format(text)
 
-        def_list = eval_lissp(
-            text, extra_ns=dict(defaction=make_action,
-                                mapkv=make_dict,
-                                deftypes=make_super_types_dict))
+        bindings = [['mapkv', make_dict],
+                    ['define-types', make_super_types_dict],
+                    ['define-action', make_action],
+                    ['define-meta-action', make_meta_action]]
+
+        def_list = eval_lissp(text, extra_ns=dict([munge(k), v] for k, v in bindings))
 
         merged_def_dict = merge_dicts(def_list)
         dsl = dict(actions=merged_def_dict['_action_'],
+                   meta_actions=merged_def_dict['_meta_action_'],
                    super_types_dict=merge_dicts(merged_def_dict['_types_'],
                                                 merge_values=lambda values: set(chainelems(values))))
         return dsl
@@ -109,6 +166,7 @@ def postprocess_answer(answer):
 
 
 if __name__ == '__main__':
-    dsl = read_dsl('./logic/example.dsl')
+    # dsl = read_dsl('./logic/example.dsl')
+    dsl = read_dsl('./semparse/dsl/kopl.dsl')
     breakpoint()
     ()

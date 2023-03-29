@@ -2,65 +2,71 @@
 
 ;; Examples
 ;;
-;; (defaction
+;; (define-action
 ;;   :name 'and
-;;   :act_type 'bool
-;;   :param_types '(bool bool bool)
-;;   :expr_dict (mapkv :default $'(and_func @0 @1 @2)
-;;                    :visual $'(and @0 @1 @2))
-;;   :optional_idx None
-;;   :rest_idx 2)
+;;   :act-type 'bool
+;;   :param-types '(bool bool bool)
+;;   :expr-dict (mapkv :default $(and-func @0 @1 @2)
+;;                    :visual $(and @0 @1 @2))
+;;   :optional-idx None
+;;   :rest-idx 2)
 ;;
-;; (defaction
+;; (define-action
 ;;   :name 'or
-;;   :act_type 'bool
-;;   :param_types '(bool bool bool)
-;;   :expr_dict (mapkv :default $'(or_func @0 @1 @2)
-;;                    :visual $'(or @0 @1 @2))
-;;   :optional_idx None
-;;   :rest_idx 2)
+;;   :act-type 'bool
+;;   :param-types '(bool bool bool)
+;;   :expr-dict (mapkv :default $(or-func @0 @1 @2)
+;;                    :visual $(or @0 @1 @2))
+;;   :optional-idx None
+;;   :rest-idx 2)
 
-(deftypes
+(define-types
   '(:object
     concept
     (:entity
-     (:entity_with_fact
-      entity_with_attr
-      entity_with_rel))
-    entity_name
+     (:entity-with-fact
+      entity-with-attr
+      entity-with-rel))
+    entity-name
     relation
     direction
-    comp_operator
-    st_or_bt_operator
-    min_or_max_operator
+    comp-operator
+    st-or-bt-operator
+    min-or-max-operator
     (:attribute
-     attribute_string
-     attribute_number
-     (:attribute_time
-      attribute_date
-      attribute_year))
+     attribute-string
+     attribute-number
+     (:attribute-time
+      attribute-date
+      attribute-year))
     (:qualifier
-     qualifier_string
-     qualifier_number
-     (:qualifier_time
-      qualifier_date
-      qualifier_year))
+     qualifier-string
+     qualifier-number
+     (:qualifier-time
+      qualifier-date
+      qualifier-year))
     (:value
-     value_string
-     value_number
-     (:value_time
-      value_date
-      value_year))))
+     value-string
+     value-number
+     (:value-time
+      value-date
+      value-year))
+    (:part
+     part-string
+     part-number
+     (:part-time
+      part-date
+      part-year))))
 
-(deftypes
+(define-types
   '(:result
-    result_entity_name
-    result_number
-    result_relation
-    result_attr_value
-    result_attr_q_value
-    result_rel_q_value
-    result_boolean))
+    result-entity-name
+    result-number
+    result-relation
+    result-attr-value
+    result-attr-q-value
+    result-rel-q-value
+    result-boolean))
 
 
 ;; Result functions
@@ -78,304 +84,352 @@
 ;; QueryName ('What')
 
 
-(defaction
+(define-action
   :name 'program
-  :act_type 'result
-  :param_types '(result)
-  :expr_dict (mapkv :default $'(lambda (engine)
-                                 (postprocess_denotation @0))
+  :act-type 'result
+  :param-types '(result)
+  :expr-dict (mapkv :default $(lambda (engine)
+                                 (postprocess-denotation @0))
                     :visual "@0"
-                    :visual_2 $'(program @0)))
+                    :visual-2 $(program @0)))
 
-(defaction
-  :name 'all_entities
-  :act_type 'entity
-  :param_types '()
-  :expr_dict (mapkv :default $'(engine.FindAll)
-                    :visual $'all-entities))
+(define-action
+  :name 'all-entities
+  :act-type 'entity
+  :param-types '()
+  :expr-dict (mapkv :default $(engine.FindAll)
+                    :visual "all-entities"))
 
-(defaction
+(define-action
   :name 'find
-  :act_type 'entity
-  :param_types '(entity_name)
-  :expr_dict (mapkv :default $'(engine.Find @0)
-                    :visual $'(find @0)))
+  :act-type 'entity
+  :param-types '(entity-name)
+  :expr-dict (mapkv :default $(engine.Find @0)
+                    :visual $(find @0)))
 
-;;; filter_*
+;;; filter-*
 
-(defaction
-  :name 'filter_concept
-  :act_type 'entity
-  :param_types '(concept)
-  :expr_dict (mapkv :default $'(engine.FilterConcept @0)
-                    :visual $'(filter-concept @0)))
+(define-action
+  :name 'filter-concept
+  :act-type 'entity
+  :param-types '(concept)
+  :expr-dict (mapkv :default $(engine.FilterConcept @0)
+                    :visual $(filter-concept @0)))
 
-(defaction
-  :name 'filter_str
-  :act_type 'entity_with_attr
-  :param_types '(attribute_string value_string entity)
-  :expr_dict (mapkv :default $'(engine.FilterStr @2 @0 @1)
-                    :visual $'(filter-str @0 @1 @2)))
+(define-action
+  :name 'filter-str
+  :act-type 'entity-with-attr
+  :param-types '(attribute-string value-string entity)
+  :expr-dict (mapkv :default $(engine.FilterStr @2 @0 @1)
+                    :visual $(filter-str @0 @1 @2)))
 
-(defaction
-  :name 'filter_num
-  :act_type 'entity_with_attr
-  :param_types '(attribute_number value_number comp_operator entity)
-  :expr_dict (mapkv :default $'(engine.FilterNum @3 @0 @1 @2)
-                    :visual $'(filter-num @0 @1 @2 @3)))
+(define-action
+  :name 'filter-num
+  :act-type 'entity-with-attr
+  :param-types '(attribute-number value-number comp-operator entity)
+  :expr-dict (mapkv :default $(engine.FilterNum @3 @0 @1 @2)
+                    :visual $(filter-num @0 @1 @2 @3)))
 
-(defaction
-  :name 'filter_year
-  :act_type 'entity_with_attr
-  :param_types '(attribute_time value_year comp_operator entity)
-  :expr_dict (mapkv :default $'(engine.FilterYear @3 @0 @1 @2)
-                    :visual $'(filter-year @0 @1 @2 @3)))
+(define-action
+  :name 'filter-year
+  :act-type 'entity-with-attr
+  :param-types '(attribute-time value-year comp-operator entity)
+  :expr-dict (mapkv :default $(engine.FilterYear @3 @0 @1 @2)
+                    :visual $(filter-year @0 @1 @2 @3)))
 
-(defaction
-  :name 'filter_date
-  :act_type 'entity_with_attr
-  :param_types '(attribute_time value_date comp_operator entity)
-  :expr_dict (mapkv :default $'(engine.FilterDate @3 @0 @1 @2)
-                    :visual $'(filter-date @0 @1 @2 @3)))
+(define-action
+  :name 'filter-date
+  :act-type 'entity-with-attr
+  :param-types '(attribute-time value-date comp-operator entity)
+  :expr-dict (mapkv :default $(engine.FilterDate @3 @0 @1 @2)
+                    :visual $(filter-date @0 @1 @2 @3)))
 
 ;;; relate
 
-(defaction
+(define-action
   :name 'relate
-  :act_type 'entity_with_rel
-  :param_types '(relation direction entity)
-  :expr_dict (mapkv :default $'(engine.Relate @2 @0 @1)
-                    :visual $'(relate @0 @1 @2)))
+  :act-type 'entity-with-rel
+  :param-types '(relation direction entity)
+  :expr-dict (mapkv :default $(engine.Relate @2 @0 @1)
+                    :visual $(relate @0 @1 @2)))
 
-;;; op_*
+;;; op-*
 
-(defaction
-  :name 'op_eq
-  :act_type 'comp_operator
-  :param_types '()
-  :expr_dict (mapkv :default #"\"=\""
+(define-action
+  :name 'op-eq
+  :act-type 'comp-operator
+  :param-types '()
+  :expr-dict (mapkv :default #"\"=\""
                     :visual "="))
 
-(defaction
-  :name 'op_ne
-  :act_type 'comp_operator
-  :param_types '()
-  :expr_dict (mapkv :default #"\"!=\""
+(define-action
+  :name 'op-ne
+  :act-type 'comp-operator
+  :param-types '()
+  :expr-dict (mapkv :default #"\"!=\""
                     :visual "!="))
 
-(defaction
-  :name 'op_lt
-  :act_type 'comp_operator
-  :param_types '()
-  :expr_dict (mapkv :default #"\"<\""
+(define-action
+  :name 'op-lt
+  :act-type 'comp-operator
+  :param-types '()
+  :expr-dict (mapkv :default #"\"<\""
                     :visual "<"))
 
-(defaction
-  :name 'op_gt
-  :act_type 'comp_operator
-  :param_types '()
-  :expr_dict (mapkv :default #"\">\""
+(define-action
+  :name 'op-gt
+  :act-type 'comp-operator
+  :param-types '()
+  :expr-dict (mapkv :default #"\">\""
                     :visual ">"))
 
-;;; direction_*
+;;; direction-*
 
-(defaction
-  :name 'direction_forward
-  :act_type 'direction
-  :param_types '()
-  :expr_dict (mapkv :default #"\"forward\""
+(define-action
+  :name 'direction-forward
+  :act-type 'direction
+  :param-types '()
+  :expr-dict (mapkv :default #"\"forward\""
                     :visual "'forward"))
 
-(defaction
-  :name 'direction_backward
-  :act_type 'direction
-  :param_types '()
-  :expr_dict (mapkv :default #"\"backward\""
+(define-action
+  :name 'direction-backward
+  :act-type 'direction
+  :param-types '()
+  :expr-dict (mapkv :default #"\"backward\""
                     :visual "'backward"))
 
-;;; q_filter_*
+;;; q-filter-*
 
-(defaction
-  :name 'q_filter_str
-  :act_type 'entity_with_fact
-  :param_types '(qualifier_string value_string entity_with_fact)
-  :expr_dict (mapkv :default $'(engine.QFilterStr @2 @0 @1)
-                    :visual $'(q-filter-str @0 @1 @2)))
+(define-action
+  :name 'q-filter-str
+  :act-type 'entity-with-fact
+  :param-types '(qualifier-string value-string entity-with-fact)
+  :expr-dict (mapkv :default $(engine.QFilterStr @2 @0 @1)
+                    :visual $(q-filter-str @0 @1 @2)))
 
-(defaction
-  :name 'q_filter_num
-  :act_type 'entity_with_fact
-  :param_types '(qualifier_number value_number comp_operator entity_with_fact)
-  :expr_dict (mapkv :default $'(engine.QFilterNum @3 @0 @1 @2)
-                    :visual $'(q-filter-num @0 @1 @2 @3)))
+(define-action
+  :name 'q-filter-num
+  :act-type 'entity-with-fact
+  :param-types '(qualifier-number value-number comp-operator entity-with-fact)
+  :expr-dict (mapkv :default $(engine.QFilterNum @3 @0 @1 @2)
+                    :visual $(q-filter-num @0 @1 @2 @3)))
 
-(defaction
-  :name 'q_filter_year
-  :act_type 'entity_with_fact
-  :param_types '(qualifier_time value_year comp_operator entity_with_fact)
-  :expr_dict (mapkv :default $'(engine.QFilterYear @3 @0 @1 @2)
-                    :visual $'(q-filter-year @0 @1 @2 @3)))
+(define-action
+  :name 'q-filter-year
+  :act-type 'entity-with-fact
+  :param-types '(qualifier-time value-year comp-operator entity-with-fact)
+  :expr-dict (mapkv :default $(engine.QFilterYear @3 @0 @1 @2)
+                    :visual $(q-filter-year @0 @1 @2 @3)))
 
-(defaction
-  :name 'q-filter_date
-  :act_type 'entity_with_fact
-  :param_types '(qualifier_time value_date comp_operator entity_with_fact)
-  :expr_dict (mapkv :default $'(engine.QFilterDate @3 @0 @1 @2)
-                    :visual $'(q-filter-date @0 @1 @2 @3)))
+(define-action
+  :name 'q-filter-date
+  :act-type 'entity-with-fact
+  :param-types '(qualifier-time value-date comp-operator entity-with-fact)
+  :expr-dict (mapkv :default $(engine.QFilterDate @3 @0 @1 @2)
+                    :visual $(q-filter-date @0 @1 @2 @3)))
 
 ;;; intersect / union
 
-(defaction
+(define-action
   :name 'intersect
-  :act_type 'entity
-  :param_types '(entity entity)
-  :expr_dict (mapkv :default $'(engine.And @0 @1)
-                    :visual $'(intersect @0 @1)))
+  :act-type 'entity
+  :param-types '(entity entity)
+  :expr-dict (mapkv :default $(engine.And @0 @1)
+                    :visual $(intersect @0 @1)))
 
-(defaction
+(define-action
   :name 'union
-  :act_type 'entity
-  :param_types '(entity entity)
-  :expr_dict (mapkv :default $'(engine.Or @0 @1)
-                    :visual $'(union @0 @1)))
+  :act-type 'entity
+  :param-types '(entity entity)
+  :expr-dict (mapkv :default $(engine.Or @0 @1)
+                    :visual $(union @0 @1)))
 
 ;;; count
 
-(defaction
+(define-action
   :name 'count
-  :act_type 'result_number
-  :param_types '(entity)
-  :expr_dict (mapkv :default $'(engine.Count @0)
-                    :visual $'(count @0)))
+  :act-type 'result-number
+  :param-types '(entity)
+  :expr-dict (mapkv :default $(engine.Count @0)
+                    :visual $(count @0)))
 
-;;; select_*
+;;; select-*
 
-(defaction
-  :name 'select_between
-  :act_type 'result_entity_name
-  :param_types '(attribute st_or_bt_operator entity entity)
-  :expr_dict (mapkv :default $'(engine.SelectBetween @2 @3 @0 @1)
-                    :visual $'(select-between @0 @1 @2 @3)))
+(define-action
+  :name 'select-between
+  :act-type 'result-entity-name
+  :param-types '(attribute st-or-bt-operator entity entity)
+  :expr-dict (mapkv :default $(engine.SelectBetween @2 @3 @0 @1)
+                    :visual $(select-between @0 @1 @2 @3)))
 
-(defaction
-  :name 'select_among
-  :act_type 'result_entity_name
-  :param_types '(attribute min_or_max_operator entity)
-  :expr_dict (mapkv :default $'(engine.SelectBetween @2 @0 @1)
-                    :visual $'(select-between @0 @1 @2)))
+(define-action
+  :name 'select-among
+  :act-type 'result-entity-name
+  :param-types '(attribute min-or-max-operator entity)
+  :expr-dict (mapkv :default $(engine.SelectBetween @2 @0 @1)
+                    :visual $(select-between @0 @1 @2)))
 
-;;; op_*
+;;; op-*
 
-(defaction
-  :name 'op_st
-  :act_type 'st_or_bt_operator
-  :param_types '()
-  :expr_dict (mapkv :default #"\"smaller\""
+(define-action
+  :name 'op-st
+  :act-type 'st-or-bt-operator
+  :param-types '()
+  :expr-dict (mapkv :default #"\"smaller\""
                     :visual "'smaller"))
 
-(defaction
-  :name 'op_gt
-  :act_type 'st_or_bt_operator
-  :param_types '()
-  :expr_dict (mapkv :default #"\"greater\""
+(define-action
+  :name 'op-gt
+  :act-type 'st-or-bt-operator
+  :param-types '()
+  :expr-dict (mapkv :default #"\"greater\""
                     :visual "'greater"))
 
-(defaction
-  :name 'op_min
-  :act_type 'min_or_max_operator
-  :param_types '()
-  :expr_dict (mapkv :default #"\"min\""
+(define-action
+  :name 'op-min
+  :act-type 'min-or-max-operator
+  :param-types '()
+  :expr-dict (mapkv :default #"\"min\""
                     :visual "'min"))
 
-(defaction
-  :name 'op_max
-  :act_type 'min_or_max_operator
-  :param_types '()
-  :expr_dict (mapkv :default #"\"max\""
+(define-action
+  :name 'op-max
+  :act-type 'min-or-max-operator
+  :param-types '()
+  :expr-dict (mapkv :default #"\"max\""
                     :visual "'max"))
 
-;;; query_*
+;;; query-*
 
-(defaction
-  :name 'query_name
-  :act_type 'result_entity_name
-  :param_types '(entity)
-  :expr_dict (mapkv :default $'(engine.QueryName @0)
-                    :visual $'(query-name @0)))
+(define-action
+  :name 'query-name
+  :act-type 'result-entity-name
+  :param-types '(entity)
+  :expr-dict (mapkv :default $(engine.QueryName @0)
+                    :visual $(query-name @0)))
 
-(defaction
-  :name 'query_attr
-  :act_type 'result_attr_value
-  :param_types '(attribute entity)
-  :expr_dict (mapkv :default $'(engine.QueryAttr @1 @0)
-                    :visual $'(query-attr @0 @1)))
+(define-action
+  :name 'query-attr
+  :act-type 'result-attr-value
+  :param-types '(attribute entity)
+  :expr-dict (mapkv :default $(engine.QueryAttr @1 @0)
+                    :visual $(query-attr @0 @1)))
 
-(defaction
-  :name 'query_attr_under_cond
-  :act_type 'result_attr_value
-  :param_types '(attribute qualifier value entity)
-  :expr_dict (mapkv :default $'(engine.QueryAttrUnderCondition @3 @0 @1 @2)
-                    :visual $'(query-attr-under-cond @0 @1 @2 @3)))
+(define-action
+  :name 'query-attr-under-cond
+  :act-type 'result-attr-value
+  :param-types '(attribute qualifier value entity)
+  :expr-dict (mapkv :default $(engine.QueryAttrUnderCondition @3 @0 @1 @2)
+                    :visual $(query-attr-under-cond @0 @1 @2 @3)))
 
-(defaction
-  :name 'query_relation
-  :act_type 'result_relation
-  :param_types '(entity entity)
-  :expr_dict (mapkv :default $'(engine.QueryRelation @0 @1)
-                    :visual $'(query-relation @0 @1)))
+(define-action
+  :name 'query-relation
+  :act-type 'result-relation
+  :param-types '(entity entity)
+  :expr-dict (mapkv :default $(engine.QueryRelation @0 @1)
+                    :visual $(query-relation @0 @1)))
 
-(defaction
-  :name 'query_attr_qualifier
-  :act_type 'result_attr_q_value
-  :param_types '(attribute value qualifier entity)
-  :expr_dict (mapkv :default $'(engine.QueryAttrQualifier @3 @0 @1 @2)
-                    :visual $'(query-attr-qualifier @0 @1 @2 @3)))
+(define-action
+  :name 'query-attr-qualifier
+  :act-type 'result-attr-q-value
+  :param-types '(attribute value qualifier entity)
+  :expr-dict (mapkv :default $(engine.QueryAttrQualifier @3 @0 @1 @2)
+                    :visual $(query-attr-qualifier @0 @1 @2 @3)))
 
-(defaction
-  :name 'query_rel_qualifier
-  :act_type 'result_rel_q_value
-  :param_types '(relation qualifier entity entity)
-  :expr_dict (mapkv :default $'(engine.QueryRelationQualifier @2 @3 @0 @1)
-                    :visual $'(query-rel-qualifier @0 @1 @2 @3)))
+(define-action
+  :name 'query-rel-qualifier
+  :act-type 'result-rel-q-value
+  :param-types '(relation qualifier entity entity)
+  :expr-dict (mapkv :default $(engine.QueryRelationQualifier @2 @3 @0 @1)
+                    :visual $(query-rel-qualifier @0 @1 @2 @3)))
 
-;;; verify_*
+;;; verify-*
 
-(defaction
-  :name 'verify_str
-  :act_type 'result_boolean
-  :param_types '(value_string result_attr_value)
-  :expr_dict (mapkv :default $'(engine.VerifyStr @1 @0)
-                    :visual $'(verify-str @0 @1)))
+(define-action
+  :name 'verify-str
+  :act-type 'result-boolean
+  :param-types '(value-string result-attr-value)
+  :expr-dict (mapkv :default $(engine.VerifyStr @1 @0)
+                    :visual $(verify-str @0 @1)))
 
-(defaction
-  :name 'verify_num
-  :act_type 'result_boolean
-  :param_types '(value_number comp_operator result_attr_value)
-  :expr_dict (mapkv :default $'(engine.VerifyNum @2 @0 @1)
-                    :visual $'(verify-num @0 @1 @2)))
+(define-action
+  :name 'verify-num
+  :act-type 'result-boolean
+  :param-types '(value-number comp-operator result-attr-value)
+  :expr-dict (mapkv :default $(engine.VerifyNum @2 @0 @1)
+                    :visual $(verify-num @0 @1 @2)))
 
-(defaction
-  :name 'verify_year
-  :act_type 'result_boolean
-  :param_types '(value_year comp_operator result_attr_value)
-  :expr_dict (mapkv :default $'(engine.VerifyYear @2 @0 @1)
-                    :visual $'(verify-year @0 @1 @2)))
+(define-action
+  :name 'verify-year
+  :act-type 'result-boolean
+  :param-types '(value-year comp-operator result-attr-value)
+  :expr-dict (mapkv :default $(engine.VerifyYear @2 @0 @1)
+                    :visual $(verify-year @0 @1 @2)))
 
-(defaction
-  :name 'verify_date
-  :act_type 'result_boolean
-  :param_types '(value_date comp_operator result_attr_value)
-  :expr_dict (mapkv :default $'(engine.VerifyDate @2 @0 @1)
-                    :visual $'(verify-date @0 @1 @2)))
+(define-action
+  :name 'verify-date
+  :act-type 'result-boolean
+  :param-types '(value-date comp-operator result-attr-value)
+  :expr-dict (mapkv :default $(engine.VerifyDate @2 @0 @1)
+                    :visual $(verify-date @0 @1 @2)))
 
-;;; parts
+;;; constant-*
 
+(define-action
+  :name 'constant-string
+  :act-type 'value-string
+  :param-types '(part-string &rest part-string)
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.replace (.join "" @:) "Ġ" " "))))
 
-;; (defaction
-;;   :name 'some-name
-;;   :act_type 'some-type
-;;   :param_types '(some-type some-type)
-;;   :expr_dict (mapkv :default $'(some expression)
-;;                    :visual $'(some expression))
-;;   :optional_idx some-idx
-;;   :rest_idx some-idx)
+(define-action
+  :name 'constant-number
+  :act-type 'value-number
+  :param-types '(part-number &rest part-number)
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.replace (.join "" @:) "Ġ" " "))))
+
+(define-action
+  :name 'constant-date
+  :act-type 'value-date
+  :param-types '(part-date &rest part-date)
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.replace (.join "" @:) "Ġ" " "))))
+
+(define-action
+  :name 'constant-year
+  :act-type 'value-year
+  :param-types '(part-year &rest part-year)
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.replace (.join "" @:) "Ġ" " "))))
+
+;;; token-*
+
+(define-meta-action
+  :meta-name 'token-string
+  :name-fn (lambda (token) token)
+  :expr-dict-fn (lambda (token)
+                  (mapkv :default (.format #"\"{}\"" token)))
+  :act-type 'part-string
+  :param-types '())
+
+(define-meta-action
+  :meta-name 'token-number
+  :name-fn (lambda (token) token)
+  :expr-dict-fn (lambda (token)
+                  (mapkv :default (.format #"\"{}\"" token)))
+  :act-type 'part-number
+  :param-types '())
+
+(define-meta-action
+  :meta-name 'token-date
+  :name-fn (lambda (token) token)
+  :expr-dict-fn (lambda (token)
+                  (mapkv :default (.format #"\"{}\"" token)))
+  :act-type 'part-date
+  :param-types '())
+
+(define-meta-action
+  :meta-name 'token-year
+  :name-fn (lambda (token) token)
+  :expr-dict-fn (lambda (token)
+                  (mapkv :default (.format #"\"{}\"" token)))
+  :act-type 'part-year
+  :param-types '())
