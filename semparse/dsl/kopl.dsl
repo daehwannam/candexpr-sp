@@ -48,12 +48,15 @@
     (:value
      value-string
      value-number
+     value-quantity
+     value-unit
      (:value-time
       value-date
       value-year))
     (:part
      part-string
-     part-number
+     part-quantity
+     part-unit
      (:part-time
       part-date
       part-year))))
@@ -124,11 +127,11 @@
                     :visual $(filter-str @0 @1 @2)))
 
 (define-action
-  :name 'filter-num
+  :name 'filter-number
   :act-type 'entity-with-attr
   :param-types '(attribute-number value-number comp-operator entity)
   :expr-dict (mapkv :default $(engine.FilterNum @3 @0 @1 @2)
-                    :visual $(filter-num @0 @1 @2 @3)))
+                    :visual $(filter-number @0 @1 @2 @3)))
 
 (define-action
   :name 'filter-year
@@ -209,11 +212,11 @@
                     :visual $(q-filter-str @0 @1 @2)))
 
 (define-action
-  :name 'q-filter-num
+  :name 'q-filter-number
   :act-type 'entity-with-fact
   :param-types '(qualifier-number value-number comp-operator entity-with-fact)
   :expr-dict (mapkv :default $(engine.QFilterNum @3 @0 @1 @2)
-                    :visual $(q-filter-num @0 @1 @2 @3)))
+                    :visual $(q-filter-number @0 @1 @2 @3)))
 
 (define-action
   :name 'q-filter-year
@@ -354,11 +357,11 @@
                     :visual $(verify-str @0 @1)))
 
 (define-action
-  :name 'verify-num
+  :name 'verify-number
   :act-type 'result-boolean
   :param-types '(value-number comp-operator result-attr-value)
   :expr-dict (mapkv :default $(engine.VerifyNum @2 @0 @1)
-                    :visual $(verify-num @0 @1 @2)))
+                    :visual $(verify-number @0 @1 @2)))
 
 (define-action
   :name 'verify-year
@@ -380,25 +383,37 @@
   :name 'constant-string
   :act-type 'value-string
   :param-types '(part-string &rest part-string)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.replace (.join "" @:) "Ġ" " "))))
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
 
 (define-action
   :name 'constant-number
   :act-type 'value-number
-  :param-types '(part-number &rest part-number)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.replace (.join "" @:) "Ġ" " "))))
+  :param-types '(value-quantity value-unit)
+  :expr-dict (mapkv :default #(.rstrip (.format #"\"{} {}\"" @1 @2))))
+
+(define-action
+  :name 'constant-quantity
+  :act-type 'value-quantity
+  :param-types '(part-quantity &rest part-quantity)
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
+
+(define-action
+  :name 'constant-unit
+  :act-type 'value-unit
+  :param-types '(&rest part-unit)
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
 
 (define-action
   :name 'constant-date
   :act-type 'value-date
   :param-types '(part-date &rest part-date)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.replace (.join "" @:) "Ġ" " "))))
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
 
 (define-action
   :name 'constant-year
   :act-type 'value-year
   :param-types '(part-year &rest part-year)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.replace (.join "" @:) "Ġ" " "))))
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
 
 ;;; token-*
 
@@ -411,11 +426,19 @@
   :param-types '())
 
 (define-meta-action
-  :meta-name 'token-number
+  :meta-name 'token-quantity
   :name-fn (lambda (token) token)
   :expr-dict-fn (lambda (token)
                   (mapkv :default (.format #"\"{}\"" token)))
-  :act-type 'part-number
+  :act-type 'part-quantity
+  :param-types '())
+
+(define-meta-action
+  :meta-name 'token-unit
+  :name-fn (lambda (token) token)
+  :expr-dict-fn (lambda (token)
+                  (mapkv :default (.format #"\"{}\"" token)))
+  :act-type 'part-unit
   :param-types '())
 
 (define-meta-action
