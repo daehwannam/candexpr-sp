@@ -22,29 +22,36 @@
 
 (define-types
   '(:object
-    concept
-    (:entity
+    (:entity-object
      (:entity-with-fact
       entity-with-attr
       entity-with-rel))
-    entity-name
-    relation
-    direction
-    comp-operator
-    st-or-bt-operator
-    min-or-max-operator
-    (:attribute
-     attribute-string
-     attribute-number
-     (:attribute-time
-      attribute-date
-      attribute-year))
-    (:qualifier
-     qualifier-string
-     qualifier-number
-     (:qualifier-time
-      qualifier-date
-      qualifier-year))
+
+    (:keyword
+     concept
+     entity
+     relation
+     direction
+     (:attribute
+      attribute-string
+      attribute-number
+      (:attribute-time
+       attribute-date                    ; not used
+       attribute-year                    ; not used
+       ))
+     (:qualifier
+      qualifier-string
+      qualifier-number
+      (:qualifier-time
+       qualifier-date                    ; not used
+       qualifier-year                    ; not used
+       )))
+
+    (:operator
+     comp-operator
+     st-or-bt-operator
+     min-or-max-operator)
+
     (:value
      value-string
      value-number
@@ -57,16 +64,18 @@
 (define-types
   '(:object
     (:key-part
-     key-part-entity-name
+     key-part-entity
      key-part-relation
      key-part-attribute-string
      key-part-attribute-number
-     key-part-attribute-date
-     key-part-attribute-year
+     (:key-part-attribute-time
+      key-part-attribute-date
+      key-part-attribute-year)
      key-part-qualifier-string
      key-part-qualifier-number
-     key-part-qualifier-date
-     key-part-qualifier-year)
+     (:key-part-qualifier-time
+      key-part-qualifier-date
+      key-part-qualifier-year))
 
     (:value-part
      value-part-string
@@ -113,15 +122,15 @@
 
 (define-action
   :name 'all-entities
-  :act-type 'entity
+  :act-type 'entity-object
   :param-types '()
   :expr-dict (mapkv :default $(engine.FindAll)
                     :visual "all-entities"))
 
 (define-action
   :name 'find
-  :act-type 'entity
-  :param-types '(entity-name)
+  :act-type 'entity-object
+  :param-types '(entity)
   :expr-dict (mapkv :default $(engine.Find @0)
                     :visual $(find @0)))
 
@@ -129,36 +138,36 @@
 
 (define-action
   :name 'filter-concept
-  :act-type 'entity
-  :param-types '(concept)
+  :act-type 'entity-object
+  :param-types '(concept entity-object)
   :expr-dict (mapkv :default $(engine.FilterConcept @0)
                     :visual $(filter-concept @0)))
 
 (define-action
   :name 'filter-str
   :act-type 'entity-with-attr
-  :param-types '(attribute-string value-string entity)
+  :param-types '(attribute-string value-string entity-object)
   :expr-dict (mapkv :default $(engine.FilterStr @2 @0 @1)
                     :visual $(filter-str @0 @1 @2)))
 
 (define-action
   :name 'filter-number
   :act-type 'entity-with-attr
-  :param-types '(attribute-number value-number comp-operator entity)
+  :param-types '(attribute-number value-number comp-operator entity-object)
   :expr-dict (mapkv :default $(engine.FilterNum @3 @0 @1 @2)
                     :visual $(filter-number @0 @1 @2 @3)))
 
 (define-action
   :name 'filter-year
   :act-type 'entity-with-attr
-  :param-types '(attribute-time value-year comp-operator entity)
+  :param-types '(attribute-time value-year comp-operator entity-object)
   :expr-dict (mapkv :default $(engine.FilterYear @3 @0 @1 @2)
                     :visual $(filter-year @0 @1 @2 @3)))
 
 (define-action
   :name 'filter-date
   :act-type 'entity-with-attr
-  :param-types '(attribute-time value-date comp-operator entity)
+  :param-types '(attribute-time value-date comp-operator entity-object)
   :expr-dict (mapkv :default $(engine.FilterDate @3 @0 @1 @2)
                     :visual $(filter-date @0 @1 @2 @3)))
 
@@ -167,7 +176,7 @@
 (define-action
   :name 'relate
   :act-type 'entity-with-rel
-  :param-types '(relation direction entity)
+  :param-types '(relation direction entity-object)
   :expr-dict (mapkv :default $(engine.Relate @2 @0 @1)
                     :visual $(relate @0 @1 @2)))
 
@@ -251,15 +260,15 @@
 
 (define-action
   :name 'intersect
-  :act-type 'entity
-  :param-types '(entity entity)
+  :act-type 'entity-object
+  :param-types '(entity-object entity-object)
   :expr-dict (mapkv :default $(engine.And @0 @1)
                     :visual $(intersect @0 @1)))
 
 (define-action
   :name 'union
-  :act-type 'entity
-  :param-types '(entity entity)
+  :act-type 'entity-object
+  :param-types '(entity-object entity-object)
   :expr-dict (mapkv :default $(engine.Or @0 @1)
                     :visual $(union @0 @1)))
 
@@ -268,7 +277,7 @@
 (define-action
   :name 'count
   :act-type 'result-number
-  :param-types '(entity)
+  :param-types '(entity-object)
   :expr-dict (mapkv :default $(engine.Count @0)
                     :visual $(count @0)))
 
@@ -277,14 +286,14 @@
 (define-action
   :name 'select-between
   :act-type 'result-entity-name
-  :param-types '(attribute st-or-bt-operator entity entity)
+  :param-types '(attribute st-or-bt-operator entity-object entity-object)
   :expr-dict (mapkv :default $(engine.SelectBetween @2 @3 @0 @1)
                     :visual $(select-between @0 @1 @2 @3)))
 
 (define-action
   :name 'select-among
   :act-type 'result-entity-name
-  :param-types '(attribute min-or-max-operator entity)
+  :param-types '(attribute min-or-max-operator entity-object)
   :expr-dict (mapkv :default $(engine.SelectBetween @2 @0 @1)
                     :visual $(select-between @0 @1 @2)))
 
@@ -323,42 +332,42 @@
 (define-action
   :name 'query-name
   :act-type 'result-entity-name
-  :param-types '(entity)
+  :param-types '(entity-object)
   :expr-dict (mapkv :default $(engine.QueryName @0)
                     :visual $(query-name @0)))
 
 (define-action
   :name 'query-attr
   :act-type 'result-attr-value
-  :param-types '(attribute entity)
+  :param-types '(attribute entity-object)
   :expr-dict (mapkv :default $(engine.QueryAttr @1 @0)
                     :visual $(query-attr @0 @1)))
 
 (define-action
   :name 'query-attr-under-cond
   :act-type 'result-attr-value
-  :param-types '(attribute qualifier value entity)
+  :param-types '(attribute qualifier value entity-object)
   :expr-dict (mapkv :default $(engine.QueryAttrUnderCondition @3 @0 @1 @2)
                     :visual $(query-attr-under-cond @0 @1 @2 @3)))
 
 (define-action
   :name 'query-relation
   :act-type 'result-relation
-  :param-types '(entity entity)
+  :param-types '(entity-object entity-object)
   :expr-dict (mapkv :default $(engine.QueryRelation @0 @1)
                     :visual $(query-relation @0 @1)))
 
 (define-action
   :name 'query-attr-qualifier
   :act-type 'result-attr-q-value
-  :param-types '(attribute value qualifier entity)
+  :param-types '(attribute value qualifier entity-object)
   :expr-dict (mapkv :default $(engine.QueryAttrQualifier @3 @0 @1 @2)
                     :visual $(query-attr-qualifier @0 @1 @2 @3)))
 
 (define-action
   :name 'query-rel-qualifier
   :act-type 'result-rel-q-value
-  :param-types '(relation qualifier entity entity)
+  :param-types '(relation qualifier entity-object entity-object)
   :expr-dict (mapkv :default $(engine.QueryRelationQualifier @2 @3 @0 @1)
                     :visual $(query-rel-qualifier @0 @1 @2 @3)))
 
@@ -394,22 +403,39 @@
 
 ;;; keyword-*
 
-(define-action
-  :name 'keyword-entity-name
-  :act-type 'entity-name
-  :param-types '(key-part-entity-name &rest key-part-entity-name)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
-
-(TODO ...)
-
+(starmaps
+ (lambda (name act-type param-type)
+   (define-action
+     :name name
+     :act-type act-type
+     :param-types (entuple param-type '&rest param-type)
+     :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " "))))))
+ '((keyword-entity-name      entity           key-part-entity)
+   (keyword-relation         relation         key-part-relation)
+   (keyword-attribute-string attribute-string key-part-attribute-string)
+   (keyword-attribute-number attribute-number key-part-attribute-number)
+   (keyword-attribute-time   attribute-time   key-part-attribute-time)
+   ;; (keyword-attribute-date   attribute-date   key-part-attribute-date)
+   ;; (keyword-attribute-year   attribute-year   key-part-attribute-year)
+   (keyword-qualifier-string qualifier-string key-part-qualifier-string)
+   (keyword-qualifier-number qualifier-number key-part-qualifier-number)
+   (keyword-qualifier-time   qualifier-time   key-part-qualifier-time)
+   ;; (keyword-qualifier-date   qualifier-date   key-part-qualifier-date)
+   ;; (keyword-qualifier-year   qualifier-year   key-part-qualifier-year)
+   ))
 
 ;;; constant-*
-
-(define-action
-  :name 'constant-string
-  :act-type 'value-string
-  :param-types '(value-part-string &rest value-part-string)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
+(starmaps
+ (lambda (name act-type param-type)
+  (define-action
+    :name name
+    :act-type act-type
+    :param-types (entuple value-part-string '&rest value-part-string)
+    :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " "))))))
+ '((constant-string value-string value-part-string)
+   (constant-quantity value-quantity value-part-quantity)
+   (constant-date value-date value-part-date)
+   (constant-year value-year value-part-year)))
 
 (define-action
   :name 'constant-number
@@ -418,29 +444,10 @@
   :expr-dict (mapkv :default #(.rstrip (.format #"\"{} {}\"" @1 @2))))
 
 (define-action
-  :name 'constant-quantity
-  :act-type 'value-quantity
-  :param-types '(value-part-quantity &rest value-part-quantity)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
-
-(define-action
   :name 'constant-unit
   :act-type 'value-unit
   :param-types '(&rest value-part-unit)
   :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
-
-(define-action
-  :name 'constant-date
-  :act-type 'value-date
-  :param-types '(value-part-date &rest value-part-date)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
-
-(define-action
-  :name 'constant-year
-  :act-type 'value-year
-  :param-types '(value-part-year &rest value-part-year)
-  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
-
 
 ;;; token-*
 
