@@ -52,14 +52,29 @@
      value-unit
      (:value-time
       value-date
-      value-year))
-    (:part
-     part-string
-     part-quantity
-     part-unit
-     (:part-time
-      part-date
-      part-year))))
+      value-year))))
+
+(define-types
+  '(:object
+    (:key-part
+     key-part-entity-name
+     key-part-relation
+     key-part-attribute-string
+     key-part-attribute-number
+     key-part-attribute-date
+     key-part-attribute-year
+     key-part-qualifier-string
+     key-part-qualifier-number
+     key-part-qualifier-date
+     key-part-qualifier-year)
+
+    (:value-part
+     value-part-string
+     value-part-quantity
+     value-part-unit
+     (:value-part-time
+      value-part-date
+      value-part-year))))
 
 (define-types
   '(:result
@@ -93,8 +108,8 @@
   :param-types '(result)
   :expr-dict (mapkv :default $(lambda (engine)
                                  (postprocess-denotation @0))
-                    :visual "@0"
-                    :visual-2 $(program @0)))
+                    :visual-0 "@0"
+                    :visual $(program @0)))
 
 (define-action
   :name 'all-entities
@@ -377,12 +392,23 @@
   :expr-dict (mapkv :default $(engine.VerifyDate @2 @0 @1)
                     :visual $(verify-date @0 @1 @2)))
 
+;;; keyword-*
+
+(define-action
+  :name 'keyword-entity-name
+  :act-type 'entity-name
+  :param-types '(key-part-entity-name &rest key-part-entity-name)
+  :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
+
+(TODO ...)
+
+
 ;;; constant-*
 
 (define-action
   :name 'constant-string
   :act-type 'value-string
-  :param-types '(part-string &rest part-string)
+  :param-types '(value-part-string &rest value-part-string)
   :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
 
 (define-action
@@ -394,65 +420,73 @@
 (define-action
   :name 'constant-quantity
   :act-type 'value-quantity
-  :param-types '(part-quantity &rest part-quantity)
+  :param-types '(value-part-quantity &rest value-part-quantity)
   :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
 
 (define-action
   :name 'constant-unit
   :act-type 'value-unit
-  :param-types '(&rest part-unit)
+  :param-types '(&rest value-part-unit)
   :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
 
 (define-action
   :name 'constant-date
   :act-type 'value-date
-  :param-types '(part-date &rest part-date)
+  :param-types '(value-part-date &rest value-part-date)
   :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
 
 (define-action
   :name 'constant-year
   :act-type 'value-year
-  :param-types '(part-year &rest part-year)
+  :param-types '(value-part-year &rest value-part-year)
   :expr-dict (mapkv :default #(.format #"\"{}\"" (.lstrip (.replace (.join "" @:) "Ġ" " ")))))
+
 
 ;;; token-*
 
 (define-meta-action
-  :meta-name 'token-string
+  :meta-name 'token
   :name-fn (lambda (token) token)
   :expr-dict-fn (lambda (token)
                   (mapkv :default (.format #"\"{}\"" token)))
-  :act-type 'part-string
   :param-types '())
 
-(define-meta-action
-  :meta-name 'token-quantity
-  :name-fn (lambda (token) token)
-  :expr-dict-fn (lambda (token)
-                  (mapkv :default (.format #"\"{}\"" token)))
-  :act-type 'part-quantity
-  :param-types '())
+;; (define-meta-action
+;;   :meta-name 'token-string
+;;   :name-fn (lambda (token) token)
+;;   :expr-dict-fn (lambda (token)
+;;                   (mapkv :default (.format #"\"{}\"" token)))
+;;   :act-type 'value-part-string
+;;   :param-types '())
 
-(define-meta-action
-  :meta-name 'token-unit
-  :name-fn (lambda (token) token)
-  :expr-dict-fn (lambda (token)
-                  (mapkv :default (.format #"\"{}\"" token)))
-  :act-type 'part-unit
-  :param-types '())
+;; (define-meta-action
+;;   :meta-name 'token-quantity
+;;   :name-fn (lambda (token) token)
+;;   :expr-dict-fn (lambda (token)
+;;                   (mapkv :default (.format #"\"{}\"" token)))
+;;   :act-type 'value-part-quantity
+;;   :param-types '())
 
-(define-meta-action
-  :meta-name 'token-date
-  :name-fn (lambda (token) token)
-  :expr-dict-fn (lambda (token)
-                  (mapkv :default (.format #"\"{}\"" token)))
-  :act-type 'part-date
-  :param-types '())
+;; (define-meta-action
+;;   :meta-name 'token-unit
+;;   :name-fn (lambda (token) token)
+;;   :expr-dict-fn (lambda (token)
+;;                   (mapkv :default (.format #"\"{}\"" token)))
+;;   :act-type 'value-part-unit
+;;   :param-types '())
 
-(define-meta-action
-  :meta-name 'token-year
-  :name-fn (lambda (token) token)
-  :expr-dict-fn (lambda (token)
-                  (mapkv :default (.format #"\"{}\"" token)))
-  :act-type 'part-year
-  :param-types '())
+;; (define-meta-action
+;;   :meta-name 'token-date
+;;   :name-fn (lambda (token) token)
+;;   :expr-dict-fn (lambda (token)
+;;                   (mapkv :default (.format #"\"{}\"" token)))
+;;   :act-type 'value-part-date
+;;   :param-types '())
+
+;; (define-meta-action
+;;   :meta-name 'token-year
+;;   :name-fn (lambda (token) token)
+;;   :expr-dict-fn (lambda (token)
+;;                   (mapkv :default (.format #"\"{}\"" token)))
+;;   :act-type 'value-part-year
+;;   :param-types '())

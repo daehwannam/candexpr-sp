@@ -69,7 +69,8 @@ def read_dsl(file_path):
 
         kwargs.update(dict(
             name=demunge(kwargs['name']),
-            act_type=demunge(kwargs['act_type']),
+            act_type=(demunge(kwargs['act_type']) if isinstance(kwargs['act_type'], str) else
+                      tuple(map(demunge, demunge(kwargs['act_type'])))),
             expr_dict=expr_dict,
             param_types=param_types,
             optional_idx=optional_idx,
@@ -77,18 +78,23 @@ def read_dsl(file_path):
 
         return dict(_action_=Action(**kwargs))
 
+    # make_action.actions = []
+
     def make_meta_action(*symbols):
         kwargs = parse_kwargs(symbols)
         param_types, optional_idx, rest_idx = parse_params(kwargs['param_types'])
 
         kwargs.update(dict(
             meta_name=demunge(kwargs['meta_name']),
-            act_type=demunge(kwargs['act_type']),
+            act_type=(demunge(kwargs['act_type']) if isinstance(kwargs['act_type'], str) else
+                      tuple(map(demunge, demunge(kwargs['act_type'])))),
             param_types=param_types,
             optional_idx=optional_idx,
             rest_idx=rest_idx))
 
         return dict(_meta_action_=MetaAction(**kwargs))
+
+    # make_meta_action.meta_actions = []
 
     def make_super_types_dict(type_hierarchy_tuple):
         super_types_dict = {}
@@ -167,6 +173,6 @@ def postprocess_answer(answer):
 
 if __name__ == '__main__':
     # dsl = read_dsl('./logic/example.dsl')
-    dsl = read_dsl('./semparse/dsl/kopl.dsl')
+    dsl = read_dsl('./dsl/kopl/dsl')
     breakpoint()
     ()

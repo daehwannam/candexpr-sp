@@ -4,9 +4,10 @@ from typing import List, Dict
 from abc import ABCMeta, abstractmethod
 import copy
 from bidict import bidict, ValueDuplicationError
+import inspect
 
 from dhnamlib.pylib.structure import TreeStructure
-from dhnamlib.pylib.iteration import any_not_none, iterate
+from dhnamlib.pylib.iteration import any_not_none, iterate, all_same
 from dhnamlib.pylib.decorators import abstractfunction
 from dhnamlib.pylib.constant import Abstract
 
@@ -29,6 +30,7 @@ class Action:
                  rest_idx=None):
         self.name = name
 
+        assert isinstance(act_type, str) or self.is_union_type(act_type)
         assert isinstance(param_types, (list, tuple))
 
         self.act_type = act_type
@@ -37,6 +39,13 @@ class Action:
         self.optional_idx = optional_idx
         self.rest_idx = rest_idx
         self.num_min_args = self.get_min_num_args()
+
+    @staticmethod
+    def is_union_type(act_type):
+        return isinstance(act_type, (list, tuple))
+
+    def is_union_act_type(self):
+        return self.is_union_type(self.act_type)
 
     def __repr__(self):
         return self.name
@@ -64,20 +73,27 @@ class MetaAction:
     def __init__(self,
                  *,
                  meta_name,
-                 name_fn=None,
-                 expr_dict_fn=None,
+                 name_fn,
+                 expr_dict_fn,
                  **action_kwargs):
+        assert all_same(map(self.get_num_args, [name_fn, expr_dict_fn]))
+        self.num_meta_args = self.get_num_args(name_fn)
+
         self.meta_name = meta_name
         meta_action = self
 
         class SpecificAction(Action):
             def __init__(self, *, meta_args, **kwargs):
+                assert len(meta_args) == meta_action.num_meta_args
+
                 self.meta_action = meta_action
 
                 for k, v in action_kwargs.items():
                     if k in kwargs:
                         assert v is None
                     kwargs[k] = v
+
+                num_args_list = []
 
                 assert 'name' not in kwargs
                 kwargs['name'] = name_fn(*meta_args)
@@ -88,6 +104,10 @@ class MetaAction:
                 super().__init__(**kwargs)
 
         self.action_cls = SpecificAction
+
+    @staticmethod
+    def get_num_args(func):
+        return len(inspect.getargspec(f).args)
 
     def __repr__(self):
         return self.meta_name
@@ -128,7 +148,9 @@ class Grammar:
     def make_type_to_actions_dict(actions, super_types_dict, constructor=dict):
         dic = {}
         for action in actions:
-            type_q = deque([action.act_type])
+            
+            type_q = deque(action.act_type if action.is_union_act_type() else
+                           [action.act_type])
             while type_q:
                 typ = type_q.popleft()
                 dic.setdefault(typ, set()).add(action)
