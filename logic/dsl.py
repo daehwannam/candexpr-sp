@@ -7,7 +7,7 @@ from hissp.munger import munge, demunge
 
 from dhnamlib.pylib.lisp import remove_comments, replace_prefixed_parens, parse_hy_args
 from dhnamlib.pylib.iteration import merge_dicts, chainelems
-from dhnamlib.pylib.function import starmaps  # imported for eval_lissp
+from dhnamlib.pylib.function import starloop  # imported for eval_lissp
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
 
@@ -63,7 +63,6 @@ def read_dsl(file_path):
                 idx += 1
 
         return tuple(params), optional_idx, rest_idx
-
 
     def parse_act_type(act_type):
         if isinstance(act_type, str):
@@ -130,7 +129,6 @@ def read_dsl(file_path):
 
     make_super_types_dict._super_types_dicts_ = []
 
-
     def make_dict(*symbols):
         return parse_kwargs(symbols)
 
@@ -153,6 +151,7 @@ def read_dsl(file_path):
                     ['define-meta-action', make_meta_action]]
 
         _ = eval_lissp(text, extra_ns=dict([munge(k), v] for k, v in bindings))
+        breakpoint()
         assert _ is None
 
         dsl = dict(super_types_dict=merge_dicts(make_super_types_dict._super_types_dicts_,

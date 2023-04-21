@@ -1,6 +1,7 @@
 
-from itertools import chain
-from pprint import pprint as pp
+import re
+# from itertools import chain
+# from pprint import pprint as pp
 
 from logic.dsl import read_dsl
 

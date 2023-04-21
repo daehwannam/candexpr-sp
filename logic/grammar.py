@@ -7,7 +7,7 @@ from bidict import bidict, ValueDuplicationError
 import inspect
 
 from dhnamlib.pylib.structure import TreeStructure
-from dhnamlib.pylib.iteration import any_not_none, iterate, all_same
+from dhnamlib.pylib.iteration import any_not_none, iterate, all_same, flatten
 from dhnamlib.pylib.decorators import abstractfunction
 from dhnamlib.pylib.constant import Abstract
 
@@ -107,7 +107,7 @@ class MetaAction:
 
     @staticmethod
     def get_num_args(func):
-        return len(inspect.getargspec(f).args)
+        return len(inspect.signature(func).parameters)
 
     def __repr__(self):
         return self.meta_name
@@ -301,6 +301,9 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
         return subtrees
 
     def get_expr_str(self, expr_key=None, extra_ns=None):
+        # TODO
+        # - simplify "get_expr_str" and uses "flatten"
+        # - expr_dict with either string or function
         if expr_key is None:
             expr_key = self.grammar.default_expr_key
 
