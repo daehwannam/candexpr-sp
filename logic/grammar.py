@@ -1,3 +1,4 @@
+import re
 from itertools import chain
 from collections import deque
 from typing import List, Dict
@@ -7,7 +8,7 @@ from bidict import bidict, ValueDuplicationError
 import inspect
 
 from dhnamlib.pylib.structure import TreeStructure
-from dhnamlib.pylib.iteration import any_not_none, iterate, all_same, flatten
+from dhnamlib.pylib.iteration import any_not_none, all_same, flatten, split_by_indices, chainelems
 from dhnamlib.pylib.decorators import abstractfunction
 from dhnamlib.pylib.constant import Abstract
 
@@ -36,9 +37,60 @@ class Action:
         self.act_type = act_type
         self.param_types = param_types
         self.expr_dict = expr_dict
+        self.expr_pieces_dict = self.get_expr_pieces_dict(expr_dict)
         self.optional_idx = optional_idx
         self.rest_idx = rest_idx
         self.num_min_args = self.get_min_num_args()
+
+    _raw_left_curly_bracket_symbol = '___L_CURLY___'
+    _raw_right_curly_bracket_symbol = '___R_CURLY___'
+    _place_holder_regex = re.compile(r'{(([0-9]+)|([_a-zA-Z][_a-zA-Z0-9]*))}')
+
+    class PieceKey:
+        def __init__(self, value):
+            self.value = value
+
+        def __repr__(self):
+            return repr(self.value)
+
+    @classmethod
+    def get_expr_pieces_dict(cls, expr_dict):
+        def replace_brackets_with_symbols(text):
+            return text.replace(
+                '{{', cls._raw_left_curly_bracket_symbol).replace(
+                '}}', cls._raw_right_curly_bracket_symbol)
+
+        def replace_symbols_with_brackets(text):
+            return text.replace(
+                cls._raw_left_curly_bracket_symbol, '{{').replace(
+                cls._raw_right_curly_bracket_symbol, '}}')
+
+        def iter_span_piece_key_pairs(expr):
+            for match_obj in cls._place_holder_regex.finditer(expr):
+                yield match_obj.span(), match_obj.group(1)
+
+        def iter_expr_pieces(expr):
+            span_piece_key_pairs = tuple(iter_span_piece_key_pairs(replace_brackets_with_symbols(expr)))
+            if len(span_piece_key_pairs) == 0:
+                yield expr
+            else:
+                spans, piece_keys = zip(*iter_span_piece_key_pairs(replace_brackets_with_symbols(expr)))
+                splits = split_by_indices(expr, chainelems(spans))
+                for idx, split in enumerate(splits):
+                    if idx % 2 == 1:
+                        yield Action.PieceKey(int(piece_keys[idx // 2]))
+                    else:
+                        yield replace_symbols_with_brackets(split)
+
+        def get_expr_pieces(expr):
+            if callable(expr):
+                return expr
+            else:
+                assert isinstance(expr, str)
+                return tuple(iter_expr_pieces(expr))
+
+        return dict([piece_key, get_expr_pieces(expr)]
+                    for piece_key, expr in expr_dict.items())
 
     @staticmethod
     def is_union_type(act_type):
@@ -92,8 +144,6 @@ class MetaAction:
                     if k in kwargs:
                         assert v is None
                     kwargs[k] = v
-
-                num_args_list = []
 
                 assert 'name' not in kwargs
                 kwargs['name'] = name_fn(*meta_args)
@@ -300,67 +350,35 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
                 tree = tree.children[-1]
         return subtrees
 
-    def get_expr_str(self, expr_key=None, extra_ns=None):
-        # TODO
-        # - simplify "get_expr_str" and uses "flatten"
-        # - expr_dict with either string or function
+    def get_expr_str(self, expr_key=None):
         if expr_key is None:
             expr_key = self.grammar.default_expr_key
 
         def get_expr_pieces(action):
-            return action.expr_dict.get(expr_key)
+            return any_not_none(
+                action.expr_pieces_dict.get(k)
+                for k in [expr_key, self.grammar.default_expr_key])
 
-        program_expr_pieces = []
-
-        def get_idx(text):
-            if text == '':
-                return None
+        def get_expr_form(tree):
+            child_expr_forms = tuple(map(get_expr_form, tree.children))
+            expr_pieces_or_expr_fn = get_expr_pieces(tree.value)
+            if callable(expr_pieces_or_expr_fn):
+                expr_fn = expr_pieces_or_expr_fn
+                expr_form = expr_fn(*map(form_to_str, child_expr_forms))
             else:
-                return int(text)
+                expr_pieces = expr_pieces_or_expr_fn
+                expr_form = []
+                for expr_piece in expr_pieces:
+                    if isinstance(expr_piece, Action.PieceKey):
+                        expr_form.append(child_expr_forms[expr_piece.value])
+                    else:
+                        expr_form.append(expr_piece)
+            return expr_form
 
-        paren_pairs = ['()', '[]']
-        l_to_r_paren = dict(paren_pairs)
-        l_parens, r_parens = map(set, zip(*paren_pairs))
+        def form_to_str(expr_form):
+            return ''.join(flatten(expr_form))
 
-        def tree_to_pieces(tree, total_expr_pieces, in_injection):
-            it = iterate(get_expr_pieces(tree.value))
-            while it:
-                piece = next(it)
-                if piece.startswith(self.grammar.placeholder_prefix):
-                    param_idx = int(piece[1:])
-                    tree_to_pieces(tree.children[param_idx], total_expr_pieces, in_injection)
-                elif piece == self.grammar.injection_prefix and not in_injection:
-                    eval_pieces = []
-                    paren_stack = [next(it)]
-                    assert paren_stack == ['(']
-                    while paren_stack:
-                        piece = next(it)
-                        if piece.startswith(self.grammar.placeholder_prefix):
-                            if ':' in piece:
-                                eval_pieces.append('(entuple')
-                                beg_idx, end_idx = map(get_idx, piece[1:].split(':'))
-                                for param_idx in range(beg_idx, end_idx):
-                                    tree_to_pieces(tree.children[param_idx], eval_pieces, True)
-                                    if param_idx < end_idx - 1:
-                                        eval_pieces.append(' ')
-                                eval_pieces.append(')')  # end of entuple
-                            else:
-                                param_idx = int(piece[1:])
-                                tree_to_pieces(tree.children[param_idx], eval_pieces, True)
-                        else:
-                            if piece in l_parens:
-                                paren_stack.append(piece)
-                            elif piece in r_parens:
-                                left_paren = paren_stack.pop()
-                                assert l_to_r_paren[left_paren] == piece
-                            eval_pieces.append(piece)
-                    total_expr_pieces.append(eval_lissp(''.join(eval_pieces), extra_ns=extra_ns))
-                else:
-                    total_expr_pieces.append(piece)
-
-        tree_to_pieces(self, program_expr_pieces, False)
-
-        return ''.join(program_expr_pieces)
+        return form_to_str(get_expr_form(self))
 
 
 def make_program_tree_cls(grammar: Grammar, name=None):

@@ -10,24 +10,12 @@ from dhnamlib.pylib.iteration import merge_dicts, chainelems
 from dhnamlib.pylib.function import starloop  # imported for eval_lissp
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
+from dhnamlib.hissplib.expression import remove_backquoted_symbol_prefixes
 
 from .grammar import Action, MetaAction
 
 
 prelude()  # used for eval_lissp
-
-
-split_lisp_regex = re.compile(r'([\(\)\[\] ])')
-
-
-def split_lisp(text):
-    tokens = split_lisp_regex.split(text)
-    return tuple(token for token in tokens if token)
-
-
-def split_expr_dict(expr_dict):
-    return dict([k, split_lisp(v)]
-                for k, v in expr_dict.items())
 
 
 dsl_read_form = '(progn {})'
@@ -71,103 +59,108 @@ def read_dsl(file_path):
             assert isinstance(act_type, (list, tuple))
             return tuple(map(demunge, demunge(act_type)))
 
-    def make_action(*symbols):
-        kwargs = parse_kwargs(symbols)
+    def make_define_types(super_types_dicts):
+        def define_types(type_hierarchy_tuple):
+            super_types_dict = {}
 
-        expr_dict = split_expr_dict(kwargs['expr_dict'])
-        param_types, optional_idx, rest_idx = parse_params(kwargs['param_types'])
+            def update_super_types_dict(parent_type, children):
+                for child in children:
+                    if isinstance(child, tuple):
+                        child_kw, *grandchildren = child
+                        assert child_kw[0] == ':'
+                        child_type = child_kw[1:]
+                        update_super_types_dict(child_type, grandchildren)
+                    else:
+                        child_type = demunge(child)
+                    super_types_dict.setdefault(child_type, set()).add(parent_type)
 
-        kwargs.update(dict(
-            name=demunge(kwargs['name']),
-            act_type=parse_act_type(kwargs['act_type']),
-            expr_dict=expr_dict,
-            param_types=param_types,
-            optional_idx=optional_idx,
-            rest_idx=rest_idx))
+            root_kw, *children = type_hierarchy_tuple
+            root_type = root_kw[1:]
+            update_super_types_dict(root_type, children)
 
-        # return dict(_action_=Action(**kwargs))
-        make_action._actions_.append(Action(**kwargs))
+            super_types_dicts.append(super_types_dict)
+        return define_types
 
-    make_action._actions_ = []
+    def make_define_action(actions):
+        def define_action(*symbols):
+            kwargs = parse_kwargs(symbols)
 
-    def make_meta_action(*symbols):
-        kwargs = parse_kwargs(symbols)
-        param_types, optional_idx, rest_idx = parse_params(kwargs['param_types'])
+            param_types, optional_idx, rest_idx = parse_params(kwargs['param_types'])
 
-        kwargs.update(dict(
-            meta_name=demunge(kwargs['meta_name']),
-            act_type=parse_act_type(kwargs['act_type']),
-            param_types=param_types,
-            optional_idx=optional_idx,
-            rest_idx=rest_idx))
+            kwargs.update(dict(
+                name=demunge(kwargs['name']),
+                act_type=parse_act_type(kwargs['act_type']),
+                expr_dict=kwargs['expr_dict'],
+                param_types=param_types,
+                optional_idx=optional_idx,
+                rest_idx=rest_idx))
 
-        # return dict(_meta_action_=MetaAction(**kwargs))
-        make_meta_action._meta_actions_.append(MetaAction(**kwargs))
+            actions.append(Action(**kwargs))
+        return define_action
 
-    make_meta_action._meta_actions_ = []
+    def make_define_meta_action(meta_actions):
+        def define_meta_action(*symbols):
+            kwargs = parse_kwargs(symbols)
+            param_types, optional_idx, rest_idx = parse_params(kwargs['param_types'])
+            param_types = param_types if len(param_types) != 0 else None
+            act_type = parse_act_type(kwargs['act_type']) if 'act_type' in kwargs else None
 
-    def make_super_types_dict(type_hierarchy_tuple):
-        super_types_dict = {}
+            kwargs.update(dict(
+                meta_name=demunge(kwargs['meta_name']),
+                act_type=act_type,
+                param_types=param_types,
+                optional_idx=optional_idx,
+                rest_idx=rest_idx))
 
-        def update_super_types_dict(parent_type, children):
-            for child in children:
-                if isinstance(child, tuple):
-                    child_kw, *grandchildren = child
-                    assert child_kw[0] == ':'
-                    child_type = child_kw[1:]
-                    update_super_types_dict(child_type, grandchildren)
-                else:
-                    child_type = demunge(child)
-                super_types_dict.setdefault(child_type, set()).add(parent_type)
-
-        root_kw, *children = type_hierarchy_tuple
-        root_type = root_kw[1:]
-        update_super_types_dict(root_type, children)
-
-        # return dict(_types_=super_types_dict)
-        make_super_types_dict._super_types_dicts_.append(super_types_dict)
-
-    make_super_types_dict._super_types_dicts_ = []
+            meta_actions.append(MetaAction(**kwargs))
+        return define_meta_action
 
     def make_dict(*symbols):
         return parse_kwargs(symbols)
 
-    def make_dsl(text, string_expr_prefix='$', injection_prefix='#'):
+    def preprocess_prefixed_parens(text):
         def expr_to_str(prefix, expr_repr):
-            return '"{}{}"'.format(prefix, expr_repr.replace('"', r'\"'))
+            return 
 
-        text = remove_comments(text)
-        text = replace_prefixed_parens(
+        string_expr_prefix = '$'
+        backquote = '`'
+        return replace_prefixed_parens(
             text,
             info_dicts=[dict(prefix=string_expr_prefix, paren_pair='()',
-                             fn=lambda x: expr_to_str(string_expr_prefix, x)),
-                        dict(prefix=injection_prefix, paren_pair='()',
-                             fn=lambda x: expr_to_str(injection_prefix, x))])
+                             fn=lambda x: '"{}{}"'.format(string_expr_prefix,
+                                                          x.replace('"', r'\"'))),
+                        dict(prefix=backquote, paren_pair='()',
+                             fn=lambda x: "(remove_backquoted_symbol_prefixes {}{})".format(backquote, x))])
+
+    def make_dsl(text, preprocessing_prefixed_parens=True):
+        text = remove_comments(text)
+        if preprocessing_prefixed_parens:
+            text = preprocess_prefixed_parens(text)
         text = dsl_read_form.format(text)
 
+        super_types_dicts = []
+        actions = []
+        meta_actions = []
+
         bindings = [['mapkv', make_dict],
-                    ['define-types', make_super_types_dict],
-                    ['define-action', make_action],
-                    ['define-meta-action', make_meta_action]]
+                    ['define-types', make_define_types(super_types_dicts)],
+                    ['define-action', make_define_action(actions)],
+                    ['define-meta-action', make_define_meta_action(meta_actions)]]
 
         _ = eval_lissp(text, extra_ns=dict([munge(k), v] for k, v in bindings))
-        breakpoint()
         assert _ is None
 
-        dsl = dict(super_types_dict=merge_dicts(make_super_types_dict._super_types_dicts_,
+        dsl = dict(super_types_dict=merge_dicts(super_types_dicts,
                                                 merge_fn=lambda values: set(chainelems(values))),
-                   actions=make_action._actions_,
-                   meta_actions=make_meta_action._meta_actions_)
+                   actions=actions,
+                   meta_actions=meta_actions)
 
-        # dsl = dict(actions=merged_def_dict['_action_'],
-        #            meta_actions=merged_def_dict['_meta_action_'],
-        #            super_types_dict=merge_dicts(merged_def_dict['_types_'],
-        #                                         merge_fn=lambda values: set(chainelems(values))))
         return dsl
 
     with open(file_path) as f:
         text = f.read()
-        return make_dsl(text)
+
+    return make_dsl(text)
 
 
 def postprocess_denotation(denotation):
