@@ -21,13 +21,13 @@
 ;;   :rest-idx 2)
 
 (define-types
-  '(:type                             ; not used
+  '(:type                             ; abstract
     (:obj-entity
      (:obj-entity-with-fact
       obj-entity-with-attr
       obj-entity-with-rel))
 
-    (:keyword                           ; not used
+    (:keyword                           ; abstract
      kw-concept
      kw-entity
      kw-relation
@@ -35,18 +35,18 @@
       kw-attr-string
       kw-attr-number
       (:kw-attr-time
-       kw-attr-date                    ; not used ..?
-       kw-attr-year                    ; not used ..?
+       kw-attr-date                     ; NOT USED
+       kw-attr-year                     ; NOT USED
        ))
      (:kw-qualifier
       kw-q-string
       kw-q-number
       (:kw-q-time
-       kw-q-date                    ; not used
-       kw-q-year                    ; not used
+       kw-q-date                        ; NOT USED
+       kw-q-year                        ; NOT USED
        )))
 
-    (:operator
+    (:operator                          ; abstract
      op-direction
      op-comparison
      op-st-or-bt
@@ -57,35 +57,36 @@
      v-number
      v-quantity
      v-unit
-     (:v-time
+     (:v-time                           ; abstract
       v-date
       v-year))))
 
 (define-types
   '(:part
-    (:keyword-part
+    (:keyword-part                      ; abstract
      kp-concept
      kp-entity
      kp-relation
-     (:kp-attribute
+     (:kp-attribute                     ; abstract
       kp-attr-string
       kp-attr-number
       (:kp-attr-time
-       kp-attr-date
-       kp-attr-year))
-     (:kp-qualifier
+       kp-attr-date                     ; NOT USED
+       kp-attr-year                     ; NOT USED
+       ))
+     (:kp-qualifier                     ; abstract
       kp-q-string
       kp-q-number
       (:kp-q-time
-       kp-q-date           ; not used
-       kp-q-year           ; not used
+       kp-q-date                        ; NOT USED
+       kp-q-year                        ; NOT USED
        )))
 
     (:value-part
      vp-string
      vp-quantity
      vp-unit
-     (:vp-time
+     (:vp-time                          ; abstract
       vp-date
       vp-year))))
 
@@ -98,6 +99,16 @@
     result-attr-q-value
     result-rel-q-value
     result-boolean))
+
+(declare-abstract-types
+  '(type
+    keyword
+    operator
+    v-time
+    keyword-part
+    kp-attribute
+    kp-qualifier
+    vp-time))
 
 
 ;; Result functions
@@ -120,7 +131,7 @@
   :act-type 'result
   :param-types '(result)
   :expr-dict (mapkv :default $(lambda (engine)
-                                 (postprocess-denotation {0}))
+                                (postprocess-denotation {0}))
                     :visual-0 "{0}"
                     :visual $(program {0})))
 
@@ -405,55 +416,57 @@
   :expr-dict (mapkv :default $(engine.VerifyDate {2} {0} {1})
                     :visual $(verify-date {0} {1} {2})))
 
-;;; keyword-*
+(let (join-parts (lambda (: :* args)
+                   (.format #"\"{}\"" (.lstrip (.replace (.join "" args) "Ġ" " ")))))
+  ;; keyword-*
+  (starloop
+   (lambda (name act-type param-type)
+     (define-action
+       :name name
+       :act-type act-type
+       ;; :param-types (entuple param-type '&rest param-type)
+       :param-types `(,param-type &rest ,param-type)
+       :expr-dict (mapkv :default join-parts)))
+   '((keyword-entity           kw-entity      kp-entity)
+     (keyword-relation         kw-relation    kp-relation)
+     (keyword-attribute-string kw-attr-string kp-attr-string)
+     (keyword-attribute-number kw-attr-number kp-attr-number)
+     (keyword-attribute-time   kw-attr-time   kp-attr-time)
+     ;; (keyword-attribute-date   kw-attr-date   kp-attr-date)
+     ;; (keyword-attribute-year   kw-attr-year   kp-attr-year)
+     (keyword-qualifier-string kw-q-string kp-q-string)
+     (keyword-qualifier-number kw-q-number kp-q-number)
+     (keyword-qualifier-time   kw-q-time   kp-q-time)
+     ;; (keyword-qualifier-date   kw-q-date   kp-q-date)
+     ;; (keyword-qualifier-year   kw-q-year   kp-q-year)
+     ))
 
-(starloop
- (lambda (name act-type param-type)
-   (define-action
-     :name name
-     :act-type act-type
-     ;; :param-types (entuple param-type '&rest param-type)
-     :param-types `(,param-type &rest ,param-type)
-     :expr-dict (mapkv :default (lambda (: :* args) (.format #"\"{}\"" (.lstrip (.replace (.join "" args) "Ġ" " ")))))))
- '((keyword-entity           kw-entity      kp-entity)
-   (keyword-relation         kw-relation    kp-relation)
-   (keyword-attribute-string kw-attr-string kp-attr-string)
-   (keyword-attribute-number kw-attr-number kp-attr-number)
-   (keyword-attribute-time   kw-attr-time   kp-attr-time)
-   ;; (keyword-attribute-date   kw-attr-date   kp-attr-date)
-   ;; (keyword-attribute-year   kw-attr-year   kp-attr-year)
-   (keyword-qualifier-string kw-q-string kp-q-string)
-   (keyword-qualifier-number kw-q-number kp-q-number)
-   (keyword-qualifier-time   kw-q-time   kp-q-time)
-   ;; (keyword-qualifier-date   kw-q-date   kp-q-date)
-   ;; (keyword-qualifier-year   kw-q-year   kp-q-year)
-   ))
+  ;; constant-*
+  (starloop
+   (lambda (name act-type param-type)
+     (define-action
+       :name name
+       :act-type act-type
+       ;; :param-types (entuple vp-string '&rest vp-string)
+       :param-types `(,param-type &rest ,param-type)
+       :expr-dict (mapkv :default join-parts)))
+   '((constant-string v-string vp-string)
+     (constant-quantity v-quantity vp-quantity)
+     (constant-date v-date vp-date)
+     (constant-year v-year vp-year)))
 
-;;; constant-*
-(starloop
- (lambda (name act-type param-type)
   (define-action
-    :name name
-    :act-type act-type
-    ;; :param-types (entuple vp-string '&rest vp-string)
-    :param-types `(,param-type &rest ,param-type)
-    :expr-dict (mapkv :default (lambda (: :* args) (.format #"\"{}\"" (.lstrip (.replace (.join "" args) "Ġ" " ")))))))
- '((constant-string v-string vp-string)
-   (constant-quantity v-quantity vp-quantity)
-   (constant-date v-date vp-date)
-   (constant-year v-year vp-year)))
+    :name 'constant-number
+    :act-type 'v-number
+    :param-types '(v-quantity v-unit)
+    :expr-dict (mapkv :default (lambda (v-quantity v-unit) (.rstrip (.format #"\"{} {}\"" v-quantity v-unit)))))
 
-(define-action
-  :name 'constant-number
-  :act-type 'v-number
-  :param-types '(v-quantity v-unit)
-  :expr-dict (mapkv :default (lambda (v-quantity v-unit) (.rstrip (.format #"\"{} {}\"" v-quantity v-unit)))))
+  (define-action
+    :name 'constant-unit
+    :act-type 'v-unit
+    :param-types '(&rest vp-unit)
+    :expr-dict (mapkv :default join-parts)))
 
-(define-action
-  :name 'constant-unit
-  :act-type 'v-unit
-  :param-types '(&rest vp-unit)
-  :expr-dict (mapkv :default (lambda (: :* args) (.format #"\"{}\"" (.lstrip (.replace (.join "" args) "Ġ" " "))))))
 
 ;;; token-*
 
