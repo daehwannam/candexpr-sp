@@ -1,19 +1,25 @@
 
+from itertools import chain
+
 from hissp.munger import munge, demunge
 
 from dhnamlib.pylib.lisp import (remove_comments, replace_prefixed_parens, is_keyword, keyword_to_symbol)
 from dhnamlib.pylib.iteration import merge_dicts, chainelems
 from dhnamlib.pylib.function import starloop  # imported for eval_lissp
+from dhnamlib.pylib.decorators import Register
 # from dhnamlib.pylib.structure import AttrDict
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
 from dhnamlib.hissplib.expression import remove_backquoted_symbol_prefixes  # imported for eval_lissp
+from dhnamlib.hissplib.operation import import_operators
 from dhnamlib.hissplib.decorators import parse_hy_args, hy_function
+from dhnamlib.pylib.decorators import abstractfunction
 
 from .formalism import Formalism, Action, MetaAction
 
 
 prelude()  # used for eval_lissp
+import_operators()  # used for eval_lissp
 
 grammar_read_form = '(progn {})'
 
@@ -21,35 +27,75 @@ grammar_read_form = '(progn {})'
 class Grammar:
     """Formal grammar"""
 
-    def __init__(self, super_types_dict, actions, meta_actions, use_reduce=True):
-        self.formalism = Formalism()
-
+    def __init__(self, *, formalism, super_types_dict, actions, meta_actions, register, use_reduce=True):
+        self.formalism = formalism
         self.super_types_dict = super_types_dict
-        self.actions = self.formalism.extend_actions(actions, use_reduce=use_reduce)
+        self.base_actions = formalism.extend_actions(actions, use_reduce=use_reduce)
         self.meta_actions = meta_actions
+        self.register = register
+        self.added_actions = tuple()
 
-        self.name_to_action_dict = self.formalism.make_name_to_action_dict(actions)
-        self.meta_name_to_meta_action_dict = self.formalism.make_name_to_action_dict(meta_actions, meta=True)
+        self._name_to_base_action_dict = formalism.make_name_to_action_dict(actions)
+        self._meta_name_to_meta_action_dict = formalism.make_name_to_action_dict(meta_actions, meta=True)
+        self._type_to_base_actions_dict = formalism.make_type_to_actions_dict(self.base_actions, super_types_dict)
+
+        self._name_to_added_action_dict = dict()
+        self._type_to_added_actions_dict = dict()
 
     def get_action(self, name):
-        return self.formalism.name_to_action(name, [self.name_to_action_dict])
+        return self.formalism.name_to_action(name, self.get_name_to_action_dicts())
+
+    def get_name_to_action_dicts(self):
+        return [self._name_to_base_action_dict, self._name_to_added_action_dict]
 
     def get_meta_action(self, meta_name):
-        return self.formalism.name_to_action(meta_name, [self.meta_name_to_meta_action_dict])
+        return self.formalism.name_to_action(meta_name, [self._meta_name_to_meta_action_dict])
 
-    def add_action(self, action):
-        assert action.name not in self.name_to_action_dict
-        self.actions.append(action)
-        self.name_to_action_dict[action.name] = action
+    def get_type_to_actions_dict(self):
+        return [self._type_to_base_actions_dict, self._type_to_added_actions_dict]
+
+    @abstractfunction
+    def get_name_to_id_dicts(self):
+        pass
 
     def update_actions(self, actions):
-        for action in actions:
-            self.add_action(action)
+        self.formalism.update_name_to_action_dict(self._name_to_added_action_dict, actions)
+        self.added_actions = self.added_actions + tuple(actions)
+        assert len(self._name_to_added_action_dict) == len(self.added_actions)
+
+        self.formalism.update_type_to_actions_dict(self._type_to_added_actions_dict, actions, self.super_types_dict)
+
+    def sub_and_super(self, sub_type, super_type):
+        return self.formalism.sub_and_super(self.super_types_dict, sub_type, super_type)
+
+    @property
+    def program_tree_cls(self):
+        return self.get_program_tree_cls()
+
+    @abstractfunction
+    def get_program_tree_cls(self):
+        pass
+
+    @property
+    def search_state_cls(self):
+        return self.get_search_state_cls()
+
+    @abstractfunction
+    def get_search_state_cls(self):
+        pass
+
+    @property
+    def compiler_cls(self):
+        return self.compiler_cls()
+
+    @abstractfunction
+    def get_compiler_cls(self):
+        pass
 
     # raise Exception('TODO: static_actions ...?')
 
 
-def read_grammar(file_path, grammar_cls=Grammar):
+def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
     def parse_params(raw_params):
         munged_optional = munge('&optional')
         munged_rest = munge('&rest')
@@ -171,6 +217,16 @@ def read_grammar(file_path, grammar_cls=Grammar):
         args, kwargs = parse_hy_args(symbols)
         return dict(*args, **kwargs)
 
+    def make_retrieve(register):
+        def retrieve(key):
+            if isinstance(key, str):
+                new_key = demunge(key)
+            else:
+                new_key = tuple(map(demunge, key))
+            return register.retrieve(new_key)
+
+        return retrieve
+
     def preprocess_prefixed_parens(text):
         def expr_to_str(prefix, expr_repr):
             return 
@@ -180,8 +236,7 @@ def read_grammar(file_path, grammar_cls=Grammar):
         return replace_prefixed_parens(
             text,
             info_dicts=[dict(prefix=string_expr_prefix, paren_pair='()',
-                             fn=lambda x: '"{}{}"'.format(string_expr_prefix,
-                                                          x.replace('"', r'\"'))),
+                             fn=lambda x: '#"{}"'.format(x.replace('"', r'\"'))),
                         dict(prefix=backquote, paren_pair='()',
                              fn=lambda x: "(remove_backquoted_symbol_prefixes {}{})".format(backquote, x))])
 
@@ -196,6 +251,7 @@ def read_grammar(file_path, grammar_cls=Grammar):
         abstract_types = set()
         actions = []
         meta_actions = []
+        register = Register(strategy='conditional')
 
         is_concrete_type = make_is_concrete_type(types, abstract_types)
 
@@ -203,16 +259,19 @@ def read_grammar(file_path, grammar_cls=Grammar):
                     ['define-types', make_define_types(super_types_dicts, types)],
                     ['declare-abstract-types', make_declare_abstract_types(abstract_types)],
                     ['define-action', hy_function(make_define_action(actions, is_concrete_type))],
-                    ['define-meta-action', hy_function(make_define_meta_action(meta_actions, is_concrete_type))]]
+                    ['define-meta-action', hy_function(make_define_meta_action(meta_actions, is_concrete_type))],
+                    ['retrieve', make_retrieve(register)]]
 
         eval_result = eval_lissp(text, extra_ns=dict([munge(k), v] for k, v in bindings))
         assert eval_result is None
 
         grammar = grammar_cls(
+            formalism=formalism,
             super_types_dict=merge_dicts(super_types_dicts,
                                          merge_fn=lambda values: set(chainelems(values))),
             actions=actions,
-            meta_actions=meta_actions)
+            meta_actions=meta_actions,
+            register=register)
 
         return grammar
 
@@ -244,6 +303,7 @@ def postprocess_answer(answer):
 
 if __name__ == '__main__':
     # grammar = read_grammar('./logic/example.grammar')
-    grammar = read_grammar('./grammar/kopl/grammar.lissp')
+    formalism = Formalism()
+    grammar = read_grammar('./grammar/kopl/grammar.lissp', formalism=formalism)
     breakpoint()
     ()

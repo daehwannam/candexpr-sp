@@ -18,9 +18,9 @@ from dhnamlib.pylib.filesys import make_logger
 from .data import DataLoader
 from .predict import validate
 
-from kqapro_utils.misc import seed_everything, ProgressBar
-# from kqapro_utils.misc import MetricLogger
-from kqapro_utils.lr_scheduler import get_linear_schedule_with_warmup
+from kqapro_util.misc import seed_everything, ProgressBar
+# from kqapro_util.misc import MetricLogger
+from kqapro_util.lr_scheduler import get_linear_schedule_with_warmup
 from utils import common
 
 # warnings.simplefilter("ignore") # hide warnings that caused by invalid sparql query

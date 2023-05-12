@@ -9,8 +9,8 @@ import inspect
 
 from dhnamlib.pylib.structure import TreeStructure
 from dhnamlib.pylib.iteration import any_not_none, all_same, flatten, split_by_indices, chainelems
-from dhnamlib.pylib.decorators import abstractfunction
 from dhnamlib.pylib.constant import Abstract
+from dhnamlib.pylib.klass import abstractfunction, Interface
 
 from dhnamlib.hissplib.compile import eval_lissp
 from dhnamlib.hissplib.macro import prelude
@@ -26,9 +26,11 @@ class Action:
                  name,
                  act_type,
                  param_types,
-                 expr_dict: Dict[str, List[str]],
+                 expr_dict,
                  optional_idx=None,
-                 rest_idx=None):
+                 rest_idx=None,
+                 arg_candidate=None,
+                 arg_filter=None):
         self.name = name
 
         assert isinstance(act_type, tuple)
@@ -40,6 +42,8 @@ class Action:
         self.expr_pieces_dict = self.get_expr_pieces_dict(expr_dict)
         self.optional_idx = optional_idx
         self.rest_idx = rest_idx
+        self.arg_candidate = arg_candidate
+        self.arg_filter = arg_filter
         self.num_min_args = self.get_min_num_args()
 
     _raw_left_curly_bracket_symbol = '___L_CURLY___'
@@ -140,6 +144,8 @@ class MetaAction:
             def __init__(self, *, meta_args, **kwargs):
                 assert len(meta_args) == meta_action.num_meta_args
 
+                self.meta_args = meta_args
+
                 self.meta_action = meta_action
 
                 for k, v in action_kwargs.items():
@@ -174,7 +180,7 @@ class Formalism:
     def __init__(self, default_expr_key='default'):
         self.default_expr_key = default_expr_key
         self.reduce_action = Action(name='reduce',
-                                    act_type=('<reduce>',),
+                                    act_type=('reduce-type',),
                                     param_types=[],
                                     expr_dict={self.default_expr_key: ''})
 
@@ -191,8 +197,12 @@ class Formalism:
 
     @staticmethod
     def make_name_to_action_dict(actions, constructor=dict, meta=False):
-        attr = 'meta_name' if meta else 'name'
-        return constructor([getattr(action, attr), action] for action in actions)
+        dic = {}
+        Formalism.update_name_to_action_dict(dic, actions, meta=meta)
+        if isinstance(dic, constructor):
+            return dic
+        else:
+            return constructor(dic.items())
 
     @staticmethod
     def update_name_to_action_dict(name_to_action_dict, actions, meta=False):
@@ -211,19 +221,38 @@ class Formalism:
     @staticmethod
     def make_type_to_actions_dict(actions, super_types_dict, constructor=dict):
         dic = {}
+        Formalism.update_type_to_actions_dict(dic, actions, super_types_dict)
+        if isinstance(dic, constructor):
+            return dic
+        else:
+            return constructor(dic.items())
+
+    @staticmethod
+    def update_type_to_actions_dict(type_to_actions_dict, actions, super_types_dict):
         for action in actions:
-            
             type_q = deque(action.act_type if action.is_union_act_type() else
                            [action.act_type])
             while type_q:
                 typ = type_q.popleft()
-                dic.setdefault(typ, set()).add(action)
+                type_to_actions_dict.setdefault(typ, set()).add(action)
                 if typ in super_types_dict:
                     type_q.extend(super_types_dict[typ])
-        if constructor == dict:
-            return dic
+
+    @staticmethod
+    def sub_and_super(super_types_dict, sub_type, super_type):
+        type_q = deque(sub_type if Action.is_union_type(sub_type) else
+                       [sub_type])
+        assert not Action.is_union_type(super_type)
+
+        while type_q:
+            typ = type_q.popleft()
+            if typ == super_type:
+                return True
+            else:
+                if typ in super_types_dict:
+                    type_q.extend(super_types_dict[typ])
         else:
-            return constructor(dic.items())
+            return False
 
     def _must_be_reduced(self, opened_tree, children):
         if len(children) > 0 and children[-1].value == self.reduce_action:
@@ -397,6 +426,9 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
 
 def make_program_tree_cls(formalism: Formalism, name=None):
     class NewProgramTree(ProgramTree):
+        interface = Interface(ProgramTree)
+
+        @interface.implement
         @staticmethod
         def get_formalism():
             return formalism
@@ -462,8 +494,15 @@ class SearchState(metaclass=ABCMeta):
 
     def _get_candidate_actions(self):
         opened_tree, children = self.tree.get_opened_tree_children()
-        return self.formalism.get_candidate_actions(
-            opened_tree.value, len(children), self.get_type_to_actions_dicts())
+        opened_action = opened_tree.value
+        if opened_action.arg_candidate is None:
+            actions = self.formalism.get_candidate_actions(
+                opened_action, len(children), self.get_type_to_actions_dicts())
+        else:
+            actions = opened_action.arg_candidate(self.tree)
+        if opened_action.arg_filter is not None:
+            actions = tuple(opened_action.arg_filter(self.tree, actions))
+        return actions
 
     @abstractmethod
     def get_type_to_actions_dicts(self):
@@ -498,16 +537,16 @@ class SearchState(metaclass=ABCMeta):
         return action_to_id_bidict
 
 
-def make_search_state_cls(program_tree_cls: type, name=None):
-    class NewSearchState(SearchState):
-        @staticmethod
-        def get_program_tree_cls():
-            return program_tree_cls
+# def make_search_state_cls(program_tree_cls: type, name=None):
+#     class NewSearchState(SearchState):
+#         @staticmethod
+#         def get_program_tree_cls():
+#             return program_tree_cls
 
-    if name is not None:
-        NewSearchState.__name__ = NewSearchState.__qualname__ = name
+#     if name is not None:
+#         NewSearchState.__name__ = NewSearchState.__qualname__ = name
 
-    return NewSearchState
+#     return NewSearchState
 
 
 class Compiler:

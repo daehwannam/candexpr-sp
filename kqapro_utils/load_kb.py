@@ -1,9 +1,9 @@
 import json
 from collections import Counter
-from kqapro_utils.misc import init_vocab
+from kqapro_util.misc import init_vocab
 from datetime import date
 from queue import Queue
-from kqapro_utils.value_class import ValueClass
+from kqapro_util.value_class import ValueClass
 
 """
 knowledge json format:

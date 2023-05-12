@@ -18,7 +18,6 @@ def analyze_kb(kb):
 
     attribute_key_to_types = defaultdict(set)
     type_to_tokens = defaultdict(set)
-    type_to_tokens = defaultdict(set)
     qualifier_key_to_types = defaultdict(set)
     relations = set()
 

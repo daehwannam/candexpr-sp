@@ -10,12 +10,12 @@ import warnings
 import torch
 from tqdm import tqdm
 # from datetime import date
-# from kqapro_utils.misc import MetricLogger, seed_everything, ProgressBar
+# from kqapro_util.misc import MetricLogger, seed_everything, ProgressBar
 from transformers import BartConfig, BartForConditionalGeneration, BartTokenizer
 # import torch.optim as optim
-# from kqapro_utils.lr_scheduler import get_linear_schedule_with_warmup
+# from kqapro_util.lr_scheduler import get_linear_schedule_with_warmup
 from kopl.kopl import KoPLEngine
-from kqapro_utils.misc import seed_everything
+from kqapro_util.misc import seed_everything
 
 from dhnamlib.pylib.filesys import make_logger
 
