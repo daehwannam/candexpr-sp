@@ -8,12 +8,14 @@ from dhnamlib.pylib.iteration import merge_dicts, chainelems
 from dhnamlib.pylib.function import starloop  # imported for eval_lissp
 from dhnamlib.pylib.decorators import Register
 # from dhnamlib.pylib.structure import AttrDict
+from dhnamlib.pylib.klass import abstractfunction
+# from dhnamlib.pylib.decorators import cache
+
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
 from dhnamlib.hissplib.expression import remove_backquoted_symbol_prefixes  # imported for eval_lissp
 from dhnamlib.hissplib.operation import import_operators
 from dhnamlib.hissplib.decorators import parse_hy_args, hy_function
-from dhnamlib.pylib.decorators import abstractfunction
 
 from .formalism import Formalism, Action, MetaAction
 
@@ -27,13 +29,14 @@ grammar_read_form = '(progn {})'
 class Grammar:
     """Formal grammar"""
 
-    def __init__(self, *, formalism, super_types_dict, actions, meta_actions, register, use_reduce=True):
+    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register, use_reduce=True):
         self.formalism = formalism
         self.super_types_dict = super_types_dict
+        self.start_action = start_action
         self.base_actions = formalism.extend_actions(actions, use_reduce=use_reduce)
         self.meta_actions = meta_actions
         self.register = register
-        self.added_actions = tuple()
+        self.added_actions = []
 
         self._name_to_base_action_dict = formalism.make_name_to_action_dict(actions)
         self._meta_name_to_meta_action_dict = formalism.make_name_to_action_dict(meta_actions, meta=True)
@@ -42,13 +45,17 @@ class Grammar:
         self._name_to_added_action_dict = dict()
         self._type_to_added_actions_dict = dict()
 
-    def get_action(self, name):
+    @property
+    def reduce_action(self):
+        return self.formalism.reduce_action
+
+    def name_to_action(self, name):
         return self.formalism.name_to_action(name, self.get_name_to_action_dicts())
 
     def get_name_to_action_dicts(self):
         return [self._name_to_base_action_dict, self._name_to_added_action_dict]
 
-    def get_meta_action(self, meta_name):
+    def meta_name_to_meta_action(self, meta_name):
         return self.formalism.name_to_action(meta_name, [self._meta_name_to_meta_action_dict])
 
     def get_type_to_actions_dict(self):
@@ -60,7 +67,7 @@ class Grammar:
 
     def update_actions(self, actions):
         self.formalism.update_name_to_action_dict(self._name_to_added_action_dict, actions)
-        self.added_actions = self.added_actions + tuple(actions)
+        self.added_actions.extend(actions)
         assert len(self._name_to_added_action_dict) == len(self.added_actions)
 
         self.formalism.update_type_to_actions_dict(self._type_to_added_actions_dict, actions, self.super_types_dict)
@@ -95,7 +102,10 @@ class Grammar:
     # raise Exception('TODO: static_actions ...?')
 
 
-def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
+def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
+    if formalism is None:
+        formalism = Formalism()
+
     def parse_params(raw_params):
         munged_optional = munge('&optional')
         munged_rest = munge('&rest')
@@ -121,12 +131,13 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
 
         return tuple(params), optional_idx, rest_idx
 
-    def parse_act_type(act_type):
-        if isinstance(act_type, str):
-            return tuple([demunge(act_type)])
+    def parse_act_type(raw_act_type):
+        if isinstance(raw_act_type, str):
+            return demunge(raw_act_type)
         else:
-            assert isinstance(act_type, (list, tuple))
-            return tuple(map(demunge, demunge(act_type)))
+            assert isinstance(raw_act_type, (list, tuple))
+            assert len(raw_act_type) > 1
+            return tuple(map(demunge, raw_act_type))
 
     def make_define_types(super_types_dicts, types):
         def define_types(type_hierarchy_tuple):
@@ -166,13 +177,13 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
 
         return declare_abstract_types
 
-    def make_define_action(actions, is_concrete_type):
+    def make_define_action(actions, start_actions, is_concrete_type):
         def define_action(name, act_type, param_types, expr_dict, **kwargs):
             parsed_param_types, optional_idx, rest_idx = parse_params(param_types)
             act_type = parse_act_type(act_type)
 
             assert all(map(is_concrete_type, parsed_param_types))
-            assert all(map(is_concrete_type, act_type))
+            assert is_concrete_type(act_type)
 
             action = Action(
                 name=demunge(name),
@@ -183,7 +194,12 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
                 rest_idx=rest_idx,
                 **kwargs)
 
-            actions.append(action)
+            if action.starting:
+                start_actions.append(action)
+                if len(start_actions) > 1:
+                    raise Exception('more than one starting action is defined')
+            else:
+                actions.append(action)
         return define_action
 
     def make_define_meta_action(meta_actions, is_concrete_type):
@@ -191,10 +207,9 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
             parsed_param_types, optional_idx, rest_idx = parse_params(param_types)
             parsed_param_types = parsed_param_types if len(parsed_param_types) != 0 else None
             parsed_act_type = parse_act_type(act_type) if act_type is not None else None
-                
 
             assert parsed_param_types is None or all(map(is_concrete_type, parsed_param_types))
-            assert parsed_act_type is None or all(map(is_concrete_type, parsed_act_type))
+            assert parsed_act_type is None or is_concrete_type(parsed_act_type)
 
             meta_action = MetaAction(
                 meta_name=demunge(meta_name),
@@ -208,8 +223,15 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
         return define_meta_action
 
     def make_is_concrete_type(types, abstract_types):
-        def is_concrete_type(typ):
+        def is_concrete_non_union_type(typ):
+            assert isinstance(typ, str)
             return (typ in types) and (typ not in abstract_types)
+
+        def is_concrete_type(typ):
+            if isinstance(typ, tuple):
+                return all(map(is_concrete_non_union_type, typ))
+            else:
+                return is_concrete_non_union_type(typ)
 
         return is_concrete_type
 
@@ -250,6 +272,7 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
         types = set()
         abstract_types = set()
         actions = []
+        start_actions = []
         meta_actions = []
         register = Register(strategy='conditional')
 
@@ -258,11 +281,11 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
         bindings = [['mapkv', make_dict],
                     ['define-types', make_define_types(super_types_dicts, types)],
                     ['declare-abstract-types', make_declare_abstract_types(abstract_types)],
-                    ['define-action', hy_function(make_define_action(actions, is_concrete_type))],
+                    ['define-action', hy_function(make_define_action(actions, start_actions, is_concrete_type))],
                     ['define-meta-action', hy_function(make_define_meta_action(meta_actions, is_concrete_type))],
                     ['retrieve', make_retrieve(register)]]
 
-        eval_result = eval_lissp(text, extra_ns=dict([munge(k), v] for k, v in bindings))
+        eval_result = eval_lissp(text, extra_ns=get_extra_ns(bindings))
         assert eval_result is None
 
         grammar = grammar_cls(
@@ -270,6 +293,7 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
             super_types_dict=merge_dicts(super_types_dicts,
                                          merge_fn=lambda values: set(chainelems(values))),
             actions=actions,
+            start_action=start_actions[0],
             meta_actions=meta_actions,
             register=register)
 
@@ -281,24 +305,8 @@ def read_grammar(file_path, *, formalism, grammar_cls=Grammar):
     return make_grammar(text)
 
 
-def postprocess_denotation(denotation):
-    if isinstance(denotation, list):
-        new_denotation = [str(_) for _ in denotation]
-    else:
-        new_denotation = str(denotation)
-    return new_denotation
-
-
-def postprocess_answer(answer):
-    if answer is None:
-        new_answer = 'no'
-    elif isinstance(answer, list) and len(answer) > 0:
-        new_answer = answer[0]
-    elif isinstance(answer, list) and len(answer) == 0:
-        new_answer = 'None'
-    else:
-        new_answer = answer
-    return new_answer
+def get_extra_ns(bindings):
+    return dict([munge(k), v] for k, v in bindings)
 
 
 if __name__ == '__main__':

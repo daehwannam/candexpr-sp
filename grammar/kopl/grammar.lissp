@@ -133,7 +133,8 @@
   :expr-dict (mapkv :default $(lambda (engine)
                                 (postprocess-denotation {0}))
                     :visual-0 "{0}"
-                    :visual $(program {0})))
+                    :visual $(program {0}))
+  :starting True)
 
 (define-action
   :name 'all-entities
@@ -201,28 +202,28 @@
   :name 'op-eq
   :act-type 'op-comparison
   :param-types '()
-  :expr-dict (mapkv :default #"\"=\""
+  :expr-dict (mapkv :default $(repr "=")
                     :visual "="))
 
 (define-action
   :name 'op-ne
   :act-type 'op-comparison
   :param-types '()
-  :expr-dict (mapkv :default #"\"!=\""
+  :expr-dict (mapkv :default $(repr "!=")
                     :visual "!="))
 
 (define-action
   :name 'op-lt
   :act-type 'op-comparison
   :param-types '()
-  :expr-dict (mapkv :default #"\"<\""
+  :expr-dict (mapkv :default $(repr "<")
                     :visual "<"))
 
 (define-action
   :name 'op-gt
   :act-type 'op-comparison
   :param-types '()
-  :expr-dict (mapkv :default #"\">\""
+  :expr-dict (mapkv :default $(repr ">")
                     :visual ">"))
 
 ;;; direction-*
@@ -231,14 +232,14 @@
   :name 'direction-forward
   :act-type 'op-direction
   :param-types '()
-  :expr-dict (mapkv :default #"\"forward\""
+  :expr-dict (mapkv :default $(repr "forward")
                     :visual "'forward"))
 
 (define-action
   :name 'direction-backward
   :act-type 'op-direction
   :param-types '()
-  :expr-dict (mapkv :default #"\"backward\""
+  :expr-dict (mapkv :default $(repr "backward")
                     :visual "'backward"))
 
 ;;; q-filter-*
@@ -318,28 +319,28 @@
   :name 'op-st
   :act-type 'op-st-or-bt
   :param-types '()
-  :expr-dict (mapkv :default #"\"smaller\""
+  :expr-dict (mapkv :default $(repr "smaller")
                     :visual "'smaller"))
 
 (define-action
-  :name 'op-gt
+  :name 'op-bt
   :act-type 'op-st-or-bt
   :param-types '()
-  :expr-dict (mapkv :default #"\"greater\""
+  :expr-dict (mapkv :default $(repr "greater")
                     :visual "'greater"))
 
 (define-action
   :name 'op-min
   :act-type 'op-min-or-max
   :param-types '()
-  :expr-dict (mapkv :default #"\"min\""
+  :expr-dict (mapkv :default $(repr "min")
                     :visual "'min"))
 
 (define-action
   :name 'op-max
   :act-type 'op-min-or-max
   :param-types '()
-  :expr-dict (mapkv :default #"\"max\""
+  :expr-dict (mapkv :default $(repr "max")
                     :visual "'max"))
 
 ;;; query-*
@@ -420,7 +421,8 @@
       (let (join-tokens (retrieve '(function join-tokens)))
         (lambda (: :* args)
           ;; (.format #"\"{}\"" (.lstrip (.replace (.join "" args) "Ġ" " ")))
-          (.format #"\"{}\"" (join-tokens args)))))
+          ;; (.format #"\"{}\"" (join-tokens args))
+          (repr (join-tokens args)))))
   ;; keyword-*
   (starloop
    (lambda (name act-type param-type)
@@ -467,7 +469,7 @@
     :name 'constant-number
     :act-type 'v-number
     :param-types '(v-quantity v-unit)
-    :expr-dict (mapkv :default (lambda (v-quantity v-unit) (.rstrip (.format #"\"{} {}\"" v-quantity v-unit)))))
+    :expr-dict (mapkv :default (lambda (v-quantity v-unit) (repr (.format "{} {}" v-quantity v-unit)))))
 
   (define-action
     :name 'constant-unit
@@ -481,9 +483,9 @@
 
 (define-meta-action
   :meta-name 'nl-token
-  :name-fn (retrieve '(name token))
+  :name-fn (retrieve '(name nl-token))
   :expr-dict-fn (lambda (token)
-                  (mapkv :default (.format #"\"{}\"" token)))
+                  (mapkv :default (repr token)))
   :param-types '())
 
 ;; (define-meta-action

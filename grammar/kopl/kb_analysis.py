@@ -7,6 +7,7 @@ from util.trie import TokenTrie
 
 # from dhnamlib.pylib.decorators import fcache
 from dhnamlib.pylib.type import creatable
+from dhnamlib.pylib.iteration import unique
 
 
 numeric_types = ('quantity', 'year', 'date')
@@ -54,8 +55,7 @@ def extract_kb_info(kb):
             assert types == {'year', 'date'}
             return 'time'
         else:
-            assert len(types) == 1
-            return tuple(types)[0]
+            return unique(types)
 
     def make_type_to_keys(key_to_types):
         type_to_keys = dict()

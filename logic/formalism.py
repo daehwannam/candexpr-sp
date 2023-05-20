@@ -9,8 +9,8 @@ import inspect
 
 from dhnamlib.pylib.structure import TreeStructure
 from dhnamlib.pylib.iteration import any_not_none, all_same, flatten, split_by_indices, chainelems
-from dhnamlib.pylib.constant import Abstract
 from dhnamlib.pylib.klass import abstractfunction, Interface
+from dhnamlib.pylib.decorators import unnecessary
 
 from dhnamlib.hissplib.compile import eval_lissp
 from dhnamlib.hissplib.macro import prelude
@@ -30,10 +30,11 @@ class Action:
                  optional_idx=None,
                  rest_idx=None,
                  arg_candidate=None,
-                 arg_filter=None):
+                 arg_filter=None,
+                 starting=False):
         self.name = name
 
-        assert isinstance(act_type, tuple)
+        assert self.is_valid_act_type(act_type)
         assert isinstance(param_types, (list, tuple))
 
         self.act_type = act_type
@@ -45,6 +46,7 @@ class Action:
         self.arg_candidate = arg_candidate
         self.arg_filter = arg_filter
         self.num_min_args = self.get_min_num_args()
+        self.starting = starting
 
     _raw_left_curly_bracket_symbol = '___L_CURLY___'
     _raw_right_curly_bracket_symbol = '___R_CURLY___'
@@ -97,10 +99,23 @@ class Action:
                     for piece_key, expr in expr_dict.items())
 
     @staticmethod
-    def is_union_type(act_type):
-        # return isinstance(act_type, (list, tuple))
-        assert isinstance(act_type, tuple) and len(act_type) >= 1
-        return len(act_type) > 1
+    def is_valid_act_type(act_type):
+        if isinstance(act_type, tuple):
+            return Action.is_valid_union_type(act_type)
+        else:
+            return isinstance(act_type, str)
+
+    @staticmethod
+    def is_valid_union_type(union_type):
+        return len(union_type) > 1 and all(isinstance(typ, str) for typ in union_type)
+
+    @staticmethod
+    def is_union_type(typ):
+        if isinstance(typ, tuple):
+            assert Action.is_valid_union_type(typ)
+            return True
+        else:
+            return False
 
     def is_union_act_type(self):
         return self.is_union_type(self.act_type)
@@ -131,18 +146,22 @@ class MetaAction:
     def __init__(self,
                  *,
                  meta_name,
+                 num_meta_args=None,
                  name_fn,
                  expr_dict_fn,
                  **action_kwargs):
-        assert all_same(map(self.get_num_args, [name_fn, expr_dict_fn]))
-        self.num_meta_args = self.get_num_args(name_fn)
+
+        self.num_meta_args = num_meta_args
+        # assert all_same(map(self.get_func_num_args, [name_fn, expr_dict_fn]))
+        # self.num_meta_args = self.get_func_num_args(name_fn)
 
         self.meta_name = meta_name
         meta_action = self
 
         class SpecificAction(Action):
             def __init__(self, *, meta_args, **kwargs):
-                assert len(meta_args) == meta_action.num_meta_args
+                if meta_action.num_meta_args is not None:
+                    assert len(meta_args) == meta_action.num_meta_args
 
                 self.meta_args = meta_args
 
@@ -163,8 +182,9 @@ class MetaAction:
 
         self.action_cls = SpecificAction
 
+    @unnecessary
     @staticmethod
-    def get_num_args(func):
+    def get_func_num_args(func):
         return len(inspect.signature(func).parameters)
 
     def __repr__(self):
@@ -180,7 +200,7 @@ class Formalism:
     def __init__(self, default_expr_key='default'):
         self.default_expr_key = default_expr_key
         self.reduce_action = Action(name='reduce',
-                                    act_type=('reduce-type',),
+                                    act_type='reduce-type',
                                     param_types=[],
                                     expr_dict={self.default_expr_key: ''})
 
@@ -208,6 +228,8 @@ class Formalism:
     def update_name_to_action_dict(name_to_action_dict, actions, meta=False):
         attr = 'meta_name' if meta else 'name'
         for action in actions:
+            if not getattr(action, attr) not in name_to_action_dict:
+                breakpoint()
             assert getattr(action, attr) not in name_to_action_dict
             name_to_action_dict[getattr(action, attr)] = action
 
@@ -461,7 +483,7 @@ class SearchState(metaclass=ABCMeta):
 
     @property
     def program_tree_cls(self):
-        return self.program_tree_cls()
+        return self.get_program_tree_cls()
 
     def initialize(self):
         self.tree = self.program_tree_cls.create_root(self.get_start_action())
@@ -530,23 +552,46 @@ class SearchState(metaclass=ABCMeta):
             action_to_id_bidict = bidict(zip(actions, ids))
         except ValueDuplicationError as e:
             breakpoint()
-            print(e)
+            raise e
         assert len(action_to_id_bidict) == len(actions)
         assert len(action_to_id_bidict.inverse) == len(ids)
 
         return action_to_id_bidict
 
 
-# def make_search_state_cls(program_tree_cls: type, name=None):
-#     class NewSearchState(SearchState):
-#         @staticmethod
-#         def get_program_tree_cls():
-#             return program_tree_cls
+def make_search_state_cls(grammar, name=None):
+    class BasicSearchState(SearchState):
+        interface = Interface(SearchState)
 
-#     if name is not None:
-#         NewSearchState.__name__ = NewSearchState.__qualname__ = name
+        @staticmethod
+        @interface.implement
+        def get_program_tree_cls():
+            return grammar.program_tree_cls
 
-#     return NewSearchState
+        @interface.implement
+        def get_initial_attrs(self):
+            return dict()
+
+        @interface.implement
+        def get_start_action(self):
+            return grammar.start_action
+
+        @interface.implement
+        def get_updated_attrs(self, tree):
+            return dict()
+
+        @interface.implement
+        def get_type_to_actions_dicts(self):
+            return grammar.get_type_to_actions_dict()
+
+        @interface.implement
+        def get_name_to_id_dicts(self):
+            return grammar.get_name_to_id_dicts()
+
+    if name is not None:
+        BasicSearchState.__name__ = BasicSearchState.__qualname__ = name
+
+    return BasicSearchState
 
 
 class Compiler:
