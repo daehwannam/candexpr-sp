@@ -7,7 +7,9 @@ from util.trie import TokenTrie
 
 # from dhnamlib.pylib.decorators import fcache
 from dhnamlib.pylib.type import creatable
-from dhnamlib.pylib.iteration import unique
+from dhnamlib.pylib.iteration import unique, distinct_pairs
+from dhnamlib.pylib.decorators import construct
+from dhnamlib.pylib.function import compose
 
 
 numeric_types = ('quantity', 'year', 'date')
@@ -70,6 +72,7 @@ def extract_kb_info(kb):
                 type_to_qualifiers=make_type_to_keys(qualifier_to_types),
                 units=units)
 
+@construct(compose(dict, distinct_pairs))
 def make_trie_dict(kb_info, tokenizer, end_of_seq):
     def make_trie(kw_set):
         trie = TokenTrie(tokenizer=tokenizer, end_of_seq=end_of_seq)
@@ -77,15 +80,12 @@ def make_trie_dict(kb_info, tokenizer, end_of_seq):
             trie.add_text(kw)
         return trie
 
-    def key_coll_pairs():
-        for key, coll in kb_info.items():
-            if isinstance(coll, dict):
-                new_coll = dict([typ, make_trie(typed_coll)] for typ, typed_coll in coll.items())
-            else:
-                new_coll = make_trie(coll)
-            yield key, new_coll
-
-    return dict(key_coll_pairs())
+    for key, coll in kb_info.items():
+        if isinstance(coll, dict):
+            new_coll = dict([typ, make_trie(typed_coll)] for typ, typed_coll in coll.items())
+        else:
+            new_coll = make_trie(coll)
+        yield key, new_coll
 
 
 quantity_prefix_regex = re.compile(r'^[+-]?[0-9]*(\.[0-9]*)?(e([+-][0-9]*)?)?$')

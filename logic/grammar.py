@@ -38,7 +38,7 @@ class Grammar:
         self.register = register
         self.added_actions = []
 
-        self._name_to_base_action_dict = formalism.make_name_to_action_dict(actions)
+        self._name_to_base_action_dict = formalism.make_name_to_action_dict(self.base_actions)
         self._meta_name_to_meta_action_dict = formalism.make_name_to_action_dict(meta_actions, meta=True)
         self._type_to_base_actions_dict = formalism.make_type_to_actions_dict(self.base_actions, super_types_dict)
 
@@ -66,6 +66,7 @@ class Grammar:
         pass
 
     def update_actions(self, actions):
+        actions = tuple(actions)
         self.formalism.update_name_to_action_dict(self._name_to_added_action_dict, actions)
         self.added_actions.extend(actions)
         assert len(self._name_to_added_action_dict) == len(self.added_actions)
@@ -203,16 +204,19 @@ def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
         return define_action
 
     def make_define_meta_action(meta_actions, is_concrete_type):
-        def define_meta_action(meta_name, *, act_type=None, param_types, **kwargs):
-            parsed_param_types, optional_idx, rest_idx = parse_params(param_types)
-            parsed_param_types = parsed_param_types if len(parsed_param_types) != 0 else None
+        def define_meta_action(meta_name, *, meta_params, act_type=None, param_types=None, **kwargs):
             parsed_act_type = parse_act_type(act_type) if act_type is not None else None
+            if param_types is None:
+                parsed_param_types, optional_idx, rest_idx = None, None, None
+            else:
+                parsed_param_types, optional_idx, rest_idx = parse_params(param_types)
 
             assert parsed_param_types is None or all(map(is_concrete_type, parsed_param_types))
             assert parsed_act_type is None or is_concrete_type(parsed_act_type)
 
             meta_action = MetaAction(
                 meta_name=demunge(meta_name),
+                meta_params=tuple(map(demunge, meta_params)),
                 act_type=parsed_act_type,
                 param_types=parsed_param_types,
                 optional_idx=optional_idx,

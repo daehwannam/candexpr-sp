@@ -4,13 +4,13 @@ from collections import deque
 from typing import List, Dict
 from abc import ABCMeta, abstractmethod
 import copy
-from bidict import bidict, ValueDuplicationError
 import inspect
 
 from dhnamlib.pylib.structure import TreeStructure
-from dhnamlib.pylib.iteration import any_not_none, all_same, flatten, split_by_indices, chainelems
+from dhnamlib.pylib.iteration import any_not_none, flatten, split_by_indices, chainelems, lastelem
 from dhnamlib.pylib.klass import abstractfunction, Interface
 from dhnamlib.pylib.decorators import unnecessary
+from dhnamlib.pylib.structure import bidict, DuplicateValueError
 
 from dhnamlib.hissplib.compile import eval_lissp
 from dhnamlib.hissplib.macro import prelude
@@ -34,7 +34,7 @@ class Action:
                  starting=False):
         self.name = name
 
-        assert self.is_valid_act_type(act_type)
+        assert self.is_valid_act_type(act_type), f'"{act_type}" is not a valid act-type.'
         assert isinstance(param_types, (list, tuple))
 
         self.act_type = act_type
@@ -47,6 +47,7 @@ class Action:
         self.arg_filter = arg_filter
         self.num_min_args = self.get_min_num_args()
         self.starting = starting
+        self._id = None
 
     _raw_left_curly_bracket_symbol = '___L_CURLY___'
     _raw_right_curly_bracket_symbol = '___R_CURLY___'
@@ -135,7 +136,7 @@ class Action:
         return not self.param_types
 
     def get_min_num_args(self):
-        additional_idx = any_not_none([self.optional_idx, self.rest_idx])
+        additional_idx = any_not_none([self.optional_idx, self.rest_idx], default=None)
         if additional_idx is not None:
             return additional_idx + 1
         else:
@@ -146,39 +147,55 @@ class MetaAction:
     def __init__(self,
                  *,
                  meta_name,
-                 num_meta_args=None,
+                 meta_params,
                  name_fn,
                  expr_dict_fn,
                  **action_kwargs):
-
-        self.num_meta_args = num_meta_args
-        # assert all_same(map(self.get_func_num_args, [name_fn, expr_dict_fn]))
-        # self.num_meta_args = self.get_func_num_args(name_fn)
-
         self.meta_name = meta_name
+        self.meta_params = meta_params
+        self._meta_param_to_index = dict(map(reversed, enumerate(meta_params)))
         meta_action = self
 
         class SpecificAction(Action):
-            def __init__(self, *, meta_args, **kwargs):
-                if meta_action.num_meta_args is not None:
-                    assert len(meta_args) == meta_action.num_meta_args
-
-                self.meta_args = meta_args
+            def __init__(self, *, meta_args=None, meta_kwargs=None, **kwargs):
+                assert meta_args is not None or meta_kwargs is not None, 'At least one of meta_args or meta_kwargs should be not None'
 
                 self.meta_action = meta_action
+                self.meta_args = () if meta_args is None else meta_args
+                self.meta_kwargs = {} if meta_kwargs is None else meta_kwargs
 
-                for k, v in action_kwargs.items():
-                    if k in kwargs:
-                        assert v is None
-                    kwargs[k] = v
+                del meta_args, meta_kwargs
 
-                assert 'name' not in kwargs
-                kwargs['name'] = name_fn(*meta_args)
+                assert len(self.meta_args) + len(self.meta_kwargs) == len(meta_action.meta_params)
 
-                assert 'expr_dict' not in kwargs
-                kwargs['expr_dict'] = expr_dict_fn(*meta_args)
+                new_kwargs = dict(action_kwargs)
+                for k, v in kwargs.items():
+                    assert new_kwargs.get(k) is None
+                    new_kwargs[k] = v
 
-                super().__init__(**kwargs)
+                assert 'name' not in new_kwargs
+                new_kwargs['name'] = name_fn(*self.meta_args, **self.meta_kwargs)
+
+                assert 'expr_dict' not in new_kwargs
+                new_kwargs['expr_dict'] = expr_dict_fn(*self.meta_args, **self.meta_kwargs)
+
+                super().__init__(**new_kwargs)
+
+            def get_meta_arg(self, key):
+                try:
+                    if isinstance(key, int):
+                        try:
+                            return self.meta_arg[key]
+                        except IndexError:
+                            return self.meta_kwargs[meta_action.meta_params[key]]
+                    else:
+                        assert isinstance(key, str)
+                        try:
+                            return self.meta_kwargs[key]
+                        except KeyError:
+                            return self.meta_args[meta_action._meta_param_to_index[key]]
+                except (IndexError, KeyError):
+                    raise Exception(f'no value exists for key {key}')
 
         self.action_cls = SpecificAction
 
@@ -190,8 +207,8 @@ class MetaAction:
     def __repr__(self):
         return self.meta_name
 
-    def __call__(self, *, meta_args, **kwargs):
-        return self.action_cls(meta_args=meta_args, **kwargs)
+    def __call__(self, *, meta_args=None, meta_kwargs=None, **kwargs):
+        return self.action_cls(meta_args=meta_args, meta_kwargs=meta_kwargs, **kwargs)
 
 
 class Formalism:
@@ -228,16 +245,13 @@ class Formalism:
     def update_name_to_action_dict(name_to_action_dict, actions, meta=False):
         attr = 'meta_name' if meta else 'name'
         for action in actions:
-            if not getattr(action, attr) not in name_to_action_dict:
-                breakpoint()
             assert getattr(action, attr) not in name_to_action_dict
             name_to_action_dict[getattr(action, attr)] = action
 
     @staticmethod
-    def name_to_action(name, *name_to_action_dicts):
-        action = any(name_to_action_dict.get(name)
-                     for name_to_action_dict in name_to_action_dicts)
-        assert action is not None
+    def name_to_action(name, name_to_action_dicts):
+        action = any_not_none(name_to_action_dict.get(name)
+                              for name_to_action_dict in name_to_action_dicts)
         return action
 
     @staticmethod
@@ -333,8 +347,10 @@ class Formalism:
 
     @staticmethod
     def action_to_id(action, name_to_id_dicts):
-        return any_not_none(name_to_id_dict.get(action.name or action.name)
-                            for name_to_id_dict in name_to_id_dicts)
+        if action._id is None:
+            action._id = any_not_none(name_to_id_dict.get(action.name or action.name)
+                                      for name_to_id_dict in name_to_id_dicts)
+        return action._id
 
 
 # program tree
@@ -502,13 +518,34 @@ class SearchState(metaclass=ABCMeta):
         tree = self.tree.push_action(action).reduce_tree_amap()
         return tree
 
-    def get_updated_state(self, tree):
+    def get_updated_state(self, updated_tree):
         state = copy.copy(self)
-        state.tree = tree
-        for k, v in self.get_updated_attrs(tree).items():
+        state.tree = updated_tree
+        for k, v in self.get_updated_attrs(updated_tree).items():
             setattr(state, k, v)
 
         return state
+
+    def get_next_state(self, action):
+        updated_tree = self.get_updated_tree(action)
+        updated_state = self.get_updated_state(updated_tree)
+        return updated_state
+
+    @classmethod
+    def map_action_seq(cls, action_seq, including_initial=False, verifying=False):
+        state = cls.create()
+        if including_initial:
+            yield state
+        for action in action_seq:
+            if verifying:
+                action_to_id_bidict = state.get_candidate_action_to_id_bidict()
+                assert action in action_to_id_bidict
+            state = state.get_next_state(action)
+            yield state
+
+    @classmethod
+    def get_last_state(cls, action_seq, verifying=False):
+        return lastelem(cls.map_action_seq(action_seq, verifying=verifying))
 
     @abstractmethod
     def get_updated_attrs(self, tree):
@@ -548,11 +585,7 @@ class SearchState(metaclass=ABCMeta):
 
         assert len(actions) == len(ids)
 
-        try:
-            action_to_id_bidict = bidict(zip(actions, ids))
-        except ValueDuplicationError as e:
-            breakpoint()
-            raise e
+        action_to_id_bidict = bidict(zip(actions, ids))
         assert len(action_to_id_bidict) == len(actions)
         assert len(action_to_id_bidict.inverse) == len(ids)
 

@@ -310,7 +310,7 @@
   :name 'select-among
   :act-type 'result-entity-name
   :param-types '(kw-attribute op-min-or-max obj-entity)
-  :expr-dict (mapkv :default $(engine.SelectBetween {2} {0} {1})
+  :expr-dict (mapkv :default $(engine.SelectAmong {2} {0} {1})
                     :visual $(select-between {0} {1} {2})))
 
 ;;; op-*
@@ -483,6 +483,7 @@
 
 (define-meta-action
   :meta-name 'nl-token
+  :meta-params '(token)
   :name-fn (retrieve '(name nl-token))
   :expr-dict-fn (lambda (token)
                   (mapkv :default (repr token)))

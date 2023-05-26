@@ -1,6 +1,8 @@
 
 from itertools import chain
 
+from dhnamlib.pylib.iteration import all_same
+
 import pygtrie
 
 
@@ -61,6 +63,20 @@ class TokenTrie:
             return self.tokenizer.convert_ids_to_tokens(ids[:-1])
 
         return map(ids_to_tokens, self.id_seqs())
+
+    @classmethod
+    def merge(cls, token_trie):
+        token_trie = tuple(token_trie)
+
+        assert all_same(token_trie.tokenizer for token_trie in token_trie)
+        assert all_same(token_trie.end_of_seq for token_trie in token_trie)
+
+        merged_token_trie = cls(token_trie[0].tokenizer, token_trie[0].end_of_seq)
+
+        for token_trie in token_trie:
+            merged_token_trie.trie.update(token_trie.trie)
+
+        return merged_token_trie
 
     __iter__ = token_seqs
 

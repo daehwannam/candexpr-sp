@@ -5,10 +5,11 @@ import re
 from itertools import chain
 
 from configuration import config
+from util.trie import TokenTrie
 
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.hflib.transformers import iter_default_non_special_tokens
-from dhnamlib.pylib.decorators import construct, cache
+from dhnamlib.pylib.decorators import construct, cache, curry, variable
 from dhnamlib.pylib.function import compose
 from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, finditer
 
@@ -27,7 +28,7 @@ def iter_nl_token_actions(meta_name_to_meta_action, tokenizer):
 
     def iter_token_actions():
         for token_value, act_type in iter_token_value_act_type_pairs():
-            yield nl_token_meta_action(meta_args=dict(token=token_value),
+            yield nl_token_meta_action(meta_kwargs=dict(token=token_value),
                                        act_type=act_type)
 
     return iter_token_actions()
@@ -61,7 +62,7 @@ with block:
         union_type = [
             'kp-concept', 'kp-entity', 'kp-relation',
             'kp-attr-string', 'kp-attr-number', 'kp-attr-time',
-            'kp-q-string', 'kp-q-number', 'kp-q-time'
+            'kp-q-string', 'kp-q-number', 'kp-q-time',
             'vp-string', 'vp_unit']
 
         if is_digit_seq or is_special_quantity:
@@ -109,10 +110,21 @@ with block:
 
         assert sum(1 for value in trie_dict.values() if isinstance(value, dict)) == 2
 
-        for data_type_to_act_type, data_type_to_trie in [[data_type_to_attr_act_type, trie_dict['data_type_to_attributes']],
-                                                         [data_type_to_q_act_type, trie_dict['data_type_to_qualifiers']]]:
-            for typ, trie in data_type_to_trie.items():
-                yield data_type_to_act_type[typ], trie
+        def merge_tries(tries):
+            if len(tries) > 1:
+                return TokenTrie.merge(tries)
+            else:
+                return unique(tries)
+
+        @variable
+        @construct(curry(merge_pairs, merge_fn=merge_tries))
+        def act_type_to_trie_dict():
+            for data_type_to_act_type, data_type_to_trie in [[data_type_to_attr_act_type, trie_dict['type_to_attributes']],
+                                                             [data_type_to_q_act_type, trie_dict['type_to_qualifiers']]]:
+                for typ, trie in data_type_to_trie.items():
+                    yield data_type_to_act_type[typ], trie
+
+        yield from act_type_to_trie_dict.items()
 
 
 with block:
@@ -170,8 +182,11 @@ with block:
         recursive_kopl_form = kopl_read.kopl_to_recursive_form(labeled_kopl_program)
 
         def parse(form):
-            action_seq.append(_kopl_function_to_action(grammar, form['function']))
-            action_seq.extend(_kopl_input_to_action_seq(grammar, form['inputs']))
+            function_action = _kopl_function_to_action(grammar, form['function'])
+            action_seq.append(function_action)
+            for idx, kopl_input in enumerate(form['inputs']):
+                action_seq.extend(_kopl_input_to_action_seq(
+                    grammar, kopl_input, function_action.param_types[idx]))
             for sub_form in form['dependencies']:
                 parse(sub_form)
 
@@ -179,6 +194,8 @@ with block:
         return action_seq
 
     def _kopl_function_to_action(grammar, kopl_function):
+        if kopl_function == 'What':
+            kopl_function = 'QueryName'
         return _get_kopl_function_to_action_dict(grammar)[kopl_function]
 
     @cache
@@ -197,7 +214,7 @@ with block:
             return tuple(
                 chain(
                     map(compose(grammar.name_to_action, nl_token_to_action_name),
-                        grammar.tokenizer.tokenizer(text)),
+                        grammar.tokenizer.tokenize(text)),
                     [grammar.reduce_action]))
 
         def is_type_of(super_type):
