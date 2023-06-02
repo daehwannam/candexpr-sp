@@ -6,8 +6,7 @@ from hissp.munger import munge, demunge
 from dhnamlib.pylib.lisp import (remove_comments, replace_prefixed_parens, is_keyword, keyword_to_symbol)
 from dhnamlib.pylib.iteration import merge_dicts, chainelems
 from dhnamlib.pylib.function import starloop  # imported for eval_lissp
-from dhnamlib.pylib.decorators import Register
-# from dhnamlib.pylib.structure import AttrDict
+from dhnamlib.pylib.decorators import Register, deprecated
 from dhnamlib.pylib.klass import abstractfunction
 # from dhnamlib.pylib.decorators import cache
 
@@ -38,12 +37,24 @@ class Grammar:
         self.register = register
         self.added_actions = []
 
+        # base actions
         self._name_to_base_action_dict = formalism.make_name_to_action_dict(self.base_actions)
         self._meta_name_to_meta_action_dict = formalism.make_name_to_action_dict(meta_actions, meta=True)
         self._type_to_base_actions_dict = formalism.make_type_to_actions_dict(self.base_actions, super_types_dict)
+        self._set_action_ids(self.base_actions)
+        self._id_to_base_action_dict = formalism.make_id_to_action_dict(self.base_actions)
+        self._type_to_base_action_ids_dict = formalism.make_type_to_action_ids_dict(self.base_actions, super_types_dict)
 
+        # added actions
         self._name_to_added_action_dict = dict()
         self._type_to_added_actions_dict = dict()
+        self._type_to_added_action_ids_dict = dict()
+        self._id_to_added_action_dict = dict()
+
+    def _set_action_ids(self, actions):
+        name_to_id_dicts = self.get_name_to_id_dicts()
+        for action in actions:
+            action.id = self.formalism.action_to_id_by_name(action, name_to_id_dicts)
 
     @property
     def reduce_action(self):
@@ -58,20 +69,34 @@ class Grammar:
     def meta_name_to_meta_action(self, meta_name):
         return self.formalism.name_to_action(meta_name, [self._meta_name_to_meta_action_dict])
 
-    def get_type_to_actions_dict(self):
+    @deprecated
+    def get_type_to_actions_dicts(self):
         return [self._type_to_base_actions_dict, self._type_to_added_actions_dict]
+
+    def get_type_to_action_ids_dicts(self):
+        return [self._type_to_base_action_ids_dict, self._type_to_added_action_ids_dict]
 
     @abstractfunction
     def get_name_to_id_dicts(self):
         pass
 
-    def update_actions(self, actions):
+    def get_id_to_action_dicts(self):
+        return [self._id_to_base_action_dict, self._id_to_added_action_dict]
+
+    def id_to_action(self, action_id):
+        return self.formalism.id_to_action(action_id, self.get_id_to_action_dicts())
+
+    def add_actions(self, actions):
         actions = tuple(actions)
         self.formalism.update_name_to_action_dict(self._name_to_added_action_dict, actions)
         self.added_actions.extend(actions)
         assert len(self._name_to_added_action_dict) == len(self.added_actions)
 
+        self._set_action_ids(self.added_actions)
+
         self.formalism.update_type_to_actions_dict(self._type_to_added_actions_dict, actions, self.super_types_dict)
+        self.formalism.update_type_to_action_ids_dict(self._type_to_added_action_ids_dict, actions, self.super_types_dict)
+        self.formalism.update_id_to_action_dict(self._id_to_added_action_dict, actions)
 
     def sub_and_super(self, sub_type, super_type):
         return self.formalism.sub_and_super(self.super_types_dict, sub_type, super_type)
@@ -99,8 +124,6 @@ class Grammar:
     @abstractfunction
     def get_compiler_cls(self):
         pass
-
-    # raise Exception('TODO: static_actions ...?')
 
 
 def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
@@ -316,6 +339,6 @@ def get_extra_ns(bindings):
 if __name__ == '__main__':
     # grammar = read_grammar('./logic/example.grammar')
     formalism = Formalism()
-    grammar = read_grammar('./grammar/kopl/grammar.lissp', formalism=formalism)
+    grammar = read_grammar('./language/kopl/grammar.lissp', formalism=formalism)
     breakpoint()
     ()

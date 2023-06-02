@@ -3,12 +3,13 @@ import re
 from datetime import date
 from collections import defaultdict
 from util.trie import TokenTrie
+# from itertools import chain
 # from tqdm import tqdm
 
 # from dhnamlib.pylib.decorators import fcache
 from dhnamlib.pylib.type import creatable
 from dhnamlib.pylib.iteration import unique, distinct_pairs
-from dhnamlib.pylib.decorators import construct
+from dhnamlib.pylib.decorators import construct, id_cache
 from dhnamlib.pylib.function import compose
 
 
@@ -16,6 +17,7 @@ numeric_types = ('quantity', 'year', 'date')
 
 
 # @fcache
+@id_cache
 def extract_kb_info(kb):
     assert set(kb) == {'concepts', 'entities'}
 
@@ -86,6 +88,18 @@ def make_trie_dict(kb_info, tokenizer, end_of_seq):
         else:
             new_coll = make_trie(coll)
         yield key, new_coll
+
+
+def make_kw_to_type_dict(kb_info):
+    @construct(dict)
+    def _make_kw_to_type_dict(type_to_kw):
+        for typ, kws in kb_info[type_to_kw].items():
+            for kw in kws:
+                yield kw, typ
+
+    return dict(
+        attribute=_make_kw_to_type_dict('type_to_attributes'),
+        qualifier=_make_kw_to_type_dict('type_to_qualifiers'))
 
 
 quantity_prefix_regex = re.compile(r'^[+-]?[0-9]*(\.[0-9]*)?(e([+-][0-9]*)?)?$')

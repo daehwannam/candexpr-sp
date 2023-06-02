@@ -58,3 +58,20 @@ def number_to_quantity_and_unit(number):
         quantity = number
         unit = '1'
     return quantity, unit
+
+
+def classify_value_type(engine, key, value):
+    # Modified from "kopl.kopl.KoPLEngine._parse_key_value"
+    typ = engine.kb.key_type[key]
+
+    if typ == 'string':
+        return 'string'
+    elif typ == 'quantity':
+        return 'number'
+    else:
+        if '/' in value or ('-' in value and '-' != value[0]):
+            assert typ == 'date'
+            return 'date'
+        else:
+            assert typ == 'year'
+            return 'year'

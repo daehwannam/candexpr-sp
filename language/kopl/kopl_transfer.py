@@ -9,7 +9,7 @@ from util.trie import TokenTrie
 
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.hflib.transformers import iter_default_non_special_tokens
-from dhnamlib.pylib.decorators import construct, cache, curry, variable
+from dhnamlib.pylib.decorators import construct, cache, curry, variable, id_cache
 from dhnamlib.pylib.function import compose
 from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, finditer
 
@@ -74,6 +74,19 @@ with block:
 
         return tuple(union_type)
 
+    data_type_to_attr_act_type = dict(
+        string='kw-attr-string',
+        quantity='kw-attr-number',
+        time='kw-attr-time',
+        date='kw-attr-time',
+        year='kw-attr-time')
+    data_type_to_q_act_type = dict(
+        string='kw-q-string',
+        quantity='kw-q-number',
+        time='kw-q-time',
+        date='kw-q-time',
+        year='kw-q-time')
+
     @config
     def iter_act_type_trie_pairs(*, kb=config.ph, tokenizer, end_of_seq):
         kb_info = kb_analysis.extract_kb_info(kb)
@@ -88,25 +101,13 @@ with block:
         )
 
         trie_dict = kb_analysis.make_trie_dict(kb_info, tokenizer, end_of_seq)
+        trie_dict['units'].add_token_seq([end_of_seq])  # add reduce-only case
         for key, value in trie_dict.items():
             if isinstance(value, dict):
                 pass
             else:
                 trie = value
                 yield key_to_act_type[key], trie
-
-        data_type_to_attr_act_type = dict(
-            string='kw-attr-string',
-            quantity='kw-attr-number',
-            time='kw-attr-time',
-            date='kw-attr-time',
-            year='kw-attr-time')
-        data_type_to_q_act_type = dict(
-            string='kw-q-string',
-            quantity='kw-q-number',
-            time='kw-q-time',
-            date='kw-q-time',
-            year='kw-q-time')
 
         assert sum(1 for value in trie_dict.values() if isinstance(value, dict)) == 2
 
@@ -125,6 +126,22 @@ with block:
                     yield data_type_to_act_type[typ], trie
 
         yield from act_type_to_trie_dict.items()
+
+    @config
+    @id_cache
+    def make_kw_to_type_dict(kb=config.ph):
+        kb_info = kb_analysis.extract_kb_info(kb)
+        _kw_to_type_dict = kb_analysis.make_kw_to_type_dict(kb_info)
+
+        @construct(dict)
+        def _make_kw_to_type_dict(kw_category, new_type_dict):
+            for kw, typ in _kw_to_type_dict[kw_category].items():
+                yield kw, new_type_dict[typ]
+
+        return dict(
+            [kw_category, _make_kw_to_type_dict(kw_category, new_type_dict)]
+            for kw_category, new_type_dict in [['attribute', data_type_to_attr_act_type],
+                                               ['qualifier', data_type_to_q_act_type]])
 
 
 with block:
@@ -184,9 +201,12 @@ with block:
         def parse(form):
             function_action = _kopl_function_to_action(grammar, form['function'])
             action_seq.append(function_action)
+            prev_kopl_input = None
             for idx, kopl_input in enumerate(form['inputs']):
                 action_seq.extend(_kopl_input_to_action_seq(
-                    grammar, kopl_input, function_action.param_types[idx]))
+                    grammar, kopl_input, function_action.param_types[idx],
+                    prev_kopl_input=prev_kopl_input))
+                prev_kopl_input = kopl_input
             for sub_form in form['dependencies']:
                 parse(sub_form)
 
@@ -209,7 +229,8 @@ with block:
                 if kopl_function is not None:
                     yield kopl_function, action
 
-    def _kopl_input_to_action_seq(grammar, kopl_input, act_type):
+    @config
+    def _kopl_input_to_action_seq(grammar, kopl_input, act_type, *, engine=config.ph, prev_kopl_input):
         def text_to_nl_token_actions(text):
             return tuple(
                 chain(
@@ -217,22 +238,36 @@ with block:
                         grammar.tokenizer.tokenize(text)),
                     [grammar.reduce_action]))
 
-        def is_type_of(super_type):
+        def is_type_of(act_type, super_type):
             return grammar.sub_and_super(act_type, super_type)
 
-        if is_type_of('keyword'):
-            keyword_action = unique(_act_type_to_actions(grammar, act_type))
+        kw_to_type_dict = make_kw_to_type_dict()
+
+        if is_type_of(act_type, 'keyword'):
+            if act_type in ['kw-attr-comparable', 'kw-attribute']:
+                new_act_type = kw_to_type_dict['attribute'][kopl_input]
+                if act_type == 'kw-attr-comparable':
+                    assert new_act_type in ['kw-attr-number', 'kw-attr-time']
+            elif act_type == 'kw-qualifier':
+                new_act_type = kw_to_type_dict['qualifier'][kopl_input]
+            else:
+                new_act_type = act_type
+            keyword_action = unique(_act_type_to_actions(grammar, new_act_type))
             action_seq = tuple(chain([keyword_action], text_to_nl_token_actions(kopl_input)))
-        elif is_type_of('operator'):
+        elif is_type_of(act_type, 'operator'):
             candidate_actions = _act_type_to_actions(grammar, act_type)
             operator_action = unique(finditer(
                 candidate_actions, kopl_input,
                 test=lambda action, kopl_input: (kopl_input in action.expr_dict[grammar.formalism.default_expr_key])))
             action_seq = [operator_action]
-        elif is_type_of('value'):
-            value_action = unique(_act_type_to_actions(grammar, act_type))
+        elif is_type_of(act_type, 'value'):
+            if act_type == 'value':
+                new_act_type = 'v-{}'.format(kopl_read.classify_value_type(engine, prev_kopl_input, kopl_input))
+            else:
+                new_act_type = act_type
+            value_action = unique(_act_type_to_actions(grammar, new_act_type))
             action_seq = [value_action]
-            if is_type_of('v-number'):
+            if is_type_of(new_act_type, 'v-number'):
                 assert value_action.name == 'constant-number'
                 quantity_part, unit_part = kopl_read.number_to_quantity_and_unit(kopl_input)
                 # quantity
@@ -240,7 +275,10 @@ with block:
                 action_seq.extend(text_to_nl_token_actions(quantity_part))
                 # unit
                 action_seq.append(grammar.name_to_action('constant-unit'))
-                action_seq.extend(text_to_nl_token_actions(unit_part))
+                if unit_part == '1':
+                    action_seq.extend([grammar.reduce_action])
+                else:
+                    action_seq.extend(text_to_nl_token_actions(unit_part))
             else:
                 action_seq.extend(text_to_nl_token_actions(kopl_input))
         else:

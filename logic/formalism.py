@@ -9,7 +9,7 @@ import inspect
 from dhnamlib.pylib.structure import TreeStructure
 from dhnamlib.pylib.iteration import any_not_none, flatten, split_by_indices, chainelems, lastelem
 from dhnamlib.pylib.klass import abstractfunction, Interface
-from dhnamlib.pylib.decorators import unnecessary
+from dhnamlib.pylib.decorators import deprecated, unnecessary
 from dhnamlib.pylib.structure import bidict, DuplicateValueError
 
 from dhnamlib.hissplib.compile import eval_lissp
@@ -48,6 +48,16 @@ class Action:
         self.num_min_args = self.get_min_num_args()
         self.starting = starting
         self._id = None
+
+    @property
+    def id(self):
+        assert self._id is not None, 'action id is not set'
+        return self._id
+
+    @id.setter
+    def id(self, id):
+        assert self._id is None, 'id is already set'
+        self._id = id
 
     _raw_left_curly_bracket_symbol = '___L_CURLY___'
     _raw_right_curly_bracket_symbol = '___R_CURLY___'
@@ -199,7 +209,7 @@ class MetaAction:
 
         self.action_cls = SpecificAction
 
-    @unnecessary
+    @deprecated
     @staticmethod
     def get_func_num_args(func):
         return len(inspect.signature(func).parameters)
@@ -255,24 +265,48 @@ class Formalism:
         return action
 
     @staticmethod
-    def make_type_to_actions_dict(actions, super_types_dict, constructor=dict):
+    def make_type_to_actions_dict(actions, super_types_dict, constructor=dict, to_id=False):
         dic = {}
-        Formalism.update_type_to_actions_dict(dic, actions, super_types_dict)
+        Formalism.update_type_to_actions_dict(dic, actions, super_types_dict, to_id=to_id)
         if isinstance(dic, constructor):
             return dic
         else:
             return constructor(dic.items())
 
     @staticmethod
-    def update_type_to_actions_dict(type_to_actions_dict, actions, super_types_dict):
+    def update_type_to_actions_dict(type_to_actions_dict, actions, super_types_dict, to_id=False):
         for action in actions:
             type_q = deque(action.act_type if action.is_union_act_type() else
                            [action.act_type])
             while type_q:
                 typ = type_q.popleft()
-                type_to_actions_dict.setdefault(typ, set()).add(action)
+                type_to_actions_dict.setdefault(typ, set()).add(action.id if to_id else action)
                 if typ in super_types_dict:
                     type_q.extend(super_types_dict[typ])
+
+    @staticmethod
+    def make_type_to_action_ids_dict(actions, super_types_dict, constructor=dict):
+        return Formalism.make_type_to_actions_dict(actions, super_types_dict, constructor, to_id=True)
+
+    @staticmethod
+    def update_type_to_action_ids_dict(type_to_action_ids_dict, actions, super_types_dict):
+        return Formalism.update_type_to_actions_dict(type_to_action_ids_dict, actions, super_types_dict, to_id=True)
+
+    @staticmethod
+    def make_id_to_action_dict(actions, constructor=dict):
+        id_to_action_dict = constructor()
+        Formalism.update_id_to_action_dict(id_to_action_dict, actions)
+        return id_to_action_dict
+
+    @staticmethod
+    def update_id_to_action_dict(id_to_action_dict, actions):
+        id_to_action_dict.update([action.id, action] for action in actions)
+
+    @staticmethod
+    def id_to_action(action_id, id_to_action_dicts):
+        action = any_not_none(id_to_action_dict.get(action_id)
+                              for id_to_action_dict in id_to_action_dicts)
+        return action
 
     @staticmethod
     def sub_and_super(super_types_dict, sub_type, super_type):
@@ -310,7 +344,7 @@ class Formalism:
             else:
                 return False
 
-    def get_candidate_actions(self, opened_action, current_num_params, type_to_actions_dicts):
+    def get_candidate_actions(self, opened_action, current_num_params, type_to_actions_dicts, to_id=False):
         rest_idx = opened_action.rest_idx
         if (rest_idx is not None) and (rest_idx < current_num_params):
             next_param_idx = rest_idx
@@ -321,8 +355,11 @@ class Formalism:
 
         return tuple(chain(chainelems(type_to_actions_dict.get(param_type, [])
                                       for type_to_actions_dict in type_to_actions_dicts),
-                           [self.reduce_action] if Formalism._optionally_reducible(
+                           [self.reduce_action.id if to_id else self.reduce_action] if Formalism._optionally_reducible(
                                opened_action, current_num_params) else []))
+
+    def get_candidate_action_ids(self, opened_action, current_num_params, type_to_action_ids_dicts):
+        return self.get_candidate_actions(opened_action, current_num_params, type_to_action_ids_dicts, to_id=True)
 
     def extend_actions(self, actions, use_reduce=True):
         if use_reduce:
@@ -331,6 +368,7 @@ class Formalism:
             default_actions = tuple(actions)
         return default_actions
 
+    @deprecated
     @staticmethod
     def make_name_to_id_dict(actions, start_id, constructor=dict, sorting=False):
         if sorting:
@@ -346,11 +384,14 @@ class Formalism:
         return constructor(map(reversed, enumerate(names, start_id)))
 
     @staticmethod
-    def action_to_id(action, name_to_id_dicts):
-        if action._id is None:
-            action._id = any_not_none(name_to_id_dict.get(action.name or action.name)
-                                      for name_to_id_dict in name_to_id_dicts)
-        return action._id
+    def action_to_id_by_name(action, name_to_id_dicts):
+        return any_not_none(name_to_id_dict.get(action.name)
+                            for name_to_id_dict in name_to_id_dicts)
+
+    @deprecated
+    @staticmethod
+    def set_action_id_by_name_to_id_dicts(action, name_to_id_dicts):
+        action._id = Formalism.action_to_id_by_name(action, name_to_id_dicts)
 
 
 # program tree
@@ -538,8 +579,10 @@ class SearchState(metaclass=ABCMeta):
             yield state
         for action in action_seq:
             if verifying:
-                action_to_id_bidict = state.get_candidate_action_to_id_bidict()
-                assert action in action_to_id_bidict
+                candidate_action_ids = state.get_candidate_action_ids()
+                if action.id not in candidate_action_ids:
+                    breakpoint()                  #  assert action.name == 'reduce'
+                assert action.id in candidate_action_ids
             state = state.get_next_state(action)
             yield state
 
@@ -551,7 +594,9 @@ class SearchState(metaclass=ABCMeta):
     def get_updated_attrs(self, tree):
         pass
 
+    @unnecessary
     def _get_candidate_actions(self):
+        raise Exception('remove this method')
         opened_tree, children = self.tree.get_opened_tree_children()
         opened_action = opened_tree.value
         if opened_action.arg_candidate is None:
@@ -563,25 +608,47 @@ class SearchState(metaclass=ABCMeta):
             actions = tuple(opened_action.arg_filter(self.tree, actions))
         return actions
 
+    def get_candidate_action_ids(self):
+        opened_tree, children = self.tree.get_opened_tree_children()
+        opened_action = opened_tree.value
+        if opened_action.arg_candidate is None:
+            action_ids = self.formalism.get_candidate_action_ids(
+                opened_action, len(children), self.get_type_to_action_ids_dicts())
+        else:
+            action_ids = opened_action.arg_candidate(self.tree)
+        if opened_action.arg_filter is not None:
+            action_ids = tuple(opened_action.arg_filter(self.tree, action_ids))
+        return action_ids
+
+    @deprecated
     @abstractmethod
     def get_type_to_actions_dicts(self):
         pass
 
-    def _actions_to_ids(self, actions):
+    @abstractmethod
+    def get_type_to_action_ids_dicts(self):
+        pass
+ 
+    @deprecated
+    def _actions_to_ids_by_names(self, actions):
         name_to_id_dicts = self.get_name_to_id_dicts()
 
         def _action_to_id(action):
-            return Formalism.action_to_id(action, name_to_id_dicts)
+            return Formalism.action_to_id_by_name(action, name_to_id_dicts)
 
         return tuple(map(_action_to_id, actions))
+
+    def _ids_to_actions(self, action_ids):
+        raise NotImplementedError
 
     @abstractmethod
     def get_name_to_id_dicts(self):
         pass
 
+    @deprecated
     def get_candidate_action_to_id_bidict(self):
         actions = self._get_candidate_actions()
-        ids = self._actions_to_ids(actions)
+        ids = self._actions_to_ids_by_names(actions)
 
         assert len(actions) == len(ids)
 
@@ -613,9 +680,14 @@ def make_search_state_cls(grammar, name=None):
         def get_updated_attrs(self, tree):
             return dict()
 
+        @deprecated
         @interface.implement
         def get_type_to_actions_dicts(self):
-            return grammar.get_type_to_actions_dict()
+            return grammar.get_type_to_actions_dicts()
+
+        @interface.implement
+        def get_type_to_action_ids_dicts(self):
+            return grammar.get_type_to_action_ids_dicts()
 
         @interface.implement
         def get_name_to_id_dicts(self):

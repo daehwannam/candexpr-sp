@@ -6,7 +6,7 @@ from configuration import config
 from logic.grammar import Grammar
 from logic.formalism import make_program_tree_cls, make_search_state_cls
 
-from dhnamlib.pylib.decorators import cache, construct, variable
+from dhnamlib.pylib.decorators import cache, construct, variable, unnecessary
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.iteration import distinct_values
@@ -27,17 +27,23 @@ class KoPLGrammar(Grammar):
         super().__init__(formalism=formalism, super_types_dict=super_types_dict, actions=actions, start_action=start_action,
                          meta_actions=meta_actions, register=register, use_reduce=use_reduce)
 
+        self.initialize_from_base_actions()
+        register_all(register, self, self.tokenizer)
+        self.add_actions(kopl_transfer.iter_nl_token_actions(
+            self.meta_name_to_meta_action, self.tokenizer))
+
+    @cache
+    def initialize_from_base_actions(self):
         self.non_nl_tokens = set(distinct_values(
             kopl_transfer.action_name_to_special_token(action.name)
             for action in self.base_actions))
         self.tokenizer = make_tokenizer(self.non_nl_tokens)
-        register_all(register, self, self.tokenizer)
-        self.update_actions(kopl_transfer.iter_nl_token_actions(
-            self.meta_name_to_meta_action, self.tokenizer))
 
     @cache
     @interface.implement
     def get_name_to_id_dicts(self):
+        self.initialize_from_base_actions()
+
         @variable
         @construct(dict)
         def name_to_id_dict():
@@ -46,6 +52,14 @@ class KoPLGrammar(Grammar):
                 yield action_name, token_id
 
         return [name_to_id_dict]
+
+    @cache
+    def _get_token_to_id_dict(self):
+        self.initialize_from_base_actions()
+        return dict(map(reversed, iter_id_token_pairs(self.tokenizer)))
+
+    def token_to_id(self, token):
+        return self._get_token_to_id_dict()[token]
 
     @cache
     @interface.implement
@@ -80,18 +94,27 @@ def register_all(register, grammar, tokenizer):
     def join_tokens(tokens):
         return ''.join(tokens).replace('Ġ', ' ').lstrip()
 
+    reduce_token = kopl_transfer.action_name_to_special_token(grammar.reduce_action.name)
+
     with block:
         # filter
         def make_arg_filter(typ, is_prefix):
-            def arg_filter(tree, actions):
+            def arg_filter(tree, action_ids):
                 opened_tree, children = tree.get_opened_tree_children()
-                for action in actions:
-                    action_seq = join_tokens(action_in_seq.meta_args[0] for action_in_seq in chain(
-                        (child.value for child in children), [action]))
-                    if action == grammar.reduce_action:
-                        yield kb_analysis.is_value_type(action_seq, typ)
+                for action_id in action_ids:
+                    action = grammar.id_to_action(action_id)
+                    token_seq = [child.value.get_meta_arg('token') for child in children]
+                    if action is grammar.reduce_action:
+                        pass
                     else:
-                        yield is_prefix(action_seq)
+                        token_seq.append(action.get_meta_arg('token'))
+                    joined_tokens = join_tokens(token_seq)
+                    if action == grammar.reduce_action:
+                        if kb_analysis.is_value_type(joined_tokens, typ):
+                            yield action_id
+                    else:
+                        if is_prefix(joined_tokens):
+                            yield action_id
 
             return arg_filter
 
@@ -107,18 +130,19 @@ def register_all(register, grammar, tokenizer):
 
     with block:
         # arg_candidate
-        reduce_token = kopl_transfer.action_name_to_special_token(grammar.reduce_action.name)
-
+        @unnecessary
         def get_candidate_action_name(token):
             return kopl_transfer.token_to_action_name(token, special_tokens=[reduce_token])
 
         def make_arg_candidate(trie):
             def arg_candidate(tree):
                 opened_tree, children = tree.get_opened_tree_children()
-                token_seq_prefix = tuple(child.value.get_meta_arg('token') for child in children)
-                candidate_tokens = trie.candidate_tokens(token_seq_prefix)
-
-                return tuple(grammar.name_to_action(get_candidate_action_name(token)) for token in candidate_tokens)
+                # token_seq_prefix = tuple(child.value.get_meta_arg('token') for child in children)
+                # candidate_tokens = trie.candidate_tokens(token_seq_prefix)
+                # return tuple(grammar.name_to_action(get_candidate_action_name(token)) for token in candidate_tokens)
+                id_seq_prefix = tuple(grammar.token_to_id(child.value.get_meta_arg('token'))
+                                      for child in children)
+                return tuple(trie.candidate_ids(id_seq_prefix))
 
             return arg_candidate
 
@@ -153,25 +177,32 @@ def register_all(register, grammar, tokenizer):
 # KB -> keyword-type pairs
 
 
-if __name__ == '__main__':
+def test_all():
     from logic.grammar import read_grammar
     from dhnamlib.pylib.filesys import json_load
-    from configuration import config
     from dhnamlib.pylib.time import TimeMeasure
-    import cProfile
+    from dhnamlib.pylib.cProfiling import run_context
+    # import cProfile
 
-    grammar = read_grammar('./grammar/kopl/grammar.lissp', grammar_cls=KoPLGrammar)
-    kb = json_load('./_tmp_data-indented/indented-kb.json')
+    grammar = read_grammar('./language/kopl/grammar.lissp', grammar_cls=KoPLGrammar)
+    # kb = json_load('./_tmp_data-indented/indented-kb.json')
     dataset = json_load('./_tmp_data-indented/indented-train.json')
 
-    with config(kb=kb):
-        action_seq = kopl_transfer.kopl_to_action_seq(grammar, dataset[0]['program'])
-        with TimeMeasure() as tm:
-            # last_seq = grammar.search_state_cls.get_last_state(action_seq, verifying=True)
-            # last_seq = grammar.search_state_cls.get_last_state(action_seq, verifying=True)
-            cProfile.run('last_seq = grammar.search_state_cls.get_last_state(action_seq, verifying=True)')
-        print(f'Time: {tm.interval} seconds')
+    action_seq = kopl_transfer.kopl_to_action_seq(grammar, dataset[1]['program'])
+
+    def test():
+        last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=True)
+
+    with TimeMeasure() as tm:
+        run_context('test()', sort='cumtime')
+        # cProfile.runctx('test()', globals(), locals(), sort='cumtime')
+    print(f'Time: {tm.interval} seconds')
 
     # action_seq
     # breakpoint()
     pass
+
+
+if __name__ == '__main__':
+    pass
+
