@@ -482,7 +482,7 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
                 for k in [expr_key, self.formalism.default_expr_key])
 
         def get_expr_form(tree):
-            child_expr_forms = tuple(map(get_expr_form, tree.children))
+            child_expr_forms = tuple() if tree.terminal else tuple(map(get_expr_form, tree.children))
             expr_pieces_or_expr_fn = get_expr_pieces(tree.value)
             if callable(expr_pieces_or_expr_fn):
                 expr_fn = expr_pieces_or_expr_fn
@@ -492,13 +492,18 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
                 expr_form = []
                 for expr_piece in expr_pieces:
                     if isinstance(expr_piece, Action.PieceKey):
+                        if len(child_expr_forms) == 0:
+                            breakpoint()
                         expr_form.append(child_expr_forms[expr_piece.value])
                     else:
                         expr_form.append(expr_piece)
             return expr_form
 
         def form_to_str(expr_form):
-            return ''.join(flatten(expr_form))
+            if isinstance(expr_form, str):
+                return expr_form
+            else:
+                return ''.join(flatten(expr_form))
 
         return form_to_str(get_expr_form(self))
 

@@ -10,7 +10,8 @@ from dhnamlib.pylib.decorators import Register, deprecated
 from dhnamlib.pylib.klass import abstractfunction
 # from dhnamlib.pylib.decorators import cache
 
-from dhnamlib.hissplib.macro import prelude
+from dhnamlib.hissplib.macro import prelude, load_macro
+from dhnamlib.hissplib.module import import_lissp
 from dhnamlib.hissplib.compile import eval_lissp
 from dhnamlib.hissplib.expression import remove_backquoted_symbol_prefixes  # imported for eval_lissp
 from dhnamlib.hissplib.operation import import_operators
@@ -21,6 +22,9 @@ from .formalism import Formalism, Action, MetaAction
 
 prelude()  # used for eval_lissp
 import_operators()  # used for eval_lissp
+
+hissplib_basic = import_lissp('dhnamlib.hissplib.basic')
+load_macro(hissplib_basic, 'el-let', 'let')
 
 grammar_read_form = '(progn {})'
 
@@ -119,7 +123,7 @@ class Grammar:
 
     @property
     def compiler_cls(self):
-        return self.compiler_cls()
+        return self.get_compiler_cls()
 
     @abstractfunction
     def get_compiler_cls(self):

@@ -1,4 +1,5 @@
 from itertools import chain
+import json
 
 from transformers import BartTokenizer
 
@@ -94,6 +95,21 @@ def register_all(register, grammar, tokenizer):
     def join_tokens(tokens):
         return ''.join(tokens).replace('Ġ', ' ').lstrip()
 
+    @register(['function', 'concat-tokens'])
+    def concat_tokens(*tokens):
+        return join_tokens(tokens)
+
+    def repr_as_str(expr):
+        return json.dumps(expr)
+
+    @register(['function', 'concat-parts'])
+    def concat_parts(*tokens):
+        return repr_as_str(join_tokens(tokens))
+
+    @register(['function', 'concat-quantity-unit'])
+    def concat_quantity_unit(quantity, unit):
+        return repr_as_str(f'{quantity} {unit}'.rstrip())
+
     reduce_token = kopl_transfer.action_name_to_special_token(grammar.reduce_action.name)
 
     with block:
@@ -185,6 +201,7 @@ def test_all():
     # import cProfile
 
     grammar = read_grammar('./language/kopl/grammar.lissp', grammar_cls=KoPLGrammar)
+    compiler = grammar.compiler_cls()
     # kb = json_load('./_tmp_data-indented/indented-kb.json')
     dataset = json_load('./_tmp_data-indented/indented-train.json')
 
@@ -192,10 +209,14 @@ def test_all():
 
     def test():
         last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=True)
+        program = compiler.compile_tree(last_state.tree)
+        breakpoint()
+        denotation = program(config.engine)
+        print(f'denotation: {denotation}')
 
     with TimeMeasure() as tm:
-        run_context('test()', sort='cumtime')
-        # cProfile.runctx('test()', globals(), locals(), sort='cumtime')
+        test()
+        # run_context('test()', sort='cumtime')
     print(f'Time: {tm.interval} seconds')
 
     # action_seq

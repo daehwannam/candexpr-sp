@@ -22,7 +22,7 @@ class KoPLCompiler(Compiler):
 
     @interface.implement
     def compile_trees(self, trees):
-        return tuple(eval_lissp(tree.get_expr_str, extra_ns=self.extra_ns)
+        return tuple(eval_lissp(tree.get_expr_str(), extra_ns=self.extra_ns)
                      for tree in trees)
 
 
@@ -30,11 +30,16 @@ def postprocess_denotation(denotation):
     if isinstance(denotation, list):
         new_denotation = [str(_) for _ in denotation]
     else:
+        assert isinstance(denotation (str, int, float))
         new_denotation = str(denotation)
     return new_denotation
 
 
 def postprocess_answer(answer):
+    '''
+    Modify the result from `postprocess_denotation`
+    '''
+
     if answer is None:
         new_answer = 'no'
     elif isinstance(answer, list) and len(answer) > 0:
