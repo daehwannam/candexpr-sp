@@ -429,7 +429,7 @@
        :act-type act-type
        ;; :param-types (entuple param-type '&rest param-type)
        :param-types `(,param-type &rest ,param-type)
-       :arg-candidate (retrieve `(candidate ,act-type))
+       :arg-candidate (if-else (= name 'keyword-entity) None (retrieve `(candidate ,act-type)))
        :expr-dict (mapkv :default concat-parts)))
    '((keyword-concept           kw-concept      kp-concept    )
      (keyword-entity            kw-entity       kp-entity     )

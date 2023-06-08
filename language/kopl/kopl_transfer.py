@@ -45,14 +45,16 @@ with block:
     digit_seq_token_regex = re.compile(r'^Ġ?[0-9]+$')
 
     def is_special_quantity_token(token_value):
-        return token_value in {'.', '-', 'e'}
+        # Actually ['Ġ+', '+'] are not used to represent quantity in kqapro dataset
+        return token_value in {'.', 'Ġ-', 'e', '-', 'Ġ+', '+'}
 
     def is_special_date_token(token_value):
         # return token_value in {'/'}  # '/' is used in kb.json but not in kopl dataset
         return token_value in {'-'}
 
     def is_special_year_token(token_value):
-        return token_value in {'-'}
+        # Actually 'Ġ+' is not used to represent year in kqapro dataset
+        return token_value in {'Ġ-', 'Ġ+'}
 
     def get_token_act_type(token_value):
         is_digit_seq = is_digit_seq_token(token_value)

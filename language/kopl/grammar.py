@@ -185,6 +185,9 @@ def register_all(register, grammar, tokenizer):
             return arg_candidate
 
         for act_type, trie in kopl_transfer.iter_act_type_trie_pairs(tokenizer=tokenizer, end_of_seq=reduce_token):
+            if act_type == 'kw-entity':
+                # KoPL doesn't consider valid entity names
+                continue
             register(['candidate', act_type], make_arg_candidate(trie))
 
 
@@ -242,19 +245,6 @@ def _test_grammar():
         labeled_kopl_program = example['program']
         answer = example['answer']
 
-        # if example_idx == 157:
-        #     # this case is when answer != prediction
-        #     continue
-        #     breakpoint()
-
-        if example_idx < 2535:
-            continue
-        elif example_idx == 2535:
-            # error occurs when example_idx == 2535
-            # print('IndexError occurs when executing "program(config.context)"')
-            # breakpoint()
-            pass
-
         try:
             with tm:
                 action_seq = kopl_transfer.kopl_to_action_seq(grammar, labeled_kopl_program)
@@ -288,7 +278,8 @@ def _test_grammar():
                     print(f'incorrect prediction for an example of index {example_idx}')
                     # raise Exception('incorrect prediction')
         except Exception as e:
-            if len(e.args) > 0 and e.args[0] == 'map_action_seq': 
+            if len(e.args) > 0 and e.args[0] == 'map_action_seq':
+                breakpoint()
                 print(f'error in map_action_seq. opened: {e.args[1]} . children: {e.args[2]}, action: {e.args[3]}')
                 print(f'skip {example_idx}')
             else:
