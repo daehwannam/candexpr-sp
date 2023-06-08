@@ -7,7 +7,7 @@ from dhnamlib.pylib.filesys import json_load
 from dhnamlib.pylib.iteration import apply_recursively
 
 # from kopl.kopl import KoPLEngine
-from language.kopl.execution import KoPLContext, KoPLDebuggingContext
+from domain.kopl.execution import KoPLContext, KoPLDebuggingContext
 
 # from transformers import BartTokenizer
 
