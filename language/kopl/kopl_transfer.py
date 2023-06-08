@@ -48,7 +48,8 @@ with block:
         return token_value in {'.', '-', 'e'}
 
     def is_special_date_token(token_value):
-        return token_value in {'/'}
+        # return token_value in {'/'}  # '/' is used in kb.json but not in kopl dataset
+        return token_value in {'-'}
 
     def is_special_year_token(token_value):
         return token_value in {'-'}
@@ -102,6 +103,8 @@ with block:
 
         trie_dict = kb_analysis.make_trie_dict(kb_info, tokenizer, end_of_seq)
         trie_dict['units'].add_token_seq([end_of_seq])  # add reduce-only case
+
+        # Processing keywords in `key_to_act_type`
         for key, value in trie_dict.items():
             if isinstance(value, dict):
                 pass
@@ -111,6 +114,7 @@ with block:
 
         assert sum(1 for value in trie_dict.values() if isinstance(value, dict)) == 2
 
+        # Processing keywords for attributes and qualifiers
         def merge_tries(tries):
             if len(tries) > 1:
                 return TokenTrie.merge(tries)
@@ -230,7 +234,7 @@ with block:
                     yield kopl_function, action
 
     @config
-    def _kopl_input_to_action_seq(grammar, kopl_input, act_type, *, engine=config.ph, prev_kopl_input):
+    def _kopl_input_to_action_seq(grammar, kopl_input, act_type, *, context=config.ph, prev_kopl_input):
         def text_to_nl_token_actions(text):
             return tuple(
                 chain(
@@ -256,13 +260,16 @@ with block:
             action_seq = tuple(chain([keyword_action], text_to_nl_token_actions(kopl_input)))
         elif is_type_of(act_type, 'operator'):
             candidate_actions = _act_type_to_actions(grammar, act_type)
-            operator_action = unique(finditer(
-                candidate_actions, kopl_input,
-                test=lambda action, kopl_input: (kopl_input in action.expr_dict[grammar.formalism.default_expr_key])))
+            if kopl_input == '=':
+                operator_action = unique(action for action in candidate_actions if action.name == 'op-eq')
+            else:
+                operator_action = unique(finditer(
+                    candidate_actions, kopl_input,
+                    test=lambda action, kopl_input: (kopl_input in action.expr_dict[grammar.formalism.default_expr_key])))
             action_seq = [operator_action]
         elif is_type_of(act_type, 'value'):
             if act_type == 'value':
-                new_act_type = 'v-{}'.format(kopl_read.classify_value_type(engine, prev_kopl_input, kopl_input))
+                new_act_type = 'v-{}'.format(kopl_read.classify_value_type(context, prev_kopl_input, kopl_input))
             else:
                 new_act_type = act_type
             value_action = unique(_act_type_to_actions(grammar, new_act_type))

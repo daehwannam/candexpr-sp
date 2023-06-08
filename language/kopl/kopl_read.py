@@ -15,12 +15,12 @@ def kopl_to_recursive_form(labeled_kopl_program):
     return parse(len(labeled_kopl_program) - 1)
 
 
-kopl_function_regex = re.compile(r"engine\.([a-zA-Z]+)")
+_kopl_function_regex = re.compile(r"context\.([a-zA-Z]+)")
 
 
 def extract_kopl_func(expr):
-    # e.g. expr == "(engine.VerifyDate @2 @0 @1)"
-    match_obj = kopl_function_regex.search(expr)
+    # e.g. expr == "(context.VerifyDate @2 @0 @1)"
+    match_obj = _kopl_function_regex.search(expr)
     if match_obj:
         kopl_func =  match_obj.group(1)
         assert kopl_func in kopl_function_names
@@ -60,18 +60,17 @@ def number_to_quantity_and_unit(number):
     return quantity, unit
 
 
-def classify_value_type(engine, key, value):
+def classify_value_type(context, key, value):
     # Modified from "kopl.kopl.KoPLEngine._parse_key_value"
-    typ = engine.kb.key_type[key]
+    typ = context.kb.key_type[key]
 
     if typ == 'string':
         return 'string'
     elif typ == 'quantity':
         return 'number'
     else:
+        assert typ == 'date'
         if '/' in value or ('-' in value and '-' != value[0]):
-            assert typ == 'date'
             return 'date'
         else:
-            assert typ == 'year'
             return 'year'

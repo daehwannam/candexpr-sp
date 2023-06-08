@@ -104,7 +104,7 @@ def make_kw_to_type_dict(kb_info):
 
 quantity_prefix_regex = re.compile(r'^[+-]?[0-9]*(\.[0-9]*)?(e([+-][0-9]*)?)?$')
 year_prefix_regex = re.compile(r'^[+-]?[0-9]*$')
-date_prefix_regex = re.compile(r'^[0-9]{1,4}(/([0-9]{1,2}(/([0-9]{1,2})?)?)?)?$')
+date_prefix_regex = re.compile(r'^[0-9]{1,4}(-([0-9]{1,2}(-([0-9]{1,2})?)?)?)?$')
 
 
 def is_quantity_prefix(text):
@@ -121,14 +121,18 @@ def is_year_prefix(text):
 
 def is_value_type(value, typ):
     def parse_date(value):
-        return date(*value.split('/'))
+        ymd_tuple = tuple(map(int, value.split('-')))
+        if len(ymd_tuple) == 3:
+            return date(*ymd_tuple)
+        else:
+            raise ValueError('datetime.date requires 3 int type arguments')
 
     cls_dict = dict([['string', lambda *args: None],
                      ['quantity', float],
                      ['date', parse_date],
                      ['year', int]])
 
-    return creatable(cls_dict[typ], value)
+    return creatable(cls_dict[typ], value, exception_cls=ValueError)
 
 
 if __name__ == '__main__':

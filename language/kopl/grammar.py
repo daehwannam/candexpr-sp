@@ -11,10 +11,11 @@ from dhnamlib.pylib.decorators import cache, construct, variable, unnecessary
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.iteration import distinct_values
-from dhnamlib.pylib.hflib.transformers import iter_id_token_pairs
+from dhnamlib.pylib.hflib.transformers import iter_id_token_pairs, join_tokens as _join_tokens
+from dhnamlib.hissplib.expression import repr_as_hash_str
 
 from . import kb_analysis
-from .compile import KoPLCompiler
+from .execution import KoPLCompiler
 from . import kopl_transfer
 
 # from dhnamlib.pylib.decorators import fcache
@@ -38,7 +39,7 @@ class KoPLGrammar(Grammar):
         self.non_nl_tokens = set(distinct_values(
             kopl_transfer.action_name_to_special_token(action.name)
             for action in self.base_actions))
-        self.tokenizer = make_tokenizer(self.non_nl_tokens)
+        self.tokenizer = make_tokenizer(self.non_nl_tokens, sorting=True)
 
     @cache
     @interface.implement
@@ -78,11 +79,12 @@ class KoPLGrammar(Grammar):
 
 
 @config
-def make_tokenizer(special_tokens, pretrained_model_name_or_path=config.ph):
+def make_tokenizer(special_tokens, pretrained_model_name_or_path=config.ph, sorting=True):
+    special_tokens = (sorted if sorting else list)(special_tokens)
     tokenizer = BartTokenizer.from_pretrained(
         pretrained_model_name_or_path,
         add_prefix_space=True)
-    tokenizer.add_tokens(tuple(special_tokens), special_tokens=True)
+    tokenizer.add_tokens(special_tokens, special_tokens=True)
     return tokenizer
 
 
@@ -93,22 +95,43 @@ def register_all(register, grammar, tokenizer):
 
     @register(['function', 'join-tokens'])
     def join_tokens(tokens):
+        # return ''.join(tokens).replace('Ġ', ' ').lstrip()
+        return _join_tokens(tokenizer, tokens, skip_special_tokens=True).lstrip()
+
+    def fast_join_tokens(tokens):
+        '''
+        Join tokens into a string. It's faster than `join_tokens`, but it
+        cannot process tokens containing unicode characters.
+
+        In the following example, this function doesn't work:
+
+        >>> from transformers import BartTokenizer
+        >>> tokenizer = BartTokenizer.from_pretrained("facebook/bart-base")
+        >>> text = "Laos\u2013Vietnam border"
+        >>> text
+        'Laos–Vietnam border'
+        >>> tokens = tokenizer.tokenize(text)
+        >>> tokens
+        ['L', 'aos', 'âĢĵ', 'V', 'iet', 'nam', 'Ġborder']
+        >>> joined_tokens = fast_join_tokens(tokens)
+        >>> joined_tokens
+        'LaosâĢĵVietnam border'
+        >>> text == joined_tokens
+        False
+        '''
         return ''.join(tokens).replace('Ġ', ' ').lstrip()
 
     @register(['function', 'concat-tokens'])
     def concat_tokens(*tokens):
         return join_tokens(tokens)
 
-    def repr_as_str(expr):
-        return json.dumps(expr)
-
     @register(['function', 'concat-parts'])
     def concat_parts(*tokens):
-        return repr_as_str(join_tokens(tokens))
+        return repr_as_hash_str(join_tokens(tokens))
 
     @register(['function', 'concat-quantity-unit'])
     def concat_quantity_unit(quantity, unit):
-        return repr_as_str(f'{quantity} {unit}'.rstrip())
+        return repr_as_hash_str(f'{quantity} {unit}'.rstrip())
 
     reduce_token = kopl_transfer.action_name_to_special_token(grammar.reduce_action.name)
 
@@ -124,14 +147,13 @@ def register_all(register, grammar, tokenizer):
                         pass
                     else:
                         token_seq.append(action.get_meta_arg('token'))
-                    joined_tokens = join_tokens(token_seq)
+                    joined_tokens = fast_join_tokens(token_seq)
                     if action == grammar.reduce_action:
                         if kb_analysis.is_value_type(joined_tokens, typ):
                             yield action_id
                     else:
                         if is_prefix(joined_tokens):
                             yield action_id
-
             return arg_filter
 
         def get_act_type(typ):
@@ -193,35 +215,139 @@ def register_all(register, grammar, tokenizer):
 # KB -> keyword-type pairs
 
 
-def test_all():
+def _test_grammar():
+    from tqdm import tqdm
+
     from logic.grammar import read_grammar
     from dhnamlib.pylib.filesys import json_load
     from dhnamlib.pylib.time import TimeMeasure
-    from dhnamlib.pylib.cProfiling import run_context
-    # import cProfile
+    from .execution import postprocess_answer
+    from .execution import postprocess_denotation
+    from .kopl_original import execute_kopl_program
 
     grammar = read_grammar('./language/kopl/grammar.lissp', grammar_cls=KoPLGrammar)
     compiler = grammar.compiler_cls()
-    # kb = json_load('./_tmp_data-indented/indented-kb.json')
-    dataset = json_load('./_tmp_data-indented/indented-train.json')
+    dataset = json_load('./dataset/kopl/train.json')
 
-    action_seq = kopl_transfer.kopl_to_action_seq(grammar, dataset[1]['program'])
+    # action_seq = kopl_transfer.kopl_to_action_seq(grammar, dataset[0]['program'])
 
-    def test():
-        last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=True)
-        program = compiler.compile_tree(last_state.tree)
-        breakpoint()
-        denotation = program(config.engine)
-        print(f'denotation: {denotation}')
+    tm = TimeMeasure()
+    kopl_to_action_seq_cumtime = 0
+    get_last_state_cumtime = 0
+    compile_tree_cumtime = 0
+    program_cumtime = 0
+    postprocess_answer_cumtime = 0
 
-    with TimeMeasure() as tm:
-        test()
-        # run_context('test()', sort='cumtime')
-    print(f'Time: {tm.interval} seconds')
+    for example_idx, example in tqdm(enumerate(dataset)):
+        labeled_kopl_program = example['program']
+        answer = example['answer']
 
-    # action_seq
-    # breakpoint()
-    pass
+        # if example_idx == 157:
+        #     # this case is when answer != prediction
+        #     continue
+        #     breakpoint()
+
+        if example_idx < 2535:
+            continue
+        elif example_idx == 2535:
+            # error occurs when example_idx == 2535
+            # print('IndexError occurs when executing "program(config.context)"')
+            # breakpoint()
+            pass
+
+        try:
+            with tm:
+                action_seq = kopl_transfer.kopl_to_action_seq(grammar, labeled_kopl_program)
+            kopl_to_action_seq_cumtime += tm.interval
+
+            with tm:
+                last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=True)
+            get_last_state_cumtime += tm.interval
+
+            with tm:
+                program = compiler.compile_tree(last_state.tree)
+            compile_tree_cumtime += tm.interval
+
+            with tm:
+                denotation = program(config.context)
+            program_cumtime += tm.interval
+
+            with tm:
+                prediction = postprocess_answer(denotation)
+            postprocess_answer_cumtime += tm.interval
+
+            if answer != prediction:
+                denotation_by_kopl = execute_kopl_program(config.context, labeled_kopl_program)
+                if denotation == denotation_by_kopl:
+                    answer_by_kopl = postprocess_answer(denotation_by_kopl)
+                    assert answer_by_kopl == prediction
+                    # breakpoint()
+                    print(f'The labeled answer is of id {example_idx} incorrect. Expected {answer_by_kopl} but got {answer}')
+                else:
+                    # breakpoint()
+                    print(f'incorrect prediction for an example of index {example_idx}')
+                    # raise Exception('incorrect prediction')
+        except Exception as e:
+            if len(e.args) > 0 and e.args[0] == 'map_action_seq': 
+                print(f'error in map_action_seq. opened: {e.args[1]} . children: {e.args[2]}, action: {e.args[3]}')
+                print(f'skip {example_idx}')
+            else:
+                raise e
+
+    avg_time_dict = dict(
+        kopl_to_action_seq = kopl_to_action_seq_cumtime,
+        get_last_state     = get_last_state_cumtime,
+        compile_tree       = compile_tree_cumtime,
+        program            = program_cumtime,
+        postprocess_answer = postprocess_answer_cumtime)
+
+    print('=== Average time ===')
+    for k, v in avg_time_dict.items():
+        print(f'- {k}: {v}')
+
+
+# def _test():
+#     from logic.grammar import read_grammar
+#     from dhnamlib.pylib.filesys import json_load
+#     from dhnamlib.pylib.time import TimeMeasure
+#     # from dhnamlib.pylib.cProfiling import run_context
+#     # import cProfile
+
+#     grammar = read_grammar('./language/kopl/grammar.lissp', grammar_cls=KoPLGrammar)
+#     compiler = grammar.compiler_cls()
+#     # kb = json_load('./_tmp_data-indented/indented-kb.json')
+#     dataset = json_load('./_tmp_data-indented/indented-train.json')
+
+#     action_seq = kopl_transfer.kopl_to_action_seq(grammar, dataset[0]['program'])
+
+#     def test():
+#         tm = TimeMeasure()
+
+#         tm.check()
+#         last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=True)
+#         print(f'actions to the last state: {tm.elapse()}')
+
+#         print(f'logical form: {last_state.tree.get_expr_str("visual")}')
+
+#         tm.check()
+#         program = compiler.compile_tree(last_state.tree)
+#         print(f'compiling a tree: {tm.elapse()}')
+
+#         tm.check
+#         denotation = program(config.context)
+#         print(f'executing a program: {tm.elapse()}')
+
+#         print(f'denotation: {denotation}')
+
+#     # with TimeMeasure() as tm:
+#     #     test()
+#     #     # run_context('test()', sort='cumtime')
+#     # print(f'Time: {tm.interval} seconds')
+
+#     test()
+
+#     # breakpoint()
+#     pass
 
 
 if __name__ == '__main__':

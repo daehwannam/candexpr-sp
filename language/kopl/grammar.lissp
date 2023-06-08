@@ -131,7 +131,7 @@
   :name 'program
   :act-type 'result
   :param-types '(result)
-  :expr-dict (mapkv :default $(lambda (engine)
+  :expr-dict (mapkv :default $(lambda (context)
                                 (postprocess-denotation {0}))
                     :visual-0 "{0}"
                     :visual $(program {0}))
@@ -141,14 +141,14 @@
   :name 'all-entities
   :act-type 'obj-entity
   :param-types '()
-  :expr-dict (mapkv :default $(engine.FindAll)
+  :expr-dict (mapkv :default $(context.FindAll)
                     :visual "all-entities"))
 
 (define-action
   :name 'find
   :act-type 'obj-entity
   :param-types '(kw-entity)
-  :expr-dict (mapkv :default $(engine.Find {0})
+  :expr-dict (mapkv :default $(context.Find {0})
                     :visual $(find {0})))
 
 ;;; filter-*
@@ -157,35 +157,35 @@
   :name 'filter-concept
   :act-type 'obj-entity
   :param-types '(kw-concept obj-entity)
-  :expr-dict (mapkv :default $(engine.FilterConcept {1} {0})
+  :expr-dict (mapkv :default $(context.FilterConcept {1} {0})
                     :visual $(filter-concept {1} {0})))
 
 (define-action
   :name 'filter-str
   :act-type 'obj-entity-with-attr
   :param-types '(kw-attr-string v-string obj-entity)
-  :expr-dict (mapkv :default $(engine.FilterStr {2} {0} {1})
+  :expr-dict (mapkv :default $(context.FilterStr {2} {0} {1})
                     :visual $(filter-str {2} {0} {1})))
 
 (define-action
   :name 'filter-number
   :act-type 'obj-entity-with-attr
   :param-types '(kw-attr-number v-number op-comparison obj-entity)
-  :expr-dict (mapkv :default $(engine.FilterNum {3} {0} {1} {2})
+  :expr-dict (mapkv :default $(context.FilterNum {3} {0} {1} {2})
                     :visual $(filter-number {3} {0} {1} {2})))
 
 (define-action
   :name 'filter-year
   :act-type 'obj-entity-with-attr
   :param-types '(kw-attr-time v-year op-comparison obj-entity)
-  :expr-dict (mapkv :default $(engine.FilterYear {3} {0} {1} {2})
+  :expr-dict (mapkv :default $(context.FilterYear {3} {0} {1} {2})
                     :visual $(filter-year {3} {0} {1} {2})))
 
 (define-action
   :name 'filter-date
   :act-type 'obj-entity-with-attr
   :param-types '(kw-attr-time v-date op-comparison obj-entity)
-  :expr-dict (mapkv :default $(engine.FilterDate {3} {0} {1} {2})
+  :expr-dict (mapkv :default $(context.FilterDate {3} {0} {1} {2})
                     :visual $(filter-date {3} {0} {1} {2})))
 
 ;;; relate
@@ -194,7 +194,7 @@
   :name 'relate
   :act-type 'obj-entity-with-rel
   :param-types '(kw-relation op-direction obj-entity)
-  :expr-dict (mapkv :default $(engine.Relate {2} {0} {1})
+  :expr-dict (mapkv :default $(context.Relate {2} {0} {1})
                     :visual $(relate {2} {0} {1})))
 
 ;;; op-*
@@ -203,28 +203,28 @@
   :name 'op-eq
   :act-type 'op-comparison
   :param-types '()
-  :expr-dict (mapkv :default $(repr "=")
+  :expr-dict (mapkv :default #"\"=\""
                     :visual "="))
 
 (define-action
   :name 'op-ne
   :act-type 'op-comparison
   :param-types '()
-  :expr-dict (mapkv :default $(repr "!=")
+  :expr-dict (mapkv :default #"\"!=\""
                     :visual "!="))
 
 (define-action
   :name 'op-lt
   :act-type 'op-comparison
   :param-types '()
-  :expr-dict (mapkv :default $(repr "<")
+  :expr-dict (mapkv :default #"\"<\""
                     :visual "<"))
 
 (define-action
   :name 'op-gt
   :act-type 'op-comparison
   :param-types '()
-  :expr-dict (mapkv :default $(repr ">")
+  :expr-dict (mapkv :default #"\">\""
                     :visual ">"))
 
 ;;; direction-*
@@ -233,14 +233,14 @@
   :name 'direction-forward
   :act-type 'op-direction
   :param-types '()
-  :expr-dict (mapkv :default $(repr "forward")
+  :expr-dict (mapkv :default #"\"forward\""
                     :visual "'forward"))
 
 (define-action
   :name 'direction-backward
   :act-type 'op-direction
   :param-types '()
-  :expr-dict (mapkv :default $(repr "backward")
+  :expr-dict (mapkv :default #"\"backward\""
                     :visual "'backward"))
 
 ;;; q-filter-*
@@ -249,28 +249,28 @@
   :name 'q-filter-str
   :act-type 'obj-entity-with-fact
   :param-types '(kw-q-string v-string obj-entity-with-fact)
-  :expr-dict (mapkv :default $(engine.QFilterStr {2} {0} {1})
+  :expr-dict (mapkv :default $(context.QFilterStr {2} {0} {1})
                     :visual $(q-filter-str {2} {0} {1})))
 
 (define-action
   :name 'q-filter-number
   :act-type 'obj-entity-with-fact
   :param-types '(kw-q-number v-number op-comparison obj-entity-with-fact)
-  :expr-dict (mapkv :default $(engine.QFilterNum {3} {0} {1} {2})
+  :expr-dict (mapkv :default $(context.QFilterNum {3} {0} {1} {2})
                     :visual $(q-filter-number {3} {0} {1} {2})))
 
 (define-action
   :name 'q-filter-year
   :act-type 'obj-entity-with-fact
   :param-types '(kw-q-time v-year op-comparison obj-entity-with-fact)
-  :expr-dict (mapkv :default $(engine.QFilterYear {3} {0} {1} {2})
+  :expr-dict (mapkv :default $(context.QFilterYear {3} {0} {1} {2})
                     :visual $(q-filter-year {3} {0} {1} {2})))
 
 (define-action
   :name 'q-filter-date
   :act-type 'obj-entity-with-fact
   :param-types '(kw-q-time v-date op-comparison obj-entity-with-fact)
-  :expr-dict (mapkv :default $(engine.QFilterDate {3} {0} {1} {2})
+  :expr-dict (mapkv :default $(context.QFilterDate {3} {0} {1} {2})
                     :visual $(q-filter-date {3} {0} {1} {2})))
 
 ;;; intersect / union
@@ -279,14 +279,14 @@
   :name 'intersect
   :act-type 'obj-entity
   :param-types '(obj-entity obj-entity)
-  :expr-dict (mapkv :default $(engine.And {0} {1})
+  :expr-dict (mapkv :default $(context.And {0} {1})
                     :visual $(intersect {0} {1})))
 
 (define-action
   :name 'union
   :act-type 'obj-entity
   :param-types '(obj-entity obj-entity)
-  :expr-dict (mapkv :default $(engine.Or {0} {1})
+  :expr-dict (mapkv :default $(context.Or {0} {1})
                     :visual $(union {0} {1})))
 
 ;;; count
@@ -295,7 +295,7 @@
   :name 'count
   :act-type 'result-number
   :param-types '(obj-entity)
-  :expr-dict (mapkv :default $(engine.Count {0})
+  :expr-dict (mapkv :default $(context.Count {0})
                     :visual $(count {0})))
 
 ;;; select-*
@@ -304,14 +304,14 @@
   :name 'select-between
   :act-type 'result-entity-name
   :param-types '(kw-attr-comparable op-st-or-bt obj-entity obj-entity)
-  :expr-dict (mapkv :default $(engine.SelectBetween {2} {3} {0} {1})
+  :expr-dict (mapkv :default $(context.SelectBetween {2} {3} {0} {1})
                     :visual $(select-between {2} {3} {0} {1})))
 
 (define-action
   :name 'select-among
   :act-type 'result-entity-name
   :param-types '(kw-attr-comparable op-min-or-max obj-entity)
-  :expr-dict (mapkv :default $(engine.SelectAmong {2} {0} {1})
+  :expr-dict (mapkv :default $(context.SelectAmong {2} {0} {1})
                     :visual $(select-between {2} {0} {1})))
 
 ;;; op-*
@@ -320,28 +320,28 @@
   :name 'op-st
   :act-type 'op-st-or-bt
   :param-types '()
-  :expr-dict (mapkv :default $(repr "smaller")
-                    :visual "'smaller"))
+  :expr-dict (mapkv :default #"\"less\""
+                    :visual "'less"))
 
 (define-action
   :name 'op-bt
   :act-type 'op-st-or-bt
   :param-types '()
-  :expr-dict (mapkv :default $(repr "greater")
+  :expr-dict (mapkv :default #"\"greater\""
                     :visual "'greater"))
 
 (define-action
   :name 'op-min
   :act-type 'op-min-or-max
   :param-types '()
-  :expr-dict (mapkv :default $(repr "min")
+  :expr-dict (mapkv :default #"\"smallest\""
                     :visual "'min"))
 
 (define-action
   :name 'op-max
   :act-type 'op-min-or-max
   :param-types '()
-  :expr-dict (mapkv :default $(repr "max")
+  :expr-dict (mapkv :default #"\"largest\""
                     :visual "'max"))
 
 ;;; query-*
@@ -350,42 +350,42 @@
   :name 'query-name
   :act-type 'result-entity-name
   :param-types '(obj-entity)
-  :expr-dict (mapkv :default $(engine.QueryName {0})
+  :expr-dict (mapkv :default $(context.QueryName {0})
                     :visual $(query-name {0})))
 
 (define-action
   :name 'query-attr
   :act-type 'result-attr-value
   :param-types '(kw-attribute obj-entity)
-  :expr-dict (mapkv :default $(engine.QueryAttr {1} {0})
+  :expr-dict (mapkv :default $(context.QueryAttr {1} {0})
                     :visual $(query-attr {0} {1})))
 
 (define-action
   :name 'query-attr-under-cond
   :act-type 'result-attr-value
   :param-types '(kw-attribute kw-qualifier value obj-entity)
-  :expr-dict (mapkv :default $(engine.QueryAttrUnderCondition {3} {0} {1} {2})
+  :expr-dict (mapkv :default $(context.QueryAttrUnderCondition {3} {0} {1} {2})
                     :visual $(query-attr-under-cond {3} {0} {1} {2})))
 
 (define-action
   :name 'query-relation
   :act-type 'result-relation
   :param-types '(obj-entity obj-entity)
-  :expr-dict (mapkv :default $(engine.QueryRelation {0} {1})
+  :expr-dict (mapkv :default $(context.QueryRelation {0} {1})
                     :visual $(query-relation {0} {1})))
 
 (define-action
   :name 'query-attr-qualifier
   :act-type 'result-attr-q-value
   :param-types '(kw-attribute value kw-qualifier obj-entity)
-  :expr-dict (mapkv :default $(engine.QueryAttrQualifier {3} {0} {1} {2})
+  :expr-dict (mapkv :default $(context.QueryAttrQualifier {3} {0} {1} {2})
                     :visual $(query-attr-qualifier {3} {0} {1} {2})))
 
 (define-action
   :name 'query-rel-qualifier
   :act-type 'result-rel-q-value
   :param-types '(kw-relation kw-qualifier obj-entity obj-entity)
-  :expr-dict (mapkv :default $(engine.QueryRelationQualifier {2} {3} {0} {1})
+  :expr-dict (mapkv :default $(context.QueryRelationQualifier {2} {3} {0} {1})
                     :visual $(query-rel-qualifier {2} {3} {0} {1})))
 
 ;;; verify-*
@@ -394,28 +394,28 @@
   :name 'verify-str
   :act-type 'result-boolean
   :param-types '(v-string result-attr-value)
-  :expr-dict (mapkv :default $(engine.VerifyStr {1} {0})
+  :expr-dict (mapkv :default $(context.VerifyStr {1} {0})
                     :visual $(verify-str {1} {0})))
 
 (define-action
   :name 'verify-number
   :act-type 'result-boolean
   :param-types '(v-number op-comparison result-attr-value)
-  :expr-dict (mapkv :default $(engine.VerifyNum {2} {0} {1})
+  :expr-dict (mapkv :default $(context.VerifyNum {2} {0} {1})
                     :visual $(verify-number {2} {0} {1})))
 
 (define-action
   :name 'verify-year
   :act-type 'result-boolean
   :param-types '(v-year op-comparison result-attr-value)
-  :expr-dict (mapkv :default $(engine.VerifyYear {2} {0} {1})
+  :expr-dict (mapkv :default $(context.VerifyYear {2} {0} {1})
                     :visual $(verify-year {2} {0} {1})))
 
 (define-action
   :name 'verify-date
   :act-type 'result-boolean
   :param-types '(v-date op-comparison result-attr-value)
-  :expr-dict (mapkv :default $(engine.VerifyDate {2} {0} {1})
+  :expr-dict (mapkv :default $(context.VerifyDate {2} {0} {1})
                     :visual $(verify-date {2} {0} {1})))
 
 (let ((concat-tokens (retrieve '(function concat-tokens)))

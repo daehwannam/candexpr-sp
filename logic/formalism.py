@@ -8,7 +8,8 @@ import inspect
 
 from dhnamlib.pylib.structure import TreeStructure
 from dhnamlib.pylib.iteration import any_not_none, flatten, split_by_indices, chainelems, lastelem
-from dhnamlib.pylib.klass import abstractfunction, Interface
+from dhnamlib.pylib.klass import Interface
+# from dhnamlib.pylib.klass import abstractfunction
 from dhnamlib.pylib.decorators import deprecated, unnecessary
 from dhnamlib.pylib.structure import bidict, DuplicateValueError
 
@@ -482,7 +483,7 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
                 for k in [expr_key, self.formalism.default_expr_key])
 
         def get_expr_form(tree):
-            child_expr_forms = tuple() if tree.terminal else tuple(map(get_expr_form, tree.children))
+            child_expr_forms = tuple([] if tree.terminal else map(get_expr_form, tree.children))
             expr_pieces_or_expr_fn = get_expr_pieces(tree.value)
             if callable(expr_pieces_or_expr_fn):
                 expr_fn = expr_pieces_or_expr_fn
@@ -492,8 +493,6 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
                 expr_form = []
                 for expr_piece in expr_pieces:
                     if isinstance(expr_piece, Action.PieceKey):
-                        if len(child_expr_forms) == 0:
-                            breakpoint()
                         expr_form.append(child_expr_forms[expr_piece.value])
                     else:
                         expr_form.append(expr_piece)
@@ -586,7 +585,9 @@ class SearchState(metaclass=ABCMeta):
             if verifying:
                 candidate_action_ids = state.get_candidate_action_ids()
                 if action.id not in candidate_action_ids:
-                    breakpoint()                  #  assert action.name == 'reduce'
+                    opened_tree, children = state.tree.get_opened_tree_children()
+                    raise Exception('map_action_seq', str(opened_tree.value), tuple(str(child.value) for child in children), str(action))
+                    breakpoint()
                 assert action.id in candidate_action_ids
             state = state.get_next_state(action)
             yield state
@@ -704,11 +705,7 @@ def make_search_state_cls(grammar, name=None):
     return BasicSearchState
 
 
-class Compiler:
-    @abstractfunction
-    def compile_trees(self, trees):
-        pass
-
+class Compiler(metaclass=ABCMeta):
+    @abstractmethod
     def compile_tree(self, tree):
-        [executable] = self.compile_trees([tree])
-        return executable
+        '''Convert a tree to an executable'''

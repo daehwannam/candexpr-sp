@@ -22,7 +22,7 @@ special_tokens = {'quantity': {'.', '-', 'e'},
 # quantity examples: [1.2e-06, 9e-06, 4.3e-06]
 quantity_prefix_regex = r'^[+-]?[0-9]*(\.[0-9]*)?(e([+-][0-9]*)?)?$'
 year_prefix_regex = r'^[+-]?[0-9]*$'
-date_prefix_regex = r'^[0-9]{1,4}(/([0-9]{1,2}(/([0-9]{1,2})?)?)?)?$'
+date_prefix_regex_with_slash = r'^[0-9]{1,4}(/([0-9]{1,2}(/([0-9]{1,2})?)?)?)?$'
 
 
 def check_prefix(regex, text, expected=True):
@@ -54,10 +54,10 @@ if __name__ == '__main__':
     check_prefix(year_prefix_regex, '1999')
     check_prefix(year_prefix_regex, '1999.0', False)
 
-    check_prefix(date_prefix_regex, '1/1/1')
-    check_prefix(date_prefix_regex, '1/01/01')
-    check_prefix(date_prefix_regex, '11/12/13')
-    check_prefix(date_prefix_regex, '2222/12/13')
-    check_prefix(date_prefix_regex, '2222/12/13')
-    check_prefix(date_prefix_regex, '2222/12/133', False)
-    check_prefix(date_prefix_regex, '2222/012/13', False)
+    check_prefix(date_prefix_regex_with_slash, '1/1/1')
+    check_prefix(date_prefix_regex_with_slash, '1/01/01')
+    check_prefix(date_prefix_regex_with_slash, '11/12/13')
+    check_prefix(date_prefix_regex_with_slash, '2222/12/13')
+    check_prefix(date_prefix_regex_with_slash, '2222/12/13')
+    check_prefix(date_prefix_regex_with_slash, '2222/12/133', False)
+    check_prefix(date_prefix_regex_with_slash, '2222/012/13', False)
