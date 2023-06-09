@@ -14,8 +14,6 @@ from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
 from dhnamlib.hissplib.operation import import_operators
 
-from .kopl_update import KoPLRuntimeError
-
 
 prelude()  # used for eval_lissp
 import_operators()  # used for eval_lissp
@@ -31,8 +29,10 @@ class KoPLCompiler(Compiler):
     @interface.implement
     def compile_tree(self, tree, tolerant=False):
         program = eval_lissp(tree.get_expr_str(), extra_ns=self.extra_ns)
-        exception = Exception if tolerant else KoPLRuntimeError
-        return excepting(exception, runtime_exception_handler)(program)
+        if tolerant:
+            return excepting(Exception, runtime_exception_handler)(program)
+        else:
+            return program
 
 
 NO_DENOTATION = object()
@@ -70,7 +70,7 @@ class KoPLContext(KoPLEngine):
     pass
 
 
-class KoPLDebuggingContext(KoPLEngine):
+class KoPLDebugContext(KoPLEngine):
     pass
 
 
@@ -92,10 +92,10 @@ def _initialize_debugging_context():
 
     _kopl_function_regex = re.compile(r"[A-Z]([a-zA-Z]*)")
 
-    for attribute in dir(KoPLDebuggingContext):
+    for attribute in dir(KoPLDebugContext):
         if _kopl_function_regex.match(attribute) is not None:
-            obj = getattr(KoPLDebuggingContext, attribute)
-            setattr(KoPLDebuggingContext, attribute, _debug_decorator(obj))
+            obj = getattr(KoPLDebugContext, attribute)
+            setattr(KoPLDebugContext, attribute, _debug_decorator(obj))
 
 
 _initialize_debugging_context()

@@ -584,11 +584,11 @@ class SearchState(metaclass=ABCMeta):
         for action in action_seq:
             if verifying:
                 candidate_action_ids = state.get_candidate_action_ids()
-                if action.id not in candidate_action_ids:
-                    opened_tree, children = state.tree.get_opened_tree_children()
-                    raise Exception('map_action_seq', str(opened_tree.value), tuple(str(child.value) for child in children), str(action))
-                    breakpoint()
-                assert action.id in candidate_action_ids
+                # if action.id not in candidate_action_ids:
+                #     opened_tree, children = state.tree.get_opened_tree_children()
+                #     raise Exception('map_action_seq', str(opened_tree.value), tuple(str(child.value) for child in children), str(action))
+                #     breakpoint()
+                assert action.id in candidate_action_ids, f'{action} is not a candidate action in the current action tree {state.tree}'
             state = state.get_next_state(action)
             yield state
 

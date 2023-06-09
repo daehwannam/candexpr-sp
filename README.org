@@ -46,6 +46,12 @@ pip install torch==1.12.0+cu116 torchvision==0.13.0+cu116 torchaudio==0.12.0 --e
 pip install -r requirements.txt
 #+end_src
 
+* Running
+** Preprocessing
+#+begin_src sh
+python -m domain.kopl.preprocess
+#+end_src
+
 # * Running
 # ** Common configuration
 # #+begin_src sh

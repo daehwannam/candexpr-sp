@@ -1,49 +1,45 @@
 
-# import copy
-
-from dhnamlib.pylib.context import Scope
+from dhnamlib.pylib.context import Scope, LazyEval
 from dhnamlib.pylib.decorators import Register
 from dhnamlib.pylib.filesys import json_load
 from dhnamlib.pylib.iteration import apply_recursively
 
-# from kopl.kopl import KoPLEngine
-from domain.kopl.execution import KoPLContext, KoPLDebuggingContext
+from logic.grammar import read_grammar
 
-# from transformers import BartTokenizer
+from domain.kopl.execution import KoPLContext, KoPLDebugContext
 
+_kb_file_path = './dataset/kopl/kb.json'
+_train_set_file_path = './dataset/kopl/train.json'
+_val_set_file_path = './dataset/kopl/val.json'
+_test_set_file_path = './dataset/kopl/test.json'
 
-# tokenizer = BartTokenizer.from_pretrained(
-#     './pretrained/bart-base',
-#     add_prefix_space=True)
-# reduce_token = '<reduce>'
-# tokenizer.add_tokens([reduce_token], special_tokens=True)
+_train_action_seqs_file_path = './processed/kopl/train_action_seqs.jsonl'
 
-_raw_kb = json_load('./dataset/kopl/kb.json')
+_grammar_file_path = './domain/kopl/grammar.lissp'
+_pretrained_model_name_or_path = './pretrained/bart-base'
 
-# # test ------------------
-# from dhnamlib.pylib.time import TimeMeasure
-# import json
-# with TimeMeasure() as tm:
-#     _raw_kb = json_load('./dataset/kb.json')
-# print(tm.interval)
-# with TimeMeasure() as tm:
-#     apply_recursively(_raw_kb)
-# print(tm.interval)
-# with TimeMeasure() as tm:
-#     json.loads(json.dumps(_raw_kb))
-# print(tm.interval)
-# with TimeMeasure() as tm:
-#     copy.deepcopy(_raw_kb)
-# print(tm.interval)
-# # ------------------ test
+DEBUG = True
+if DEBUG:
+    context_cls = KoPLContext
+else:
+    context_cls = KoPLDebugContext
+
+def make_grammar():
+    from domain.kopl.grammar import KoPLGrammar
+    return read_grammar(_grammar_file_path, grammar_cls=KoPLGrammar)
+    
 
 config = Scope(
-    kb=_raw_kb,
-    context=KoPLDebuggingContext(apply_recursively(_raw_kb)),
-    # context=KoPLContext(apply_recursively(_raw_kb)),
-    # context=KoPLEngine(copy.deepcopy(_raw_kb)),
-    pretrained_model_name_or_path='./pretrained/bart-base',
     register=Register(strategy='conditional'),
-    # tokenizer=tokenizer,
-    # reduce_token=reduce_token,
+
+    kb=LazyEval(lambda: json_load(_kb_file_path)),
+    train_set=LazyEval(lambda: json_load(_train_set_file_path)),
+    val_set=LazyEval(lambda: json_load(_val_set_file_path)),
+    test_set=LazyEval(lambda: json_load(_test_set_file_path)),
+
+    grammar=LazyEval(make_grammar),
+    context=LazyEval(lambda: context_cls(apply_recursively(config.kb))),
+    
+    pretrained_model_name_or_path=_pretrained_model_name_or_path,
+    train_action_seqs_file_path=_train_action_seqs_file_path
 )
