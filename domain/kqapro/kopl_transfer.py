@@ -17,11 +17,11 @@ from . import kopl_read
 from . import kb_analysis
 
 
-def iter_nl_token_actions(meta_name_to_meta_action, tokenizer):
+def iter_nl_token_actions(meta_name_to_meta_action, lf_tokenizer):
     nl_token_meta_action = meta_name_to_meta_action(nl_token_meta_name)
 
     def iter_token_value_act_type_pairs():
-        all_non_special_token_values = tuple(iter_default_non_special_tokens(tokenizer))
+        all_non_special_token_values = tuple(iter_default_non_special_tokens(lf_tokenizer))
         all_act_types = map(get_token_act_type, all_non_special_token_values)
 
         return zip(all_non_special_token_values, all_act_types)
@@ -91,7 +91,7 @@ with block:
         year='kw-q-time')
 
     @config
-    def iter_act_type_trie_pairs(*, kb=config.ph, tokenizer, end_of_seq):
+    def iter_act_type_trie_pairs(*, kb=config.ph, lf_tokenizer, end_of_seq):
         kb_info = kb_analysis.extract_kb_info(kb)
         # data_types = set(['string', 'quantity', 'time', 'date', 'year'])
         # time_types = set(['time', 'date', 'year'])
@@ -103,7 +103,7 @@ with block:
             units='v-unit'
         )
 
-        trie_dict = kb_analysis.make_trie_dict(kb_info, tokenizer, end_of_seq)
+        trie_dict = kb_analysis.make_trie_dict(kb_info, lf_tokenizer, end_of_seq)
         trie_dict['units'].add_token_seq([end_of_seq])  # add reduce-only case
 
         # Processing keywords in `key_to_act_type`
@@ -241,7 +241,7 @@ with block:
             return tuple(
                 chain(
                     map(compose(grammar.name_to_action, nl_token_to_action_name),
-                        grammar.tokenizer.tokenize(text)),
+                        grammar.lf_tokenizer.tokenize(text)),
                     [grammar.reduce_action]))
 
         def is_type_of(act_type, super_type):

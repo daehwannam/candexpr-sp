@@ -49,18 +49,18 @@ def check_dependencies(labeled_program):
 if __name__ == '__main__':
     from dhnamlib.pylib.filesys import json_load
 
-    dataset = json_load('./_tmp_data-indented/indented-train.json')
+    raw_dataset = json_load('./_tmp_data-indented/indented-train.json')
     tree_forms = []
     tree_form_reprs = []
-    # for example in dataset:
+    # for example in raw_dataset:
     #     # tree_forms.append(parse_program_into_tree_form(example['program']))
     #     tree_form_reprs.append(tree_form_repr(parse_program_into_tree_form(example['program'])))
     #     breakpoint()
 
-    tree_form_reprs = tuple(map(check_dependencies, (example['program'] for example in dataset)))
+    tree_form_reprs = tuple(map(check_dependencies, (example['program'] for example in raw_dataset)))
     pp(dependencies)
 
-    output_functions = set(example['program'][-1]['function'] for example in dataset)
+    output_functions = set(example['program'][-1]['function'] for example in raw_dataset)
     pp(output_functions)
 
     breakpoint()

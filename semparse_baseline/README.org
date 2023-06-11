@@ -22,7 +22,7 @@ mkdir -p $DOWNLOAD_PATH
 wget -O $DOWNLOAD_PATH/KQAPro.IID.zip https://cloud.tsinghua.edu.cn/f/04ce81541e704a648b03/?dl=1
 unzip $DOWNLOAD_PATH/KQAPro.IID.zip -d $DATA_PATH
 mkdir -p ./dataset
-ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset/kopl
+ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset/kqapro
 #+end_src
 
 ** Pre-trained model
@@ -62,8 +62,8 @@ PREDICT_LOG_PATH=./log/bart-predict-program-$DATE
 
 ** Preprocessing
 #+begin_src sh
-python -m $MODULE.preprocess --input_dir ./dataset/kopl --output_dir $PROCESSED_PATH --model_name_or_path "$MODEL_NAME_OR_PATH"
-ln -s $(realpath ./dataset/kopl/kb.json) $PROCESSED_PATH/kb.json
+python -m $MODULE.preprocess --input_dir ./dataset/kqapro --output_dir $PROCESSED_PATH --model_name_or_path "$MODEL_NAME_OR_PATH"
+ln -s $(realpath ./dataset/kqapro/kb.json) $PROCESSED_PATH/kb.json
 #+end_src
 
 ** Training

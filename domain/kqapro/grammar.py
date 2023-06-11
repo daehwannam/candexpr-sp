@@ -1,5 +1,6 @@
 from itertools import chain
 import json
+import copy
 
 from transformers import BartTokenizer
 
@@ -30,16 +31,22 @@ class KoPLGrammar(Grammar):
                          meta_actions=meta_actions, register=register, use_reduce=use_reduce)
 
         self.initialize_from_base_actions()
-        register_all(register, self, self.tokenizer)
+        register_all(register, self, self.lf_tokenizer)
         self.add_actions(kopl_transfer.iter_nl_token_actions(
-            self.meta_name_to_meta_action, self.tokenizer))
+            self.meta_name_to_meta_action, self.lf_tokenizer))
 
     @cache
     def initialize_from_base_actions(self):
         self.non_nl_tokens = set(distinct_values(
             kopl_transfer.action_name_to_special_token(action.name)
             for action in self.base_actions))
-        self.tokenizer = make_tokenizer(self.non_nl_tokens, sorting=True)
+
+        # logical form tokenizer
+        self.lf_tokenizer = make_lf_tokenizer(self.non_nl_tokens, sorting=True)
+
+        # input tokenizer
+        self.input_tokenizer = copy.copy(self.lf_tokenizer)
+        self.input_tokenizer.add_prefix_space = False
 
     @cache
     @interface.implement
@@ -49,7 +56,7 @@ class KoPLGrammar(Grammar):
         @variable
         @construct(dict)
         def name_to_id_dict():
-            for token_id, token in iter_id_token_pairs(self.tokenizer):
+            for token_id, token in iter_id_token_pairs(self.lf_tokenizer):
                 action_name = kopl_transfer.token_to_action_name(token, special_tokens=self.non_nl_tokens)
                 yield action_name, token_id
 
@@ -58,7 +65,7 @@ class KoPLGrammar(Grammar):
     @cache
     def _get_token_to_id_dict(self):
         self.initialize_from_base_actions()
-        return dict(map(reversed, iter_id_token_pairs(self.tokenizer)))
+        return dict(map(reversed, iter_id_token_pairs(self.lf_tokenizer)))
 
     def token_to_id(self, token):
         return self._get_token_to_id_dict()[token]
@@ -79,16 +86,16 @@ class KoPLGrammar(Grammar):
 
 
 @config
-def make_tokenizer(special_tokens, pretrained_model_name_or_path=config.ph, sorting=True):
+def make_lf_tokenizer(special_tokens, pretrained_model_name_or_path=config.ph, sorting=True):
     special_tokens = (sorted if sorting else list)(special_tokens)
-    tokenizer = BartTokenizer.from_pretrained(
+    lf_tokenizer = BartTokenizer.from_pretrained(
         pretrained_model_name_or_path,
         add_prefix_space=True)
-    tokenizer.add_tokens(special_tokens, special_tokens=True)
-    return tokenizer
+    lf_tokenizer.add_tokens(special_tokens, special_tokens=True)
+    return lf_tokenizer
 
 
-def register_all(register, grammar, tokenizer):
+def register_all(register, grammar, lf_tokenizer):
     @register(['name', 'nl-token'])
     def get_nl_token_name(token):
         return kopl_transfer.nl_token_to_action_name(token)
@@ -96,7 +103,7 @@ def register_all(register, grammar, tokenizer):
     @register(['function', 'join-tokens'])
     def join_tokens(tokens):
         # return ''.join(tokens).replace('Ġ', ' ').lstrip()
-        return _join_tokens(tokenizer, tokens, skip_special_tokens=True).lstrip()
+        return _join_tokens(lf_tokenizer, tokens, skip_special_tokens=True).lstrip()
 
     def fast_join_tokens(tokens):
         '''
@@ -184,7 +191,7 @@ def register_all(register, grammar, tokenizer):
 
             return arg_candidate
 
-        for act_type, trie in kopl_transfer.iter_act_type_trie_pairs(tokenizer=tokenizer, end_of_seq=reduce_token):
+        for act_type, trie in kopl_transfer.iter_act_type_trie_pairs(lf_tokenizer=lf_tokenizer, end_of_seq=reduce_token):
             if act_type == 'kw-entity':
                 # KoPL doesn't consider valid entity names
                 continue

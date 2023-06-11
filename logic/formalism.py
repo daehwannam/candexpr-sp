@@ -385,6 +385,12 @@ class Formalism:
         return constructor(map(reversed, enumerate(names, start_id)))
 
     @staticmethod
+    def name_to_id(name, name_to_id_dicts):
+        action_id = any_not_none(name_to_id_dict.get(name)
+                                 for name_to_id_dict in name_to_id_dicts)
+        return action_id
+
+    @staticmethod
     def action_to_id_by_name(action, name_to_id_dicts):
         return any_not_none(name_to_id_dict.get(action.name)
                             for name_to_id_dict in name_to_id_dicts)

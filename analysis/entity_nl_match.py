@@ -6,9 +6,9 @@ from dhnamlib.pylib.filesys import json_load, json_save_pretty
 
 
 def analyze_entities(input_path, output_path):
-    dataset = json_load(input_path)
+    raw_dataset = json_load(input_path)
     entity_to_info = {}
-    for example in dataset:
+    for example in raw_dataset:
         question = example['question']
         for entity in chain(*(func_call['inputs'] for func_call in example['program'])):
             info = entity_to_info.setdefault(entity, {})

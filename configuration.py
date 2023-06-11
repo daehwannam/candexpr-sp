@@ -1,45 +1,71 @@
 
+import os
+from itertools import chain
+
 from dhnamlib.pylib.context import Scope, LazyEval
 from dhnamlib.pylib.decorators import Register
-from dhnamlib.pylib.filesys import json_load
-from dhnamlib.pylib.iteration import apply_recursively
+from dhnamlib.pylib.filesys import json_load, jsonl_load
+from dhnamlib.pylib.iteration import apply_recursively, distinct_pairs
+from dhnamlib.pylib.package import import_from_module
 
 from logic.grammar import read_grammar
 
-from domain.kopl.execution import KoPLContext, KoPLDebugContext
+from domain.kqapro.execution import KoPLContext, KoPLDebugContext
 
-_kb_file_path = './dataset/kopl/kb.json'
-_train_set_file_path = './dataset/kopl/train.json'
-_val_set_file_path = './dataset/kopl/val.json'
-_test_set_file_path = './dataset/kopl/test.json'
+_kb_file_path = './dataset/kqapro/kb.json'
+_train_set_file_path = './dataset/kqapro/train.json'
+_val_set_file_path = './dataset/kqapro/val.json'
+_test_set_file_path = './dataset/kqapro/test.json'
 
-_train_action_seqs_file_path = './processed/kopl/train_action_seqs.jsonl'
+_augmented_train_set_file_path = './processed/kopl/augmented_train.jsonl'
+_augmented_val_set_file_path = './processed/kopl/augmented_val.jsonl'
+_encoded_train_set_file_path = './processed/kopl/encoded_train.jsonl'
+_encoded_val_set_file_path = './processed/kopl/encoded_val.jsonl'
 
-_grammar_file_path = './domain/kopl/grammar.lissp'
+_grammar_file_path = './domain/kqapro/grammar.lissp'
 _pretrained_model_name_or_path = './pretrained/bart-base'
 
-DEBUG = True
-if DEBUG:
-    context_cls = KoPLContext
+_DEBUG = True
+if _DEBUG:
+    _context_cls = KoPLContext
+    _default_config_module_name = None
 else:
-    context_cls = KoPLDebugContext
+    _context_cls = KoPLDebugContext
+    _default_config_module_name = None
 
 def make_grammar():
-    from domain.kopl.grammar import KoPLGrammar
+    from domain.kqapro.grammar import KoPLGrammar
     return read_grammar(_grammar_file_path, grammar_cls=KoPLGrammar)
     
 
-config = Scope(
+_config = Scope(
     register=Register(strategy='conditional'),
 
     kb=LazyEval(lambda: json_load(_kb_file_path)),
-    train_set=LazyEval(lambda: json_load(_train_set_file_path)),
-    val_set=LazyEval(lambda: json_load(_val_set_file_path)),
-    test_set=LazyEval(lambda: json_load(_test_set_file_path)),
+    context=LazyEval(lambda: _context_cls(apply_recursively(config.kb))),
+
+    raw_train_set=LazyEval(lambda: json_load(_train_set_file_path)),
+    raw_val_set=LazyEval(lambda: json_load(_val_set_file_path)),
+    raw_test_set=LazyEval(lambda: json_load(_test_set_file_path)),
+
+    augmented_train_set=LazyEval(lambda: jsonl_load(_augmented_train_set_file_path)),
+    augmented_val_set=LazyEval(lambda: jsonl_load(_augmented_val_set_file_path)),
+    encoded_train_set=LazyEval(lambda: jsonl_load(_encoded_train_set_file_path)),
+    encoded_val_set=LazyEval(lambda: jsonl_load(_encoded_val_set_file_path)),
 
     grammar=LazyEval(make_grammar),
-    context=LazyEval(lambda: context_cls(apply_recursively(config.kb))),
     
     pretrained_model_name_or_path=_pretrained_model_name_or_path,
-    train_action_seqs_file_path=_train_action_seqs_file_path
+
+    augmented_train_set_file_path=_augmented_train_set_file_path,
+    augmented_val_set_file_path=_augmented_val_set_file_path,
+    encoded_train_set_file_path=_encoded_train_set_file_path,
+    encoded_val_set_file_path=_encoded_val_set_file_path,
 )
+
+_specific_config_module_name = _default_config_module_name or os.environ.get('SEMPARSE_CONFIG')
+if _specific_config_module_name is not None:
+    _specific_config = import_from_module(_specific_config_module_name, 'config')
+    config = Scope(distinct_pairs(chain(_config.items(), _specific_config.items())))
+else:
+    config = _config

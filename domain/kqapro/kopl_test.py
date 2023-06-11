@@ -10,7 +10,7 @@ from .kopl_original import execute_kopl_program
 def test_dataset():
     from configuration import config
 
-    dataset = json_load('./dataset/kopl/train.json')
+    dataset = json_load('./dataset/kqapro/train.json')
 
     correct_count = 0
     incorrect_example_info = []
@@ -33,12 +33,12 @@ def test_dataset():
 
 
 def test_dataset_size():
-    dataset = json_load('./dataset/kopl/train.json')
+    dataset = json_load('./dataset/kqapro/train.json')
     print(len(dataset))
 
 
 def test_dataset_answers():
-    dataset = json_load('./dataset/kopl/train.json')
+    dataset = json_load('./dataset/kqapro/train.json')
     for example_idx, example in tqdm(enumerate(dataset)):
         if example['answer'] not in example['choices']:
             breakpoint
@@ -62,9 +62,9 @@ def test_grammar():
     from . import kopl_transfer
     from configuration import config
 
-    grammar = read_grammar('./domain/kopl/grammar.lissp', grammar_cls=KoPLGrammar)
+    grammar = read_grammar('./domain/kqapro/grammar.lissp', grammar_cls=KoPLGrammar)
     compiler = grammar.compiler_cls()
-    dataset = json_load('./dataset/kopl/train.json')
+    dataset = json_load('./dataset/kqapro/train.json')
 
     # action_seq = kopl_transfer.kopl_to_action_seq(grammar, dataset[0]['program'])
 

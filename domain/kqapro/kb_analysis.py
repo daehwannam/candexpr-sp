@@ -75,9 +75,9 @@ def extract_kb_info(kb):
                 units=units)
 
 @construct(compose(dict, distinct_pairs))
-def make_trie_dict(kb_info, tokenizer, end_of_seq):
+def make_trie_dict(kb_info, lf_tokenizer, end_of_seq):
     def make_trie(kw_set):
-        trie = TokenTrie(tokenizer=tokenizer, end_of_seq=end_of_seq)
+        trie = TokenTrie(tokenizer=lf_tokenizer, end_of_seq=end_of_seq)
         for kw in kw_set:
             trie.add_text(kw)
         return trie

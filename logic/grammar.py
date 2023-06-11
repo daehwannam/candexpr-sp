@@ -80,6 +80,9 @@ class Grammar:
     def get_type_to_action_ids_dicts(self):
         return [self._type_to_base_action_ids_dict, self._type_to_added_action_ids_dict]
 
+    def name_to_id(self, name):
+        return self.formalism.name_to_id(name, self.get_name_to_id_dicts())
+
     @abstractfunction
     def get_name_to_id_dicts(self):
         pass
