@@ -20,7 +20,7 @@ from kqapro_util.misc import seed_everything
 from dhnamlib.pylib.filesys import make_logger
 
 from .data import DataLoader
-from utils import common
+from .util import register
 
 # warnings.simplefilter("ignore")  # hide warnings that caused by invalid sparql query
 # from termcolor import colored
@@ -152,24 +152,26 @@ def validate(model, data, device, tokenizer, executor):
                 correct += 1
             count += 1
         acc = correct / count
-        common.logger.info('acc: {}'.format(acc))
+        logger = register.retrieve('logger')
+        logger.info('acc: {}'.format(acc))
 
         return acc
 
 
 def train(args):
+    logger = register.retrieve('logger')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    common.logger.info("Create train_loader and val_loader.........")
+    logger.info("Create train_loader and val_loader.........")
     vocab_json = os.path.join(args.input_dir, 'vocab.json')
     val_pt = os.path.join(args.input_dir, 'test.pt')
     val_loader = DataLoader(vocab_json, val_pt, args.batch_size)
-    common.logger.info("Create model.........")
+    logger.info("Create model.........")
     config_class, model_class, tokenizer_class = (BartConfig, BartForConditionalGeneration, BartTokenizer)
     tokenizer = tokenizer_class.from_pretrained(args.ckpt)
     model = model_class.from_pretrained(args.ckpt)
     model = model.to(device)
-    common.logger.info(model)
+    logger.info(model)
     engine = KoPLEngine(json.load(open(os.path.join(args.input_dir, 'kb.json'))))
     # validate(model, val_loader, device, tokenizer, engine)
 
@@ -199,11 +201,12 @@ def main():
         os.makedirs(args.save_dir)
     current_time = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())
 
-    common.register(logger=make_logger('train', os.path.join(args.save_dir, '{}.log'.format(current_time))))
+    register('logger', make_logger('train', os.path.join(args.save_dir, '{}.log'.format(current_time))))
+    logger = register.retrieve('logger')
 
     # args display
     for k, v in vars(args).items():
-        common.logger.info(k+':'+str(v))
+        logger.info(k+':'+str(v))
 
     seed_everything(42)
 
