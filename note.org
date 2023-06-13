@@ -7,6 +7,20 @@
     - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_logits_process.py::class PrefixConstrainedLogitsProcessor(LogitsProcessor):][PrefixConstrainedLogitsProcessor]]
   - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_utils.py::def greedy_search(][greedy_search]]
   - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_utils.py::def beam_search(][beam_search]]
+*** plan 1
+- I should define ~prefix_allowed_tokens_fn~ and pass it as an argument of ~generate~.
+*** plan 2
+- I should define a new LogitsProcessor rather than using PrefixConstrainedLogitsProcessor
+- then I should pass a LogitsProcessorList that includes a new LogitsProcessor as an argument ~logits_processor~ of ~generate~
 
 ** training (calculating loss)
 - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/models/bart/modeling_bart.py::1291][forward]] of [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/models/bart/modeling_bart.py::class BartForConditionalGeneration(BartPretrainedModel):][BartForConditionalGeneration]]
+
+** BartForConditionalGeneration
+*** forward
+its output is a dict type object who key is
+- loss: scalar value by NllLoss
+- logits: a tensor of shape ~[batch_size, seq_len, vocab_size]~
+**** loss and logits
+- ~loss~ is computed from ~logits~ and labels with ~CrossEntropyLoss~
+- ~CrossEntropyLoss~ uses ~torch.nn.LogSoftmax~ and ~torch.nn.NLLLoss~

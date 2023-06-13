@@ -1,5 +1,3 @@
-from itertools import chain
-import json
 import copy
 
 from transformers import BartTokenizer
@@ -18,6 +16,7 @@ from dhnamlib.hissplib.expression import repr_as_hash_str
 from . import kb_analysis
 from .execution import KoPLCompiler
 from . import kopl_transfer
+from .model import is_finetuned, load_tokenizer
 
 # from dhnamlib.pylib.decorators import fcache
 
@@ -26,7 +25,11 @@ class KoPLGrammar(Grammar):
     interface = Interface(Grammar)
 
     @config
-    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register=config.ph, use_reduce=True):
+    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register=config.ph, use_reduce=True,
+                 pretrained_model_name_or_path=config.ph):
+
+        self.pretrained_model_name_or_path = pretrained_model_name_or_path
+
         super().__init__(formalism=formalism, super_types_dict=super_types_dict, actions=actions, start_action=start_action,
                          meta_actions=meta_actions, register=register, use_reduce=use_reduce)
 
@@ -42,11 +45,23 @@ class KoPLGrammar(Grammar):
             for action in self.base_actions))
 
         # logical form tokenizer
-        self.lf_tokenizer = make_lf_tokenizer(self.non_nl_tokens, sorting=True)
+        with block:
+            if is_finetuned(self.pretrained_model_name_or_path):
+                load_tokenizer_kwargs = dict()
+            else:
+                load_tokenizer_kwargs = dict(
+                    new_special_tokens=self.non_nl_tokens,
+                    sorting_new_special_tokens=True)
 
-        # input tokenizer
-        self.input_tokenizer = copy.copy(self.lf_tokenizer)
-        self.input_tokenizer.add_prefix_space = False
+            self.lf_tokenizer = load_tokenizer(
+                pretrained_model_name_or_path=self.pretrained_model_name_or_path,
+                add_prefix_space=True,
+                **load_tokenizer_kwargs)
+
+        # utterance tokenizer
+        with block:
+            self.utterance_tokenizer = copy.copy(self.lf_tokenizer)
+            self.utterance_tokenizer.add_prefix_space = False
 
     @cache
     @interface.implement
@@ -83,16 +98,6 @@ class KoPLGrammar(Grammar):
     @interface.implement
     def get_compiler_cls(self):
         return KoPLCompiler
-
-
-@config
-def make_lf_tokenizer(special_tokens, pretrained_model_name_or_path=config.ph, sorting=True):
-    special_tokens = (sorted if sorting else list)(special_tokens)
-    lf_tokenizer = BartTokenizer.from_pretrained(
-        pretrained_model_name_or_path,
-        add_prefix_space=True)
-    lf_tokenizer.add_tokens(special_tokens, special_tokens=True)
-    return lf_tokenizer
 
 
 def register_all(register, grammar, lf_tokenizer):

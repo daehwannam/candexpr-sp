@@ -139,7 +139,7 @@ def encode_dataset(grammar, augmented_dataset):
 
         # `utterance_token_ids` and `action_ids` include BOS and EOS.
         encoded_example = dict(
-            utterance_token_ids=grammar.input_tokenizer(example['question'])['input_ids'],
+            utterance_token_ids=grammar.utterance_tokenizer(example['question'])['input_ids'],
             answer=example['answer'])
 
         if 'action_name_seq' in example:
