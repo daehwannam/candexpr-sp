@@ -6,10 +6,10 @@ from util.trie import TokenTrie
 # from itertools import chain
 # from tqdm import tqdm
 
-# from dhnamlib.pylib.decorators import fcache
+# from dhnamlib.pylib.decoration import fcache
 from dhnamlib.pylib.type import creatable
 from dhnamlib.pylib.iteration import unique, distinct_pairs
-from dhnamlib.pylib.decorators import construct, id_cache
+from dhnamlib.pylib.decoration import construct, id_cache
 from dhnamlib.pylib.function import compose
 
 

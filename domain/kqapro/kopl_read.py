@@ -2,7 +2,7 @@
 import re
 from kopl.kopl import KoPLEngine
 
-from dhnamlib.pylib.decorators import variable, construct
+from dhnamlib.pylib.decoration import variable, construct
 
 
 def kopl_to_recursive_form(labeled_kopl_program):

@@ -10,7 +10,7 @@ from dhnamlib.pylib.structure import TreeStructure
 from dhnamlib.pylib.iteration import any_not_none, flatten, split_by_indices, chainelems, lastelem
 from dhnamlib.pylib.klass import Interface
 # from dhnamlib.pylib.klass import abstractfunction
-from dhnamlib.pylib.decorators import deprecated, unnecessary
+from dhnamlib.pylib.decoration import deprecated, unnecessary
 from dhnamlib.pylib.structure import bidict, DuplicateValueError
 
 from dhnamlib.hissplib.compile import eval_lissp
@@ -583,8 +583,9 @@ class SearchState(metaclass=ABCMeta):
         return updated_state
 
     @classmethod
-    def map_action_seq(cls, action_seq, including_initial=False, verifying=False):
-        state = cls.create()
+    def map_action_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
+        if initial_state is None:
+            state = cls.create()
         if including_initial:
             yield state
         for action in action_seq:
@@ -599,8 +600,8 @@ class SearchState(metaclass=ABCMeta):
             yield state
 
     @classmethod
-    def get_last_state(cls, action_seq, verifying=False):
-        return lastelem(cls.map_action_seq(action_seq, verifying=verifying))
+    def get_last_state(cls, action_seq, initial_state=None, verifying=False):
+        return lastelem(cls.map_action_seq(action_seq, initial_state=initial_state, verifying=verifying))
 
     @abstractmethod
     def get_updated_attrs(self, tree):

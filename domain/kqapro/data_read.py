@@ -3,7 +3,7 @@ import torch
 
 from dhnamlib.pylib.torchlib.dnn import pad_sequence, SimpleDataset
 from dhnamlib.pylib.iteration import dicts2pairs, keys2items
-from dhnamlib.pylib.decorators import construct
+from dhnamlib.pylib.decoration import construct
 
 
 def make_collate(pad_token_id):

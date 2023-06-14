@@ -3,7 +3,7 @@ import os
 from itertools import chain
 
 from dhnamlib.pylib.context import Scope, LazyEval
-from dhnamlib.pylib.decorators import Register
+from dhnamlib.pylib.decoration import Register
 from dhnamlib.pylib.filesys import json_load, jsonl_load
 from dhnamlib.pylib.iteration import apply_recursively, distinct_pairs
 from dhnamlib.pylib.package import import_from_module

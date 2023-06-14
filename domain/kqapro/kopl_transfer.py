@@ -9,7 +9,7 @@ from util.trie import TokenTrie
 
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.hflib.transformers import iter_default_non_special_tokens
-from dhnamlib.pylib.decorators import construct, cache, curry, variable, id_cache
+from dhnamlib.pylib.decoration import construct, cache, curry, variable, id_cache
 from dhnamlib.pylib.function import compose
 from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, finditer
 

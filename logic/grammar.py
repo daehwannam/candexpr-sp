@@ -1,21 +1,19 @@
 
-from itertools import chain
-
 from hissp.munger import munge, demunge
 
 from dhnamlib.pylib.lisp import (remove_comments, replace_prefixed_parens, is_keyword, keyword_to_symbol)
 from dhnamlib.pylib.iteration import merge_dicts, chainelems
 from dhnamlib.pylib.function import starloop  # imported for eval_lissp
-from dhnamlib.pylib.decorators import Register, deprecated
+from dhnamlib.pylib.decoration import Register, deprecated
 from dhnamlib.pylib.klass import abstractfunction
-# from dhnamlib.pylib.decorators import cache
+# from dhnamlib.pylib.decoration import cache
 
 from dhnamlib.hissplib.macro import prelude, load_macro
 from dhnamlib.hissplib.module import import_lissp
 from dhnamlib.hissplib.compile import eval_lissp
 from dhnamlib.hissplib.expression import remove_backquoted_symbol_prefixes  # imported for eval_lissp
 from dhnamlib.hissplib.operation import import_operators
-from dhnamlib.hissplib.decorators import parse_hy_args, hy_function
+from dhnamlib.hissplib.decoration import parse_hy_args, hy_function
 
 from .formalism import Formalism, Action, MetaAction
 

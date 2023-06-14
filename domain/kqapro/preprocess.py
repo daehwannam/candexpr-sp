@@ -7,7 +7,7 @@ from configuration import config
 from dhnamlib.pylib.filesys import jsonl_save, mkdirs_unless_exist
 from dhnamlib.pylib.time import TimeMeasure
 from dhnamlib.pylib.iteration import apply_recursively
-from dhnamlib.pylib.decorators import construct
+from dhnamlib.pylib.decoration import construct
 
 from .execution import postprocess_answer
 from .kopl_original import execute_kopl_program

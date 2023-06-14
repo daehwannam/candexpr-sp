@@ -1,4 +1,5 @@
 import copy
+from typing import List
 
 from transformers import BartTokenizer
 
@@ -6,11 +7,12 @@ from configuration import config
 from logic.grammar import Grammar
 from logic.formalism import make_program_tree_cls, make_search_state_cls
 
-from dhnamlib.pylib.decorators import cache, construct, variable, unnecessary
+from dhnamlib.pylib.decoration import cache, construct, variable, unnecessary
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.iteration import distinct_values
 from dhnamlib.pylib.hflib.transformers import iter_id_token_pairs, join_tokens as _join_tokens
+from dhnamlib.pylib.data_structure import FIFODict
 from dhnamlib.hissplib.expression import repr_as_hash_str
 
 from . import kb_analysis
@@ -18,7 +20,12 @@ from .execution import KoPLCompiler
 from . import kopl_transfer
 from .model import is_finetuned, load_tokenizer
 
-# from dhnamlib.pylib.decorators import fcache
+# from dhnamlib.pylib.decoration import fcache
+
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch
 
 
 class KoPLGrammar(Grammar):
@@ -98,6 +105,46 @@ class KoPLGrammar(Grammar):
     @interface.implement
     def get_compiler_cls(self):
         return KoPLCompiler
+
+    def make_prefix_allowed_tokens_fn(batch_size, num_beams):
+        cache_size = batch_size * num_beams * 2
+        # multiplying "2" is for caching both previous states and the next sates
+        fifo_dict = FIFODict(cache_size)
+
+        def prefix_allowed_tokens_fn(self, batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
+            '''
+            This function is passed to `torch.PrefixConstrainedLogitsProcessor`, which is used by generate `transformers.generate`.
+
+            :param batch_id: the index of an example in the input batch of search
+            :param prefix_token_id_seq: a sequence of token ids
+            :return: a list of allowed candidate token ids
+            '''
+
+            raise NotImplementedError('check if this method is correct')
+
+            prefix_token_id_seq_tuple = tuple(prefix_token_id_seq)
+
+            if prefix_token_id_seq_tuple in fifo_dict:
+                return fifo_dict[prefix_token_id_seq]
+            else:
+                if prefix_token_id_seq_tuple[:-1] in fifo_dict:
+                    initial_state = fifo_dict[prefix_token_id_seq_tuple[:-1]]
+                    prefix_action_id_seq = [prefix_token_id_seq_tuple[-1]]  # only the last action id
+                else:
+                    initial_state = None
+                    bos_token_id, *prefix_action_id_seq = prefix_token_id_seq  # exclude the BOS token id
+                    assert bos_token_id == self.lf_tokenizer.bos_token_id
+
+                action_seq = tuple(map(self.id_to_action, prefix_action_id_seq))
+                last_state = self.search_state_cls.get_last_state(action_seq, initial_state=initial_state, verifying=False)
+                fifo_dict[prefix_token_id_seq_tuple] = last_state
+
+                if last_state.tree.is_closed_root():
+                    return [self.tokenizer.eos_token_id]
+                else:
+                    return last_state.get_candidate_action_ids()
+
+        return prefix_allowed_tokens_fn
 
 
 def register_all(register, grammar, lf_tokenizer):

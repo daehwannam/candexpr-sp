@@ -1,4 +1,4 @@
 
-from dhnamlib.pylib.decorators import Register
+from dhnamlib.pylib.decoration import Register
 
 register = Register()

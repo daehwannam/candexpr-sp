@@ -4,7 +4,7 @@ from collections import defaultdict
 from transformers import BartTokenizer
 from tqdm import tqdm
 
-from dhnamlib.pylib.decorators import fcache
+from dhnamlib.pylib.decoration import fcache
 
 numeric_types = ('quantity', 'year', 'date')
 

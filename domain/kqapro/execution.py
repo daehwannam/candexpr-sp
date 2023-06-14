@@ -8,7 +8,7 @@ from logic.grammar import get_extra_ns
 from kopl.kopl import KoPLEngine
 
 from dhnamlib.pylib.klass import Interface
-from dhnamlib.pylib.decorators import excepting
+from dhnamlib.pylib.decoration import excepting
 
 from dhnamlib.hissplib.macro import prelude
 from dhnamlib.hissplib.compile import eval_lissp
