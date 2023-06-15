@@ -149,45 +149,6 @@ class KoPLGrammar(Grammar):
                 fifo_dict[action_id_seq] = curr_state
                 return curr_state
 
-        @deprecated
-        def token_id_seq_to_action_id_seq(token_id_seq):
-            assert token_id_seq[0] == BOS_TOKEN_ID
-            last_idx = index(token_id_seq, PAD_TOKEN_ID,
-                             test=lambda elem, target: elem != target,
-                             reverse=True)
-            if token_id_seq[last_idx] == EOS_TOKEN_ID:
-                last_idx -= 1
-            action_id_seq = token_id_seq[1:last_idx + 1]
-            return action_id_seq
-
-        @deprecated
-        def has_pad_or_eos_token_id(token_id_seq):
-            for token_id in reversed(token_id_seq):
-                if token_id in [PAD_TOKEN_ID, EOS_TOKEN_ID]:
-                    return True
-            else:
-                return False
-
-        @deprecated
-        def is_valid_token_id_seq(token_id_seq):
-            if len(token_id_seq) > 1:
-                rev = reversed(token_id_seq)
-                for token_id in rev:
-                    if token_id != PAD_TOKEN_ID:
-                        break
-                token_id = next(rev)
-                if token_id == EOS_TOKEN_ID:
-                    for token_id in rev:
-                        if token_id in [BOS_TOKEN_ID, EOS_TOKEN_ID, PAD_TOKEN_ID]:
-                            return False
-                    else:
-                        return True
-                    
-                else:
-                    return False
-            else:
-                return token_id_seq[0] == BOS_TOKEN_ID
-
         def prefix_allowed_tokens_fn(batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
             '''
             This function is passed to `torch.PrefixConstrainedLogitsProcessor`, which is used by generate `transformers.generate`.
