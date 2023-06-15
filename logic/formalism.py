@@ -305,6 +305,9 @@ class Formalism:
 
     @staticmethod
     def id_to_action(action_id, id_to_action_dicts):
+        '''
+        :raises NotFoundError: when no action corresponds to the input id
+        '''
         action = any_not_none(id_to_action_dict.get(action_id)
                               for id_to_action_dict in id_to_action_dicts)
         return action

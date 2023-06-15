@@ -89,6 +89,9 @@ class Grammar:
         return [self._id_to_base_action_dict, self._id_to_added_action_dict]
 
     def id_to_action(self, action_id):
+        '''
+        :raises NotFoundError: when no action corresponds to the input id
+        '''
         return self.formalism.id_to_action(action_id, self.get_id_to_action_dicts())
 
     def add_actions(self, actions):
