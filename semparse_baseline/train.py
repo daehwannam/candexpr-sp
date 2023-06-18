@@ -56,10 +56,15 @@ def train(args):
     # no_decay = ["bias", "LayerNorm.weight"]
     no_decay = ["bias", "layernorm", "layer_norm"]
     bart_param_optimizer = list(model.named_parameters())
+
+    # 'weight_decay' is for AdamW
+    # 'lr' values become LambdaLR's base_lrs which are multiplied by lr_lambdas
     optimizer_grouped_parameters = [
         {'params': [p for n, p in bart_param_optimizer if not any(nd in n for nd in no_decay)],
-         'weight_decay': args.weight_decay, 'lr': args.learning_rate},
-        {'params': [p for n, p in bart_param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0,
+         'weight_decay': args.weight_decay,
+         'lr': args.learning_rate},
+        {'params': [p for n, p in bart_param_optimizer if any(nd in n for nd in no_decay)],
+         'weight_decay': 0.0,
          'lr': args.learning_rate}
     ]
     args.warmup_steps = int(t_total * args.warmup_proportion)

@@ -51,18 +51,10 @@ class KoPLGrammar(Grammar):
             for action in self.base_actions))
 
         # logical form tokenizer
-        with block:
-            if is_finetuned(self.pretrained_model_name_or_path):
-                load_tokenizer_kwargs = dict()
-            else:
-                load_tokenizer_kwargs = dict(
-                    new_special_tokens=self.non_nl_tokens,
-                    sorting_new_special_tokens=True)
-
-            self.lf_tokenizer = load_tokenizer(
-                pretrained_model_name_or_path=self.pretrained_model_name_or_path,
-                add_prefix_space=True,
-                **load_tokenizer_kwargs)
+        self.lf_tokenizer = load_tokenizer(
+            pretrained_model_name_or_path=self.pretrained_model_name_or_path,
+            add_prefix_space=True,
+            non_nl_tokens=self.non_nl_tokens)
 
         # utterance tokenizer
         with block:
