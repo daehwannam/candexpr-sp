@@ -79,6 +79,7 @@ _config = Scope(
     encoded_val_set=LazyEval(lambda: jsonl_load(_encoded_val_set_file_path)),
 
     grammar=LazyEval(_make_grammar),
+    compiler=LazyEval(lambda: config.grammar.compiler_cls()),
     
     pretrained_model_name_or_path=_pretrained_model_name_or_path,
 
@@ -91,6 +92,9 @@ _config = Scope(
     logger=LazyEval(_make_logger),
 
     batch_size=16,
+    generation_max_length=500,
+
+    debug=_DEBUG,
 )
 
 @cache

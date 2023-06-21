@@ -50,7 +50,7 @@ def postprocess_denotation(denotation):
     return new_denotation
 
 
-def postprocess_answer(answer):
+def postprocess_prediction(answer):
     '''
     Modify the result from `postprocess_denotation`
     '''

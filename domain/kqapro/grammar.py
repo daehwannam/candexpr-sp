@@ -17,7 +17,7 @@ from dhnamlib.hissplib.expression import repr_as_hash_str
 from . import kb_analysis
 from .execution import KoPLCompiler
 from . import kopl_transfer
-from .model import is_finetuned, load_tokenizer
+from . import learning
 
 # from dhnamlib.pylib.decoration import fcache
 
@@ -51,7 +51,7 @@ class KoPLGrammar(Grammar):
             for action in self.base_actions))
 
         # logical form tokenizer
-        self.lf_tokenizer = load_tokenizer(
+        self.lf_tokenizer = learning.load_tokenizer(
             pretrained_model_name_or_path=self.pretrained_model_name_or_path,
             add_prefix_space=True,
             non_nl_tokens=self.non_nl_tokens)

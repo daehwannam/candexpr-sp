@@ -4,12 +4,12 @@ from itertools import chain
 
 from configuration import config
 
-from dhnamlib.pylib.filesys import jsonl_save, mkdirs_unless_exist
+from dhnamlib.pylib.filesys import jsonl_save, mkpdirs_unless_exist
 from dhnamlib.pylib.time import TimeMeasure
 from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.decoration import construct
 
-from .execution import postprocess_answer
+from .execution import postprocess_prediction
 from .kopl_original import execute_kopl_program
 from . import kopl_transfer
 
@@ -24,7 +24,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
     get_last_state_cumtime = 0
     compile_tree_cumtime = 0
     program_cumtime = 0
-    postprocess_answer_cumtime = 0
+    postprocess_prediction_cumtime = 0
 
     action_seqs = []
 
@@ -55,14 +55,14 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             program_cumtime += tm.interval
 
             with tm:
-                prediction = postprocess_answer(denotation)
-            postprocess_answer_cumtime += tm.interval
+                prediction = postprocess_prediction(denotation)
+            postprocess_prediction_cumtime += tm.interval
 
             if verbose >= 2:
                 if answer != prediction:
                     denotation_by_kopl = execute_kopl_program(config.context, labeled_kopl_program)
                     if denotation == denotation_by_kopl:
-                        prediction_by_kopl = postprocess_answer(denotation_by_kopl)
+                        prediction_by_kopl = postprocess_prediction(denotation_by_kopl)
                         assert prediction == prediction_by_kopl
                         print(f'The labeled answer of id {example_idx} is incorrect. Expected {prediction_by_kopl} but got {answer}')
                     else:
@@ -74,7 +74,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
         get_last_state     = get_last_state_cumtime,
         compile_tree       = compile_tree_cumtime,
         program            = program_cumtime,
-        postprocess_answer = postprocess_answer_cumtime)
+        postprocess_prediction = postprocess_prediction_cumtime)
     avg_time_dict = dict([k, v / len(raw_dataset)] for k, v in cum_time_dict.items())
 
     if verbose >= 1:
@@ -109,7 +109,7 @@ def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_
             example['action_name_seq'] = action_name_seq
         if adding_answer_by_program:
             assert context is not None
-            answer_by_program = postprocess_answer(execute_kopl_program(context, example['program']))
+            answer_by_program = postprocess_prediction(execute_kopl_program(context, example['program']))
             example['answer_by_program'] = answer_by_program
     return augmented_dataset
 
@@ -128,7 +128,7 @@ def preprocess_for_augmented_dataset(
         adding_action_name_seq=adding_action_name_seq,
         adding_answer_by_program=adding_answer_by_program,
         context=context)
-    mkdirs_unless_exist(augmented_dataset_file_path)
+    mkpdirs_unless_exist(augmented_dataset_file_path)
     jsonl_save(augmented_dataset, augmented_dataset_file_path)
     print(f'The augmented dataset was saved as {augmented_dataset_file_path}')
 
@@ -162,7 +162,7 @@ def preprocess_for_encoded_dataset(
         augmented_dataset=None,
         encoded_dataset_file_path):
     encoded_dataset = encode_dataset(grammar, augmented_dataset)
-    mkdirs_unless_exist(encoded_dataset_file_path)
+    mkpdirs_unless_exist(encoded_dataset_file_path)
     jsonl_save(encoded_dataset, encoded_dataset_file_path)
     print(f'The augmented dataset was saved as {encoded_dataset_file_path}')
 

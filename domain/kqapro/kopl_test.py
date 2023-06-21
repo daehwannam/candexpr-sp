@@ -3,7 +3,7 @@ from tqdm import tqdm
 
 from dhnamlib.pylib.filesys import json_load, python_pretty_save
 
-from .execution import postprocess_answer
+from .execution import postprocess_prediction
 from .kopl_original import execute_kopl_program
 
 
@@ -17,7 +17,7 @@ def test_dataset():
 
     for example_idx, example in tqdm(enumerate(dataset)):
         denotation_by_kopl = execute_kopl_program(config.context, example['program'])
-        answer_by_kopl = postprocess_answer(denotation_by_kopl)
+        answer_by_kopl = postprocess_prediction(denotation_by_kopl)
         if answer_by_kopl == example['answer']:
             correct_count += 1
         else:
@@ -55,7 +55,7 @@ def test_grammar():
     from logic.grammar import read_grammar
     from dhnamlib.pylib.filesys import json_load
     from dhnamlib.pylib.time import TimeMeasure
-    from .execution import postprocess_answer
+    from .execution import postprocess_prediction
     from .execution import postprocess_denotation
     from .kopl_original import execute_kopl_program
     from .grammar import KoPLGrammar
@@ -73,7 +73,7 @@ def test_grammar():
     get_last_state_cumtime = 0
     compile_tree_cumtime = 0
     program_cumtime = 0
-    postprocess_answer_cumtime = 0
+    postprocess_prediction_cumtime = 0
 
     for example_idx, example in tqdm(enumerate(dataset)):
         labeled_kopl_program = example['program']
@@ -97,11 +97,11 @@ def test_grammar():
             program_cumtime += tm.interval
 
             with tm:
-                prediction = postprocess_answer(denotation)
-            postprocess_answer_cumtime += tm.interval
+                prediction = postprocess_prediction(denotation)
+            postprocess_prediction_cumtime += tm.interval
 
             denotation_by_kopl = execute_kopl_program(config.context, labeled_kopl_program)
-            prediction_by_kopl = postprocess_answer(denotation_by_kopl)
+            prediction_by_kopl = postprocess_prediction(denotation_by_kopl)
 
             if answer != prediction:
                 if denotation == denotation_by_kopl:
@@ -124,7 +124,7 @@ def test_grammar():
         get_last_state     = get_last_state_cumtime,
         compile_tree       = compile_tree_cumtime,
         program            = program_cumtime,
-        postprocess_answer = postprocess_answer_cumtime)  # cumulative time
+        postprocess_prediction = postprocess_prediction_cumtime)  # cumulative time
     avg_time_dict = dict([k, v / len(dataset)] for k, v in cum_time_dict.items())
 
     print()
