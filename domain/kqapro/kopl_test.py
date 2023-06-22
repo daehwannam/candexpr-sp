@@ -112,9 +112,9 @@ def test_grammar():
                     print(f'Incorrect prediction for an example of index {example_idx}')
                     # raise Exception('incorrect prediction')
         except Exception as e:
-            if len(e.args) > 0 and e.args[0] == 'map_action_seq':
+            if len(e.args) > 0 and e.args[0] == '_map_action_seq':
                 breakpoint()
-                print(f'error in map_action_seq. opened: {e.args[1]} . children: {e.args[2]}, action: {e.args[3]}')
+                print(f'error in _map_action_seq. opened: {e.args[1]} . children: {e.args[2]}, action: {e.args[3]}')
                 print(f'skip {example_idx}')
             else:
                 raise e

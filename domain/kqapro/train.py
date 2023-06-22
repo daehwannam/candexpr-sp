@@ -103,7 +103,12 @@ def train(
 
             optimizer.zero_grad()
             batched_output = model(**batched_input)
-            loss = batched_output['loss']
+
+            raise NotImplementedError('apply masked_softmax')
+
+            with block:
+                logits = batched_output['logits']
+            loss = ...
             loss.backward()
             optimizer.step()
             scheduler.step()
@@ -111,6 +116,7 @@ def train(
         model.eval()
         validation_result = validate(
             grammar=grammar,
+            compiler=compiler,
             model=model,
             context=context,
             data_loader=val_data_loader,
@@ -158,9 +164,6 @@ def validate(
         generation_max_length,
         analyzing=True,
 ):
-    raise NotImplementedError('use device')
-    raise NotImplementedError('return example-level detailed result')
-
     logits_processor = learning.get_logits_processor(grammar, batch_size, num_beams)
 
     all_predictions = []
@@ -204,13 +207,12 @@ def validate(
     if analyzing:
         def analyze_program(last_states):
             program_analysis = list(pairs2dicts(
-                action_seq=[last_state.tree.get_values() for last_state in last_states],
+                action_seq=[list(map(repr, last_state.tree.get_values())) for last_state in last_states],
                 tree=[repr(last_state.tree) for last_state in last_states],
                 expr=[last_state.tree.get_expr_str() for last_state in last_states],
             ))
             return program_analysis
 
-        raise NotImplementedError('add answer_action_seq and answer_tree, answer_expr')
         analysis = list(pairs2dicts(filter_dict_values(
             is_not_none,
             dict(

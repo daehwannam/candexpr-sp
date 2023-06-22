@@ -16,7 +16,7 @@
 ** training (calculating loss)
 - [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/models/bart/modeling_bart.py::1291][forward]] of [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/models/bart/modeling_bart.py::class BartForConditionalGeneration(BartPretrainedModel):][BartForConditionalGeneration]]
 
-** BartForConditionalGeneration
+** [[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/models/bart/modeling_bart.py::1291][BartForConditionalGeneration.forward]]
 *** forward
 its output is a dict type object who key is
 - loss: scalar value by NllLoss

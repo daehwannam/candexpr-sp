@@ -1,5 +1,6 @@
 
 import os
+from itertools import chain
 
 import torch
 from transformers import BartTokenizer, BartForConditionalGeneration
@@ -9,6 +10,7 @@ from dhnamlib.pylib import filesys
 from dhnamlib.pylib.hflib.transformers import logit_rescaling
 from dhnamlib.pylib import iteration
 from dhnamlib.pylib.decoration import deprecated
+from dhnamlib.pylib.torchlib.dnn import candidate_ids_to_mask, lengths_to_mask
 
 
 def is_finetuned(pretrained_model_name_or_path):
@@ -32,7 +34,7 @@ def load_model(pretrained_model_name_or_path, num_tokens=None):
     model = BartForConditionalGeneration(pretrained_model_name_or_path)
     if num_tokens is not None:
         if is_finetuned(pretrained_model_name_or_path):
-            assert model.vocab_size == num_tokens
+            assert model.config.vocab_size == num_tokens
         else:
             model.resize_token_embeddings(num_tokens)
     return model
@@ -65,13 +67,48 @@ def save_model(model, dir_path):
     model.save_pretrained(dir_path)
 
 
-def token_id_seq_to_last_state(grammar, token_id_seq):
+def _token_id_seq_to_action_seq(grammar, token_id_seq):
     eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id)
     action_id_seq = token_id_seq[:eos_token_id_idx]
     action_seq = tuple(map(grammar.id_to_action, action_id_seq))
+    return action_seq
+
+
+def token_id_seq_to_last_state(grammar, token_id_seq):
+    action_seq = _token_id_seq_to_action_seq(grammar, token_id_seq)
     last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=config.debug)
 
     return last_state
+
+
+def _labels_to_masks(grammar, labels):
+    assert labels.dim() == 2
+
+    candidate_action_ids_seqs = []
+    seq_lengths = []
+
+    for token_id_seq in labels:
+        action_seq = _token_id_seq_to_action_seq(grammar, token_id_seq)
+        candidate_action_ids_seq = grammar.search_state_cls.action_seq_to_candidate_action_ids_seq(action_seq)
+        # candidate_token_ids_seq = list(chain(candidate_action_ids_seq, [eos_token_id]))
+
+        candidate_action_ids_seqs.append(candidate_action_ids_seq)
+        seq_lengths.append(len(candidate_action_ids_seq))
+
+    softmax_mask = candidate_ids_to_mask(candidate_action_ids_seqs, len(grammar.lf_tokenizer))
+    loss_mask = lengths_to_mask(seq_lengths)
+
+    return softmax_mask, loss_mask
+
+
+def compute_loss(grammar, labels, logits):
+    softmax_mask, loss_mask = _labels_to_masks(grammar, labels)
+
+    # `softmax_mask` for `masked_log_softmax`
+    # `loss_mask` for computing loss from logits
+
+    # `F.nll_loss` with `reduction=None` then merge loss values with `loss_mask`
+    raise NotImplementedError
 
 
 @deprecated

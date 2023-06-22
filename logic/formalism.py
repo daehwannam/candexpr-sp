@@ -10,7 +10,7 @@ from dhnamlib.pylib.structure import TreeStructure
 from dhnamlib.pylib.iteration import any_not_none, flatten, split_by_indices, chainelems, lastelem
 from dhnamlib.pylib.klass import Interface
 # from dhnamlib.pylib.klass import abstractfunction
-from dhnamlib.pylib.decoration import deprecated, unnecessary
+from dhnamlib.pylib.decoration import deprecated, unnecessary, construct
 from dhnamlib.pylib.structure import bidict, DuplicateValueError
 
 from dhnamlib.hissplib.compile import eval_lissp
@@ -586,26 +586,38 @@ class SearchState(metaclass=ABCMeta):
         return updated_state
 
     @classmethod
-    def map_action_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
+    def _map_action_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
         if initial_state is None:
             state = cls.create()
         if including_initial:
-            yield state
+            yield dict(candidate_action_ids=None,
+                       state=state)
         for action in action_seq:
             if verifying:
                 candidate_action_ids = state.get_candidate_action_ids()
-                # if action.id not in candidate_action_ids:
-                #     opened_tree, children = state.tree.get_opened_tree_children()
-                #     raise Exception('map_action_seq', str(opened_tree.value), tuple(str(child.value) for child in children), str(action))
-                #     breakpoint()
                 if action.id not in candidate_action_ids:
                     raise InvalidCandidateActionError(f'{action} is not a candidate action in the current action tree {state.tree}')
             state = state.get_next_state(action)
-            yield state
+            yield dict(candidate_action_ids=candidate_action_ids,
+                       state=state)
+
+    @classmethod
+    @construct(tuple)
+    def action_seq_to_state_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
+        for info in cls._map_action_seq(cls, action_seq, initial_state=initial_state,
+                                        including_initial=including_initial, verifying=verifying):
+            yield info['state']
+
+    @classmethod
+    @construct(tuple)
+    def action_seq_to_candidate_action_ids_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
+        for info in cls._map_action_seq(cls, action_seq, initial_state=initial_state,
+                                        including_initial=including_initial, verifying=verifying):
+            yield info['candidate_action_ids']
 
     @classmethod
     def get_last_state(cls, action_seq, initial_state=None, verifying=False):
-        return lastelem(cls.map_action_seq(action_seq, initial_state=initial_state, verifying=verifying))
+        return lastelem(cls.action_seq_to_state_seq(action_seq, initial_state=initial_state, verifying=verifying))
 
     @abstractmethod
     def get_updated_attrs(self, tree):
