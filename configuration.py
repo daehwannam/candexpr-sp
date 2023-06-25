@@ -3,15 +3,15 @@ import os
 from itertools import chain
 from importlib import import_module
 import argparse
-import datetime
 
-from dhnamlib.pylib.context import Scope, LazyEval
+from dhnamlib.pylib.context import Environment, LazyEval
 from dhnamlib.pylib.decoration import Register, cache, variable
-from dhnamlib.pylib.filesys import json_load, jsonl_load
+from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, mkpdirs_unless_exist, make_logger
 from dhnamlib.pylib.iteration import apply_recursively, distinct_pairs
 # from dhnamlib.pylib.package import import_from_module
-from dhnamlib.pylib.filesys import make_logger
+from dhnamlib.pylib.version_control import get_git_hash
 
+from util.time import current_date_str
 from logic.grammar import read_grammar
 
 from domain.kqapro.execution import KoPLContext, KoPLDebugContext
@@ -47,23 +47,26 @@ def _get_device():
     return 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-_current_datetime = datetime.datetime.now()
+def _is_valid_mode(mode):
+    return mode in ['train', 'retrain', 'finetune', 'test']
 
-def _get_date_str():
-    return _current_datetime.strftime("%Y-%m-%d_%H:%M:%S_%f")
 
+def _is_training_mode(mode):
+    assert _is_valid_mode(config.mode)
+    return mode in ['train', 'retrain', 'finetune']
 
 def _make_logger():
-    if config.mode in ['train', 'finetune']:
-        log_file_path = os.path.join(config.model_dir_path, f'{_get_date_str()}_{config.mode}.log')
+    if _is_training_mode(config.mode):
+        log_file_path = os.path.join(config.model_dir_path, f'{current_date_str}_{config.mode}.log')
     else:
         log_file_path = None
+    mkpdirs_unless_exist(log_file_path)
     return make_logger(
         name=config.mode,
         log_file_path=log_file_path)
 
 
-_config = Scope(
+_config = Environment(
     register=Register(strategy='conditional'),
 
     kb=LazyEval(lambda: json_load(_kb_file_path)),
@@ -94,14 +97,15 @@ _config = Scope(
     batch_size=16,
     generation_max_length=500,
 
+    git_hash=get_git_hash(),
     debug=_DEBUG,
 )
 
 @cache
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
-    parser.add_argument('--config', dest='config_module', help='a config module')
-    parser.add_argument('--model-dir', dest='model_dir_path', help='a path to the directory of a moddel')
+    parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test)')
+    parser.add_argument('--model-dir', dest='model_dir_path', help='a path to the directory of a model')
 
     args = parser.parse_args()
     return vars(args)
@@ -127,7 +131,7 @@ def config():
     _remaining_cmd_args = dict([k, v] for k, v in _cmd_args.items()
                                if ((k not in ['config_module']) and (v is not None)))
 
-    config = Scope(
+    config = Environment(
         distinct_pairs(chain(
             _config.items(),
             _specific_config.items(),
@@ -145,3 +149,20 @@ def config_path_dict():
         general=__file__,
         specific=_specific_config_module_file_path
     )
+
+
+def _config_to_json_dict():
+    return dict([key, value] for key, value in config.items()
+                if not isinstance(value, (LazyEval, Register)))
+
+
+def save_config_info(dir_path):
+    json_dict = _config_to_json_dict()
+    config_info_path = os.path.join(dir_path, 'config-info')
+    os.mkdir(config_info_path)
+    json_save(json_dict, os.path.join(config_info_path, 'config.json'))
+    json_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
+
+
+if 'mode' in config and _is_training_mode(config.mode):
+    save_config_info()

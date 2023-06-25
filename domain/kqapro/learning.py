@@ -3,6 +3,7 @@ import os
 from itertools import chain
 
 import torch
+import torch.nn.functional as F
 from transformers import BartTokenizer, BartForConditionalGeneration
 from configuration import config
 
@@ -10,7 +11,7 @@ from dhnamlib.pylib import filesys
 from dhnamlib.pylib.hflib.transformers import logit_rescaling
 from dhnamlib.pylib import iteration
 from dhnamlib.pylib.decoration import deprecated
-from dhnamlib.pylib.torchlib.dnn import candidate_ids_to_mask, lengths_to_mask
+from dhnamlib.pylib.torchlib.dnn import candidate_ids_to_mask, lengths_to_mask, masked_softmax, nll_without_reduction
 
 
 def is_finetuned(pretrained_model_name_or_path):
@@ -84,31 +85,41 @@ def token_id_seq_to_last_state(grammar, token_id_seq):
 def _labels_to_masks(grammar, labels):
     assert labels.dim() == 2
 
-    candidate_action_ids_seqs = []
+    candidate_token_ids_seqs = []
     seq_lengths = []
 
     for token_id_seq in labels:
         action_seq = _token_id_seq_to_action_seq(grammar, token_id_seq)
         candidate_action_ids_seq = grammar.search_state_cls.action_seq_to_candidate_action_ids_seq(action_seq)
-        # candidate_token_ids_seq = list(chain(candidate_action_ids_seq, [eos_token_id]))
+        candidate_token_ids_seq = list(chain(candidate_action_ids_seq, [[grammar.lf_tokenizer.eos_token_id]]))
+        candidate_token_ids_seqs.append(candidate_token_ids_seq)
+        seq_lengths.append(len(candidate_action_ids_seq))  # except EOS
+        # `len(candidate_action_ids_seq)` could be the length to either the last reduce action or EOS.
+        # Actually, EOS token doesn't need to be considered,
+        # since the probability of EOS after the last reduce action is always 1 during beam-search
+        # due to logits_processor that ignores all actions except EOS.
 
-        candidate_action_ids_seqs.append(candidate_action_ids_seq)
-        seq_lengths.append(len(candidate_action_ids_seq))
+    softmax_mask = candidate_ids_to_mask(candidate_token_ids_seqs, len(grammar.lf_tokenizer))
+    nll_mask = lengths_to_mask(seq_lengths, max_length=max(seq_lengths) + 1)
+    # The "+1" of max_length is for EOS, so nll_mask and nll tensor have the same size
 
-    softmax_mask = candidate_ids_to_mask(candidate_action_ids_seqs, len(grammar.lf_tokenizer))
-    loss_mask = lengths_to_mask(seq_lengths)
-
-    return softmax_mask, loss_mask
+    return softmax_mask, nll_mask
 
 
-def compute_loss(grammar, labels, logits):
-    softmax_mask, loss_mask = _labels_to_masks(grammar, labels)
+def compute_loss(grammar, logits, labels):
+    assert logits.dim() == 3
+    assert labels.dim() == 2
+    assert logits.size()[:-1] == labels.size()
 
-    # `softmax_mask` for `masked_log_softmax`
-    # `loss_mask` for computing loss from logits
+    softmax_mask, nll_mask = _labels_to_masks(grammar, labels)
 
-    # `F.nll_loss` with `reduction=None` then merge loss values with `loss_mask`
-    raise NotImplementedError
+    log_probs = masked_softmax(logits, mask=softmax_mask, dim=-1)
+    nll = nll_without_reduction(log_probs, labels)
+
+    masked_nll = nll * nll_mask
+    loss = masked_nll.sum(dim=-1).mean(dim=0)
+
+    return loss
 
 
 @deprecated
@@ -172,3 +183,8 @@ def get_logits_processor(grammar, batch_size, num_beams):
     logits_processor = torch.LogitsProcessorList([
         logit_rescaling(torch.PrefixConstrainedLogitsProcessor(prefix_allowed_tokens_fn, num_beams))])
     return logits_processor
+
+
+def save_analysis(analysis, dir_path):
+    analysis_file_path = os.path.join(dir_path, 'analysis.json')
+    filesys.json_pretty_save(analysis, analysis_file_path)

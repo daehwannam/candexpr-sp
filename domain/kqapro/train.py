@@ -10,7 +10,7 @@ from .data_read import make_data_loader
 from .execution import postprocess_prediction
 
 from dhnamlib.pylib import filesys
-from dhnamlib.pylib.context import block
+from dhnamlib.pylib.context import replace_dir, copy_dir
 # from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.iteration import pairs2dicts, filter_dict_values, is_not_none
 from dhnamlib.pylib.structure import AttrDict
@@ -34,7 +34,7 @@ def train(
         num_train_epochs=config.ph,
         num_warmup_steps=config.ph,
         adam_epsilon=config.ph,
-        output_dir_path=None,
+        model_dir_path=None,
         restarting=False,
         context=config.ph,
         num_beams=config.ph,
@@ -43,12 +43,12 @@ def train(
     if restarting:
         assert learning.is_finetuned(pretrained_model_name_or_path)
 
-        if output_dir_path is None:
-            output_dir_path = filesys.get_parent_path(pretrained_model_name_or_path)
+        if model_dir_path is None:
+            model_dir_path = filesys.get_parent_path(pretrained_model_name_or_path)
 
-    last_dir_path = os.path.join(output_dir_path, 'last')
+    last_dir_path = os.path.join(model_dir_path, 'last')
     filesys.mkloc_unless_exist(last_dir_path)
-    best_dir_path = os.path.join(output_dir_path, 'best')
+    best_dir_path = os.path.join(model_dir_path, 'best')
     filesys.mkloc_unless_exist(best_dir_path)
 
     model = learning.load_model(
@@ -98,23 +98,21 @@ def train(
             batched_input = dict(
                 input_ids=batch['utterance_token_ids'].to(device),
                 attention_mask=batch['attention_mask'].to(device),
-                decoder_input_ids=batch['decoder_input_ids'].to(device),
-                labels=batch['labels'].to(device))
+                decoder_input_ids=batch['decoder_input_ids'].to(device))
 
             optimizer.zero_grad()
             batched_output = model(**batched_input)
 
-            raise NotImplementedError('apply masked_softmax')
+            logits = batched_output['logits']
+            labels = batch['labels'].to(device)
+            loss = learning.compute_loss(grammar, logits, labels)
 
-            with block:
-                logits = batched_output['logits']
-            loss = ...
             loss.backward()
             optimizer.step()
             scheduler.step()
 
         model.eval()
-        validation_result = validate(
+        validation = validate(
             grammar=grammar,
             compiler=compiler,
             model=model,
@@ -125,7 +123,7 @@ def train(
             num_beams=num_beams,
             generation_max_length=generation_max_length)
 
-        performance = validation_result['performance']
+        performance = validation['performance']
 
         status.update(
             last_performance=performance,
@@ -141,16 +139,17 @@ def train(
                 best_performance=performance,
                 best_epoch=epoch)
 
-        with block:
+        with replace_dir(last_dir_path) as temp_last_dir_path:
             # save
-            learning.save_status(status, last_dir_path)
-            learning.save_optimizer(optimizer, last_dir_path)
-            learning.save_scheduler(scheduler, last_dir_path)
-            learning.save_model(model, last_dir_path)
-            raise NotImplementedError('save validation detailed result')
+            learning.save_status(status, temp_last_dir_path)
+            learning.save_optimizer(optimizer, temp_last_dir_path)
+            learning.save_scheduler(scheduler, temp_last_dir_path)
+            learning.save_model(model, temp_last_dir_path)
+            learning.save_analysis(validation['analysis'], temp_last_dir_path)
 
             if updating_best:
-                raise NotImplementedError('save best model (copy from the last)')
+                copy_dir(last_dir_path, best_dir_path, replacing=True)
+
 
 def validate(
         grammar,
@@ -223,10 +222,12 @@ def validate(
                 answer_program=(analyze_program(all_answer_last_states)
                                 if len(all_answer_last_states) > 0 else None)))))
 
-    return dict(
+    validation = dict(
         performance=performance,
         analysis=analysis
     )
+
+    return validation
 
 
 def compute_accuracy(predictions, answers):
@@ -241,5 +242,4 @@ def compute_accuracy(predictions, answers):
 
 
 if __name__ == '__main__':
-    train()
-
+    train(model_dir_path=config.model_dir_path)

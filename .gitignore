@@ -23,3 +23,6 @@ _tmp_*
 
 # for baseline code
 /baseline-processed
+
+# model-instance
+/model-instance

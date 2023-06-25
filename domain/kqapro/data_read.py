@@ -22,7 +22,7 @@ def make_collate(pad_token_id):
 
         attention_mask = id_tensor_to_mask(utterance_token_ids, pad_token_id)
 
-        # except the last tokens (PAD or EOS)
+        # except the last tokens (either PAD or EOS)
         decoder_input_ids = LazyEval(lambda: action_ids[:, :-1].contiguous())
 
         # except the first tokens (BOS)

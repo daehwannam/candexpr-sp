@@ -1,3 +1,9 @@
+
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch
+
 import copy
 from typing import List
 import warnings
@@ -20,11 +26,6 @@ from . import kopl_transfer
 from . import learning
 
 # from dhnamlib.pylib.decoration import fcache
-
-from __future__ import annotations
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    import torch
 
 
 class KoPLGrammar(Grammar):
