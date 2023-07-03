@@ -1,16 +1,13 @@
 import functools
 
 
-class _LogicalFormFunction:
+class LispFunc:
     def __init__(self, func):
         functools.update_wrapper(self, func)
         self.func = func
 
     def __call__(self, *args, **kwargs):
         return self.func(*args, **kwargs)
-
-
-lf_function = _LogicalFormFunction
 
 
 class CallLimitExceeded(Exception):
@@ -36,11 +33,11 @@ def make_call_limited(max_num_calls):
 
 
 def get_call_limited_namespace(ns, max_num_calls):
-    call_limited = make_call_limited(max_num_calls)
+    CallLimited = make_call_limited(max_num_calls)
 
     def get_kv_gen():
         for k, v in ns.items():
-            new_v = call_limited(v) if isinstance(v, _LogicalFormFunction) else v
+            new_v = CallLimited(v) if isinstance(v, LispFunc) else v
             yield k, new_v
 
     return dict(get_kv_gen())

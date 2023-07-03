@@ -12,7 +12,7 @@ from configuration import config
 from logic.grammar import Grammar
 from logic.formalism import make_program_tree_cls, make_search_state_cls, InvalidCandidateActionError
 
-from dhnamlib.pylib.decoration import cache, construct, variable, unnecessary, deprecated
+from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary, deprecated
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.iteration import distinct_values, index, NotFoundError
@@ -45,7 +45,7 @@ class KoPLGrammar(Grammar):
         self.add_actions(kopl_transfer.iter_nl_token_actions(
             self.meta_name_to_meta_action, self.lf_tokenizer))
 
-    @cache
+    @lru_cache
     def initialize_from_base_actions(self):
         self.non_nl_tokens = set(distinct_values(
             kopl_transfer.action_name_to_special_token(action.name)
@@ -62,7 +62,7 @@ class KoPLGrammar(Grammar):
             self.utterance_tokenizer = copy.copy(self.lf_tokenizer)
             self.utterance_tokenizer.add_prefix_space = False
 
-    @cache
+    @lru_cache
     @interface.implement
     def get_name_to_id_dicts(self):
         self.initialize_from_base_actions()
@@ -76,7 +76,7 @@ class KoPLGrammar(Grammar):
 
         return [name_to_id_dict]
 
-    @cache
+    @lru_cache
     def _get_token_to_id_dict(self):
         self.initialize_from_base_actions()
         return dict(map(reversed, iter_id_token_pairs(self.lf_tokenizer)))
@@ -84,12 +84,12 @@ class KoPLGrammar(Grammar):
     def token_to_id(self, token):
         return self._get_token_to_id_dict()[token]
 
-    @cache
+    @lru_cache
     @interface.implement
     def get_program_tree_cls(self):
         return make_program_tree_cls(self.formalism, name='KoPLProgramTree')
 
-    @cache
+    @lru_cache
     @interface.implement
     def get_search_state_cls(self):
         return make_search_state_cls(self, name='KoPLSearchState')
@@ -98,11 +98,22 @@ class KoPLGrammar(Grammar):
     def get_compiler_cls(self):
         return KoPLCompiler
 
+    _INVALID_STATE = 'INVALID'
+
+    @classmethod
+    def is_invalid_state(cls, state):
+        return state == cls._INVALID_STATE
+
+    @classmethod
+    def get_invalid_state(cls):
+        return cls._INVALID_STATE
+
     def make_prefix_allowed_tokens_fn(self, batch_size, num_beams):
         # multiplying "2" is for caching both previous states and the next sates
         cache_size = batch_size * num_beams * 2
         fifo_dict = FIFODict(cache_size)
-        INVALID_STATE = 'INVALID'
+
+        # START_TOKEN_ID = model.config.decoder_start_token_id
         BOS_TOKEN_ID = self.lf_tokenizer.bos_token_id
         EOS_TOKEN_ID = self.lf_tokenizer.eos_token_id
         PAD_TOKEN_ID = self.lf_tokenizer.pad_token_id
@@ -119,8 +130,8 @@ class KoPLGrammar(Grammar):
                 else:
                     if action_id_seq[:-1] in fifo_dict:
                         prev_state = fifo_dict[action_id_seq[:-1]]
-                        if prev_state == INVALID_STATE:
-                            curr_state = INVALID_STATE
+                        if self.is_invalid_state(prev_state):
+                            curr_state = self.get_invalid_state()
                         else:
                             next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
                     else:
@@ -132,12 +143,12 @@ class KoPLGrammar(Grammar):
                         try:
                             action_seq = tuple(map(self.id_to_action, next_action_id_seq))
                         except NotFoundError:
-                            curr_state = INVALID_STATE
+                            curr_state = self.get_invalid_state()
                         else:
                             try:
                                 curr_state = self.search_state_cls.get_last_state(action_seq, initial_state=prev_state, verifying=True)
                             except InvalidCandidateActionError:
-                                curr_state = INVALID_STATE
+                                curr_state = self.get_invalid_state()
 
                 fifo_dict[action_id_seq] = curr_state
                 return curr_state
@@ -151,20 +162,27 @@ class KoPLGrammar(Grammar):
             :return: a list of allowed candidate token ids
             '''
 
-            last_token_id = prefix_token_id_seq[-1]
-            if last_token_id in [PAD_TOKEN_ID, EOS_TOKEN_ID]:
-                return [PAD_TOKEN_ID]
-            else:
-                bos_token_id, *action_id_seq = prefix_token_id_seq
-                assert bos_token_id == BOS_TOKEN_ID
-                curr_state = action_id_seq_to_state(action_id_seq)
+            _prefix_token_id_seq = prefix_token_id_seq.tolist()
 
-                if curr_state == INVALID_STATE:
-                    return []
-                if curr_state.tree.is_closed_root():
-                    return [EOS_TOKEN_ID]
+            if len(_prefix_token_id_seq) == 1:
+                return [BOS_TOKEN_ID]
+            else:
+                # if len(_prefix_token_id_seq) >= 3:
+                #     breakpoint()
+                last_token_id = _prefix_token_id_seq[-1]
+                if last_token_id in [PAD_TOKEN_ID, EOS_TOKEN_ID]:
+                    return [PAD_TOKEN_ID]
                 else:
-                    return curr_state.get_candidate_action_ids()
+                    start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
+                    assert bos_token_id == BOS_TOKEN_ID
+                    curr_state = action_id_seq_to_state(tuple(action_id_seq))
+
+                    if self.is_invalid_state(curr_state):
+                        return []
+                    if curr_state.tree.is_closed_root():
+                        return [EOS_TOKEN_ID]
+                    else:
+                        return curr_state.get_candidate_action_ids()
 
         return prefix_allowed_tokens_fn
 

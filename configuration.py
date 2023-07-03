@@ -5,13 +5,13 @@ from importlib import import_module
 import argparse
 
 from dhnamlib.pylib.context import Environment, LazyEval
-from dhnamlib.pylib.decoration import Register, cache, variable
-from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, mkpdirs_unless_exist, make_logger
-from dhnamlib.pylib.iteration import apply_recursively, distinct_pairs
+from dhnamlib.pylib.decoration import Register, lru_cache, variable
+from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, pickle_load, mkpdirs_unless_exist, mkloc_unless_exist, make_logger
+from dhnamlib.pylib.iteration import apply_recursively, distinct_pairs, not_none_valued_pairs
 # from dhnamlib.pylib.package import import_from_module
 from dhnamlib.pylib.version_control import get_git_hash
 
-from util.time import current_date_str
+from util.time import initial_date_str
 from logic.grammar import read_grammar
 
 from domain.kqapro.execution import KoPLContext, KoPLDebugContext
@@ -25,9 +25,11 @@ _augmented_train_set_file_path = './processed/kqapro/augmented_train.jsonl'
 _augmented_val_set_file_path = './processed/kqapro/augmented_val.jsonl'
 _encoded_train_set_file_path = './processed/kqapro/encoded_train.jsonl'
 _encoded_val_set_file_path = './processed/kqapro/encoded_val.jsonl'
+# _encoded_train_mask_dataset_file_path = './processed/kqapro/encoded_train_mask.jsonl'
 
 _grammar_file_path = './domain/kqapro/grammar.lissp'
-_pretrained_model_name_or_path = './pretrained/bart-base'
+# _pretrained_model_name_or_path = './pretrained/bart-base'
+_pretrained_model_name_or_path = 'facebook/bart-base'
 
 _DEBUG = True
 if _DEBUG:
@@ -57,7 +59,7 @@ def _is_training_mode(mode):
 
 def _make_logger():
     if _is_training_mode(config.mode):
-        log_file_path = os.path.join(config.model_dir_path, f'{current_date_str}_{config.mode}.log')
+        log_file_path = os.path.join(config.model_dir_path, f'{initial_date_str}_{config.mode}.log')
     else:
         log_file_path = None
     mkpdirs_unless_exist(log_file_path)
@@ -71,6 +73,7 @@ _config = Environment(
 
     kb=LazyEval(lambda: json_load(_kb_file_path)),
     context=LazyEval(lambda: _context_cls(apply_recursively(config.kb))),
+    max_num_program_iterations=200000,
 
     raw_train_set=LazyEval(lambda: json_load(_train_set_file_path)),
     raw_val_set=LazyEval(lambda: json_load(_val_set_file_path)),
@@ -80,6 +83,7 @@ _config = Environment(
     augmented_val_set=LazyEval(lambda: jsonl_load(_augmented_val_set_file_path)),
     encoded_train_set=LazyEval(lambda: jsonl_load(_encoded_train_set_file_path)),
     encoded_val_set=LazyEval(lambda: jsonl_load(_encoded_val_set_file_path)),
+    # encoded_train_mask_dataset=LazyEval(lambda: pickle_load(_encoded_train_mask_dataset_file_path)),
 
     grammar=LazyEval(_make_grammar),
     compiler=LazyEval(lambda: config.grammar.compiler_cls()),
@@ -90,32 +94,36 @@ _config = Environment(
     augmented_val_set_file_path=_augmented_val_set_file_path,
     encoded_train_set_file_path=_encoded_train_set_file_path,
     encoded_val_set_file_path=_encoded_val_set_file_path,
+    # encoded_train_mask_dataset_file_path=_encoded_train_mask_dataset_file_path,
 
     device=LazyEval(_get_device),
     logger=LazyEval(_make_logger),
 
-    batch_size=16,
-    generation_max_length=500,
+    # generation_max_length=500,
+    generation_max_length=200,
+    num_prediction_beams=1,
 
     git_hash=get_git_hash(),
     debug=_DEBUG,
 )
 
-@cache
+@lru_cache
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test)')
     parser.add_argument('--model-dir', dest='model_dir_path', help='a path to the directory of a model')
 
-    args = parser.parse_args()
-    return vars(args)
+    args, unknown = parser.parse_known_args()
+    cmd_arg_dict = dict(not_none_valued_pairs(vars(args).items()))
+    cmd_arg_dict['remaining_cmd_args'] = unknown
+    return cmd_arg_dict
 
 
-@cache
+@lru_cache
 def _get_specific_config_module():
-    _cmd_args = _parse_cmd_args()
-    if _cmd_args['config_module'] is not None:
-        _specific_config_module = import_module(_cmd_args['config_module'])
+    _cmd_arg_dict = _parse_cmd_args()
+    if _cmd_arg_dict.get('config_module') is not None:
+        _specific_config_module = import_module(_cmd_arg_dict['config_module'])
     else:
         _specific_config_module = None
     return _specific_config_module
@@ -123,19 +131,16 @@ def _get_specific_config_module():
 
 @variable
 def config():
-    _cmd_args = _parse_cmd_args()
+    _cmd_arg_dict = _parse_cmd_args()
     _specific_config_module = _get_specific_config_module()
     _specific_config = (dict() if _specific_config_module is None else
                         _specific_config_module.config)
  
-    _remaining_cmd_args = dict([k, v] for k, v in _cmd_args.items()
-                               if ((k not in ['config_module']) and (v is not None)))
-
     config = Environment(
         distinct_pairs(chain(
             _config.items(),
             _specific_config.items(),
-            _remaining_cmd_args.items()
+            _cmd_arg_dict.items()
         )))
     return config
 
@@ -151,15 +156,16 @@ def config_path_dict():
     )
 
 
-def _config_to_json_dict():
+def _config_to_json_dict(config):
     return dict([key, value] for key, value in config.items()
                 if not isinstance(value, (LazyEval, Register)))
 
 
-def save_config_info(dir_path):
-    json_dict = _config_to_json_dict()
+def save_config_info():
+    dir_path = config.model_dir_path
+    json_dict = _config_to_json_dict(config)
     config_info_path = os.path.join(dir_path, 'config-info')
-    os.mkdir(config_info_path)
+    mkloc_unless_exist(config_info_path)
     json_save(json_dict, os.path.join(config_info_path, 'config.json'))
     json_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
 

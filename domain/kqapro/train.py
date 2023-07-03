@@ -12,7 +12,7 @@ from .execution import postprocess_prediction
 from dhnamlib.pylib import filesys
 from dhnamlib.pylib.context import replace_dir, copy_dir
 # from dhnamlib.pylib.iteration import apply_recursively
-from dhnamlib.pylib.iteration import pairs2dicts, filter_dict_values, is_not_none
+from dhnamlib.pylib.iteration import pairs2dicts, not_none_valued_pairs
 from dhnamlib.pylib.structure import AttrDict
 
 from dhnamlib.pylib.torchlib.optimization import get_linear_schedule_with_warmup
@@ -28,16 +28,20 @@ def train(
         logger=config.ph,
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
-        batch_size=config.ph,
-        weight_decay=config.ph,
+        train_batch_size=config.ph,
+        val_batch_size=config.ph,
         learning_rate=config.ph,
-        num_train_epochs=config.ph,
-        num_warmup_steps=config.ph,
         adam_epsilon=config.ph,
+        weight_decay=config.ph,
+        num_train_epochs=config.ph,
+        num_warmup_epochs=config.ph,
+        max_grad_norm=config.ph,
+        # softmax_masking=config.ph,
+        softmax_masking=False,
         model_dir_path=None,
         restarting=False,
         context=config.ph,
-        num_beams=config.ph,
+        num_prediction_beams=config.ph,
         generation_max_length=config.ph,
 ):
     if restarting:
@@ -59,9 +63,8 @@ def train(
     train_data_loader = make_data_loader(
         encoded_dataset=encoded_train_set,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
-        batch_size=batch_size,
+        batch_size=train_batch_size,
         shuffle=True)
-    val_batch_size = batch_size * 4
     val_data_loader = make_data_loader(
         encoded_dataset=encoded_val_set,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
@@ -70,6 +73,7 @@ def train(
 
     param_groups = learning.get_param_groups(model, learning_rate=learning_rate, weight_decay=weight_decay)
     num_training_steps = len(train_data_loader) * num_train_epochs
+    num_warmup_steps = len(train_data_loader) * num_warmup_epochs
 
     optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, eps=adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(
@@ -94,7 +98,13 @@ def train(
     for epoch in range(status['last_epoch'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
         model.train()
+        # if config.debug:
+        #     batch_idx = -1
         for batch in tqdm(train_data_loader):
+            # if config.debug:
+            #     batch_idx += 1
+            #     if batch_idx >= 100:
+            #         break
             batched_input = dict(
                 input_ids=batch['utterance_token_ids'].to(device),
                 attention_mask=batch['attention_mask'].to(device),
@@ -105,22 +115,34 @@ def train(
 
             logits = batched_output['logits']
             labels = batch['labels'].to(device)
-            loss = learning.compute_loss(grammar, logits, labels)
+            # if softmax_masking:
+            #     softmax_mask = batch['softmax_mask'].to(device)
+            # nll_mask = batch['nll_mask'].to(device)
+            if softmax_masking:
+                softmax_mask, nll_mask = learning.labels_to_masks(grammar, labels)
+            else:
+                softmax_mask = None
+                nll_mask = learning.labels_to_nll_mask(grammar, labels)
+            loss = learning.compute_loss(grammar, logits, labels,
+                                         softmax_mask=softmax_mask,
+                                         nll_mask=nll_mask)
 
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
             scheduler.step()
 
         model.eval()
+        # from dhnamlib.pylib.cProfiling import run_context
+        # run_context('''validation = validate( grammar=grammar, compiler=compiler, model=model, context=context, data_loader=val_data_loader, batch_size=val_batch_size, num_beams=num_prediction_beams, generation_max_length=generation_max_length)''', sort='cumtime')
         validation = validate(
             grammar=grammar,
             compiler=compiler,
             model=model,
             context=context,
             data_loader=val_data_loader,
-            device=device,
             batch_size=val_batch_size,
-            num_beams=num_beams,
+            num_beams=num_prediction_beams,
             generation_max_length=generation_max_length)
 
         performance = validation['performance']
@@ -132,12 +154,16 @@ def train(
             dict(epoch=epoch,
                  performance=performance))
 
+        logger.info(f'Epoch: {epoch} / Performance: {str(performance)}')
+
+        # breakpoint()
         updating_best = is_better_performance(performance, status.best_performance, measures)
 
         if updating_best:
             status.update(
                 best_performance=performance,
                 best_epoch=epoch)
+            logger.info('Best model is updated')
 
         with replace_dir(last_dir_path) as temp_last_dir_path:
             # save
@@ -147,8 +173,8 @@ def train(
             learning.save_model(model, temp_last_dir_path)
             learning.save_analysis(validation['analysis'], temp_last_dir_path)
 
-            if updating_best:
-                copy_dir(last_dir_path, best_dir_path, replacing=True)
+        if updating_best:
+            copy_dir(last_dir_path, best_dir_path, replacing=True)
 
 
 def validate(
@@ -157,13 +183,18 @@ def validate(
         model,
         context,
         data_loader,
-        device,
         batch_size,
         num_beams,
         generation_max_length,
         analyzing=True,
+        softmax_masking=False,
 ):
-    logits_processor = learning.get_logits_processor(grammar, batch_size, num_beams)
+    if softmax_masking:
+        generation_kwargs = dict(
+            logits_processor=learning.get_logits_processor(grammar, batch_size, num_beams))
+    else:
+        generation_kwargs = dict(
+            prefix_allowed_tokens_fn=grammar.make_prefix_allowed_tokens_fn(batch_size, num_beams))
 
     all_predictions = []
     all_answers = []
@@ -173,54 +204,84 @@ def validate(
         all_predicted_last_states = []
         all_answer_last_states = []
 
+    if config.debug:
+        batch_idx = -1
+
     for batch in tqdm(data_loader):
-        batched_output = model.generate(
-            input_ids=batch['utterance_token_ids'].to(device),
+        if config.debug:
+            batch_idx += 1
+            if batch_idx >= 30:
+                break
+
+        last_states = learning.parse(
+            grammar=grammar,
+            model=model,
+            utterance_ids=batch['utterance_token_ids'].to(model.device),
             max_length=generation_max_length,
-            logits_processor=logits_processor,
             num_beams=num_beams,
+            **generation_kwargs
         )
-        predicted_last_states = tuple(learning.token_id_seq_to_last_state(grammar, token_id_seq)
-                                      for token_id_seq in batched_output)
-        predicted_programs = tuple(compiler.compile_tree(last_state.tree)
-                                   for last_state in predicted_last_states)
-        predictions = tuple(postprocess_prediction(program(context))
-                            for program in predicted_programs)
+        programs = learning.last_states_to_programs(grammar, compiler, last_states, tolerant=True)
+        predictions = learning.programs_to_predictions(context, programs)
         answers = batch['answer']
 
         all_predictions.extend(predictions)
         all_answers.extend(answers)
 
         if analyzing:
-            utterances = grammar.utteance_tokenizer.batch_decode(
+            utterances = grammar.utterance_tokenizer.batch_decode(
                 batch['utterance_token_ids'], skip_special_tokens=True)
-            if 'labels' in batch['labels']:
-                answer_last_states = tuple(learning.token_id_seq_to_last_state(grammar, batch['labels']))
+            if 'labels' in batch:
+                answer_last_states = tuple(learning.token_id_seq_to_last_state(grammar, token_id_seq)
+                                           for token_id_seq in batch['labels'].tolist())
                 all_answer_last_states.extend(answer_last_states)
             all_utterances.extend(utterances)
-            all_predicted_last_states.extend(predicted_last_states)
+            all_predicted_last_states.extend(last_states)
 
     accuracy = compute_accuracy(all_predictions, all_answers)
     performance = get_performance(accuracy=accuracy)
 
     if analyzing:
+        def get_action_seq(last_state):
+            if grammar.is_invalid_state(last_state):
+                return None
+            else:
+                if last_state.tree.is_closed_root():
+                    return list(map(repr, last_state.tree.get_values()))
+                else:
+                    return None
+
+        def get_tree_repr(last_state):
+            if grammar.is_invalid_state(last_state):
+                return None
+            else:
+                return repr(last_state.tree)
+
+        def get_expr_str(last_state, expr_key=None):
+            if grammar.is_invalid_state(last_state):
+                return None
+            else:
+                if last_state.tree.is_closed_root():
+                    return last_state.tree.get_expr_str(expr_key=expr_key)
+                else:
+                    return None
+
         def analyze_program(last_states):
             program_analysis = list(pairs2dicts(
-                action_seq=[list(map(repr, last_state.tree.get_values())) for last_state in last_states],
-                tree=[repr(last_state.tree) for last_state in last_states],
-                expr=[last_state.tree.get_expr_str() for last_state in last_states],
+                action_seq=list(map(get_action_seq, last_states)),
+                tree=list(map(get_tree_repr, last_states)),
+                expr=list(map(get_expr_str, last_states)),
+                visual_expr=list(map(lambda last_state: get_expr_str(last_state, expr_key='visual'), last_states)),
             ))
             return program_analysis
 
-        analysis = list(pairs2dicts(filter_dict_values(
-            is_not_none,
-            dict(
-                utterance=all_utterances,
-                answer=all_answers,
-                prediction=all_predictions,
-                predicted_program=analyze_program(all_predicted_last_states),
-                answer_program=(analyze_program(all_answer_last_states)
-                                if len(all_answer_last_states) > 0 else None)))))
+        analysis = list(pairs2dicts(not_none_valued_pairs(
+            utterance=all_utterances,
+            answer=all_answers,
+            prediction=all_predictions,
+            predicted_program=analyze_program(all_predicted_last_states),
+            answer_program=(analyze_program(all_answer_last_states)
+                            if len(all_answer_last_states) > 0 else None))))
 
     validation = dict(
         performance=performance,
@@ -243,3 +304,7 @@ def compute_accuracy(predictions, answers):
 
 if __name__ == '__main__':
     train(model_dir_path=config.model_dir_path)
+
+    # from dhnamlib.pylib.cProfiling import run_context
+    # tuple(config.items(lazy=False))
+    # run_context('train(model_dir_path=config.model_dir_path)', sort='cumtime')

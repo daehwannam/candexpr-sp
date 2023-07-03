@@ -53,7 +53,13 @@ python -m domain.kqapro.preprocess --goal augmented_train_set
 python -m domain.kqapro.preprocess --goal augmented_val_set
 python -m domain.kqapro.preprocess --goal encoded_train_set
 python -m domain.kqapro.preprocess --goal encoded_val_set
+# python -m domain.kqapro.preprocess --goal encoded_train_mask
 #+end_src
+
+** Training
+#+begin_src sh
+python -m domain.kqapro.train --config config.train_strong_sup
+#+end_src>
 
 # * Running
 # ** Common configuration

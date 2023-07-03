@@ -1,10 +1,12 @@
-from tqdm import tqdm
+
 from argparse import ArgumentParser
 from itertools import chain
+from tqdm import tqdm
+import torch
 
 from configuration import config
 
-from dhnamlib.pylib.filesys import jsonl_save, mkpdirs_unless_exist
+from dhnamlib.pylib.filesys import jsonl_save, pickle_save, mkpdirs_unless_exist
 from dhnamlib.pylib.time import TimeMeasure
 from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.decoration import construct
@@ -12,6 +14,7 @@ from dhnamlib.pylib.decoration import construct
 from .execution import postprocess_prediction
 from .kopl_original import execute_kopl_program
 from . import kopl_transfer
+from . import learning
 
 
 @config
@@ -159,12 +162,37 @@ def encode_dataset(grammar, augmented_dataset):
 def preprocess_for_encoded_dataset(
         *,
         grammar=config.ph,
-        augmented_dataset=None,
+        augmented_dataset,
         encoded_dataset_file_path):
     encoded_dataset = encode_dataset(grammar, augmented_dataset)
     mkpdirs_unless_exist(encoded_dataset_file_path)
     jsonl_save(encoded_dataset, encoded_dataset_file_path)
     print(f'The augmented dataset was saved as {encoded_dataset_file_path}')
+
+
+@construct(list)
+def encode_mask(grammar, encoded_dataset):
+    for example in tqdm(encoded_dataset):
+        labels = torch.tensor([example['action_ids'][1:]], dtype=torch.int64)
+        softmax_mask, nll_mask = learning.labels_to_masks(grammar, labels)
+
+        softmax_mask = tuple(map(bytes, softmax_mask[0].tolist()))
+        nll_mask = bytes(nll_mask[0].tolist())
+
+        yield dict(softmax_mask=softmax_mask,
+                   nll_mask=nll_mask)
+
+
+@config
+def preprocess_for_encoded_mask(
+        *,
+        grammar=config.ph,
+        encoded_dataset,
+        encoded_train_mask_dataset_file_path):
+    encoded_mask = encode_mask(grammar, encoded_dataset)
+    mkpdirs_unless_exist(encoded_train_mask_dataset_file_path)
+    pickle_save(encoded_mask, encoded_train_mask_dataset_file_path)
+    print(f'The encoded mask was saved as {encoded_train_mask_dataset_file_path}')
 
 
 def _main():
@@ -175,10 +203,11 @@ def _main():
             'augmented_train_set',
             'augmented_val_set',
             'encoded_train_set',
-            'encoded_val_set'
+            'encoded_val_set',
+            'encoded_train_mask'
         ])
 
-    args = parser.parse_args()
+    args = parser.parse_args(config.remaining_cmd_args)
 
     if args.goal == 'augmented_train_set':
         preprocess_for_augmented_dataset(
@@ -190,7 +219,7 @@ def _main():
         preprocess_for_augmented_dataset(
             raw_dataset=config.raw_val_set,
             augmented_dataset_file_path=config.augmented_val_set_file_path,
-            adding_action_name_seq=False,
+            adding_action_name_seq=True,
             adding_answer_by_program=True)
     elif args.goal == 'encoded_train_set':
         preprocess_for_encoded_dataset(
@@ -200,6 +229,11 @@ def _main():
         preprocess_for_encoded_dataset(
             augmented_dataset=config.augmented_val_set,
             encoded_dataset_file_path=config.encoded_val_set_file_path)
+    elif args.goal == 'encoded_train_mask':
+        raise NotImplementedError
+        preprocess_for_encoded_mask(
+            encoded_dataset=config.encoded_train_set,
+            encoded_train_mask_dataset_file_path=config.encoded_train_mask_dataset_file_path)
     else:
         raise Exception('Unexpected goal')
 

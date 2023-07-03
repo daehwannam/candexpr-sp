@@ -2,5 +2,5 @@
 import datetime
 
 
-current_datetime = datetime.datetime.now()
-current_date_str = current_datetime.strftime("%Y-%m-%d_%H:%M:%S_%f")
+initial_datetime = datetime.datetime.now()
+initial_date_str = initial_datetime.strftime("%Y-%m-%d_%H:%M:%S_%f")

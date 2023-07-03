@@ -5,12 +5,13 @@ from typing import List, Dict
 from abc import ABCMeta, abstractmethod
 import copy
 import inspect
+from functools import lru_cache
 
 from dhnamlib.pylib.structure import TreeStructure
-from dhnamlib.pylib.iteration import any_not_none, flatten, split_by_indices, chainelems, lastelem
+from dhnamlib.pylib.iteration import any_not_none, flatten, split_by_indices, chainelems, lastelem, not_none_valued_pairs
 from dhnamlib.pylib.klass import Interface
 # from dhnamlib.pylib.klass import abstractfunction
-from dhnamlib.pylib.decoration import deprecated, unnecessary, construct
+from dhnamlib.pylib.decoration import deprecated, unnecessary, construct, keyed_cache
 from dhnamlib.pylib.structure import bidict, DuplicateValueError
 
 from dhnamlib.hissplib.compile import eval_lissp
@@ -312,6 +313,16 @@ class Formalism:
                               for id_to_action_dict in id_to_action_dicts)
         return action
 
+        # from dhnamlib.pylib.exception import NotFoundError
+        # try:
+        #     action = any_not_none(id_to_action_dict.get(action_id)
+        #                           for id_to_action_dict in id_to_action_dicts)
+        #     return action
+        # except NotFoundError as e:
+        #     breakpoint()
+        #     print(e)
+
+
     @staticmethod
     def sub_and_super(super_types_dict, sub_type, super_type):
         type_q = deque(sub_type if Action.is_union_type(sub_type) else
@@ -357,11 +368,19 @@ class Formalism:
         param_type = opened_action.param_types[next_param_idx]
         del rest_idx, next_param_idx
 
-        return tuple(chain(chainelems(type_to_actions_dict.get(param_type, [])
-                                      for type_to_actions_dict in type_to_actions_dicts),
+        # Note: `chainelems` is slower than chain
+        # return tuple(chain(chainelems(type_to_actions_dict.get(param_type, [])
+        #                               for type_to_actions_dict in type_to_actions_dicts),
+        #                    [self.reduce_action.id if to_id else self.reduce_action] if Formalism._optionally_reducible(
+        #                        opened_action, current_num_params) else []))
+
+        return tuple(chain(*(type_to_actions_dict.get(param_type, [])
+                             for type_to_actions_dict in type_to_actions_dicts),
                            [self.reduce_action.id if to_id else self.reduce_action] if Formalism._optionally_reducible(
                                opened_action, current_num_params) else []))
 
+    @keyed_cache(lambda self, opened_action, current_num_params, type_to_action_ids_dicts: (
+        opened_action, current_num_params, tuple(sorted(map(id, type_to_action_ids_dicts)))))
     def get_candidate_action_ids(self, opened_action, current_num_params, type_to_action_ids_dicts):
         return self.get_candidate_actions(opened_action, current_num_params, type_to_action_ids_dicts, to_id=True)
 
@@ -516,9 +535,19 @@ class ProgramTree(TreeStructure, metaclass=ABCMeta):
         return form_to_str(get_expr_form(self))
 
 
-def make_program_tree_cls(formalism: Formalism, name=None):
+def make_program_tree_cls(formalism: Formalism, name=None, opening_cache_size=10000):
     class NewProgramTree(ProgramTree):
         interface = Interface(ProgramTree)
+
+        @interface.override
+        @lru_cache(maxsize=opening_cache_size)
+        def get_opened_tree_children(self):
+            if self.is_opened():
+                opened_tree, children = self, tuple()
+            else:
+                opened_tree, siblings = self.prev.get_opened_tree_children()
+                children = siblings + (self,)
+            return opened_tree, children
 
         @interface.implement
         @staticmethod
@@ -560,6 +589,15 @@ class SearchState(metaclass=ABCMeta):
         for k, v in self.get_initial_attrs().items():
             setattr(self, k, v)
 
+    @property
+    def using_arg_filter(self):
+        return self.get_using_arg_filter()
+
+    @classmethod
+    @abstractmethod
+    def get_using_arg_filter(cls):
+        pass
+
     @abstractmethod
     def get_initial_attrs(self):
         pass
@@ -586,33 +624,41 @@ class SearchState(metaclass=ABCMeta):
         return updated_state
 
     @classmethod
-    def _map_action_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
-        if initial_state is None:
-            state = cls.create()
+    def _map_action_seq(cls, action_seq, *, initial_state=None, including_initial=False, including_candidates, verifying=False):
+        state = cls.create() if initial_state is None else initial_state
+
         if including_initial:
-            yield dict(candidate_action_ids=None,
-                       state=state)
+            yield dict(candidate_action_ids=None, state=state)
+
         for action in action_seq:
-            if verifying:
-                candidate_action_ids = state.get_candidate_action_ids()
-                if action.id not in candidate_action_ids:
+            if including_candidates or verifying:
+                _candidate_action_ids = state.get_candidate_action_ids()
+                if verifying and (action.id not in _candidate_action_ids):
                     raise InvalidCandidateActionError(f'{action} is not a candidate action in the current action tree {state.tree}')
+                candidate_action_ids = _candidate_action_ids if including_candidates else None
+            else:
+                candidate_action_ids = None
             state = state.get_next_state(action)
-            yield dict(candidate_action_ids=candidate_action_ids,
-                       state=state)
+            yield dict(not_none_valued_pairs(
+                candidate_action_ids=candidate_action_ids,
+                state=state))
 
     @classmethod
     @construct(tuple)
     def action_seq_to_state_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
-        for info in cls._map_action_seq(cls, action_seq, initial_state=initial_state,
-                                        including_initial=including_initial, verifying=verifying):
+        for info in cls._map_action_seq(
+                action_seq, initial_state=initial_state,
+                including_initial=including_initial, including_candidates=False,
+                verifying=verifying):
             yield info['state']
 
     @classmethod
     @construct(tuple)
     def action_seq_to_candidate_action_ids_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
-        for info in cls._map_action_seq(cls, action_seq, initial_state=initial_state,
-                                        including_initial=including_initial, verifying=verifying):
+        for info in cls._map_action_seq(
+                action_seq, initial_state=initial_state,
+                including_initial=including_initial, including_candidates=True,
+                verifying=verifying):
             yield info['candidate_action_ids']
 
     @classmethod
@@ -645,7 +691,7 @@ class SearchState(metaclass=ABCMeta):
                 opened_action, len(children), self.get_type_to_action_ids_dicts())
         else:
             action_ids = opened_action.arg_candidate(self.tree)
-        if opened_action.arg_filter is not None:
+        if self.using_arg_filter and opened_action.arg_filter is not None:
             action_ids = tuple(opened_action.arg_filter(self.tree, action_ids))
         return action_ids
 
@@ -692,7 +738,7 @@ class InvalidCandidateActionError(Exception):
     pass
 
 
-def make_search_state_cls(grammar, name=None):
+def make_search_state_cls(grammar, name=None, using_arg_filter=False):
     class BasicSearchState(SearchState):
         interface = Interface(SearchState)
 
@@ -700,6 +746,10 @@ def make_search_state_cls(grammar, name=None):
         @interface.implement
         def get_program_tree_cls():
             return grammar.program_tree_cls
+
+        @classmethod
+        def get_using_arg_filter(cls):
+            return using_arg_filter
 
         @interface.implement
         def get_initial_attrs(self):
