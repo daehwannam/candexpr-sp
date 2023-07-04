@@ -359,30 +359,35 @@ class Formalism:
             else:
                 return False
 
-    def get_candidate_actions(self, opened_action, current_num_params, type_to_actions_dicts, to_id=False):
+    @staticmethod
+    def _get_next_param_idx(opened_action, current_num_args):
         rest_idx = opened_action.rest_idx
-        if (rest_idx is not None) and (rest_idx < current_num_params):
+        if (rest_idx is not None) and (rest_idx < current_num_args):
             next_param_idx = rest_idx
         else:
-            next_param_idx = current_num_params
-        param_type = opened_action.param_types[next_param_idx]
-        del rest_idx, next_param_idx
+            next_param_idx = current_num_args
+        return next_param_idx
 
-        # Note: `chainelems` is slower than chain
-        # return tuple(chain(chainelems(type_to_actions_dict.get(param_type, [])
-        #                               for type_to_actions_dict in type_to_actions_dicts),
-        #                    [self.reduce_action.id if to_id else self.reduce_action] if Formalism._optionally_reducible(
-        #                        opened_action, current_num_params) else []))
-
+    @keyed_cache(lambda self, param_type, type_to_candidates_dicts: (
+        param_type, tuple(sorted(map(id, type_to_candidates_dicts)))))
+    def _type_to_candidates(self, param_type, type_to_candidates_dicts):
         return tuple(chain(*(type_to_actions_dict.get(param_type, [])
-                             for type_to_actions_dict in type_to_actions_dicts),
-                           [self.reduce_action.id if to_id else self.reduce_action] if Formalism._optionally_reducible(
-                               opened_action, current_num_params) else []))
+                             for type_to_actions_dict in type_to_candidates_dicts)))
 
-    @keyed_cache(lambda self, opened_action, current_num_params, type_to_action_ids_dicts: (
-        opened_action, current_num_params, tuple(sorted(map(id, type_to_action_ids_dicts)))))
-    def get_candidate_action_ids(self, opened_action, current_num_params, type_to_action_ids_dicts):
-        return self.get_candidate_actions(opened_action, current_num_params, type_to_action_ids_dicts, to_id=True)
+    def _get_candidates(self, opened_action, current_num_args, type_to_candidates_dicts, to_id=False):
+        next_param_idx = self._get_next_param_idx(opened_action, current_num_args)
+        param_type = opened_action.param_types[next_param_idx]
+
+        candidates = self._type_to_candidates(param_type, type_to_candidates_dicts)
+        additional_candidates = ([self.reduce_action.id if to_id else self.reduce_action]
+                                 if Formalism._optionally_reducible(opened_action, current_num_args) else [])
+        if len(additional_candidates) > 0:
+            return tuple(chain(candidates, additional_candidates))
+        else:
+            return candidates
+
+    def get_candidate_action_ids(self, opened_action, current_num_args, type_to_action_ids_dicts):
+        return self._get_candidates(opened_action, current_num_args, type_to_action_ids_dicts, to_id=True)
 
     def extend_actions(self, actions, use_reduce=True):
         if use_reduce:
@@ -675,7 +680,7 @@ class SearchState(metaclass=ABCMeta):
         opened_tree, children = self.tree.get_opened_tree_children()
         opened_action = opened_tree.value
         if opened_action.arg_candidate is None:
-            actions = self.formalism.get_candidate_actions(
+            actions = self.formalism._get_candidates(
                 opened_action, len(children), self.get_type_to_actions_dicts())
         else:
             actions = opened_action.arg_candidate(self.tree)

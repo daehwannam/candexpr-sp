@@ -4,7 +4,7 @@ from itertools import chain
 
 import torch
 import torch.nn.functional as F
-from transformers import BartTokenizer, BartForConditionalGeneration
+from transformers import BartTokenizer, BartForConditionalGeneration, BartConfig
 import transformers
 from configuration import config
 
@@ -15,7 +15,7 @@ from dhnamlib.pylib.hflib.transformers import logit_rescaling
 from dhnamlib.pylib import iteration
 from dhnamlib.pylib.decoration import deprecated
 from dhnamlib.pylib.exception import NotFoundError
-from dhnamlib.pylib.torchlib.dnn import candidate_ids_to_mask, lengths_to_mask, masked_softmax, nll_without_reduction, pad_sequence
+from dhnamlib.pylib.torchlib.dnn import candidate_ids_to_mask, lengths_to_mask, masked_log_softmax, nll_without_reduction, pad_sequence
 
 
 def is_finetuned(pretrained_model_name_or_path):
@@ -56,6 +56,10 @@ def load_model(pretrained_model_name_or_path, num_tokens=None):
     return model
 
 
+def load_model_config(pretrained_model_name_or_path):
+    return BartConfig.from_pretrained(pretrained_model_name_or_path)
+
+
 def get_param_groups(model, learning_rate, weight_decay):
     non_decayed_names = ["bias", "layernorm", "layer_norm"]
     model_named_parameters = tuple(model.named_parameters())
@@ -84,8 +88,8 @@ def save_model(model, dir_path):
 
 
 def _token_id_seq_to_action_seq(grammar, token_id_seq):
-    eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id)
-    action_id_seq = token_id_seq[:eos_token_id_idx]
+    eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id, reverse=True)
+    action_id_seq = token_id_seq[1: eos_token_id_idx]  # index 0 has bos_token_id, which should be skipped
     action_seq = tuple(map(grammar.id_to_action, action_id_seq))
     return action_seq
 
@@ -112,7 +116,9 @@ def labels_to_masks(grammar, labels):
     for token_id_seq in labels.tolist():
         action_seq = _token_id_seq_to_action_seq(grammar, token_id_seq)
         candidate_action_ids_seq = grammar.search_state_cls.action_seq_to_candidate_action_ids_seq(action_seq)
-        candidate_token_ids_seq = list(chain(candidate_action_ids_seq, [[grammar.lf_tokenizer.eos_token_id]]))
+        candidate_token_ids_seq = list(chain([[grammar.lf_tokenizer.bos_token_id]],
+                                             candidate_action_ids_seq,
+                                             [[grammar.lf_tokenizer.eos_token_id]]))
         candidate_token_ids_seqs.append(candidate_token_ids_seq)
         seq_lengths.append(len(candidate_action_ids_seq))  # except couting EOS
 
@@ -140,7 +146,7 @@ def labels_to_nll_mask(grammar, labels):
     seq_lengths = []
 
     for token_id_seq in labels.tolist():
-        eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id)
+        eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id, reverse=True)
         seq_lengths.append(eos_token_id_idx)  # except couting EOS
 
     nll_mask = lengths_to_mask(seq_lengths, max_length=max(seq_lengths) + 1)
@@ -156,7 +162,7 @@ def compute_loss(grammar, logits, labels, softmax_mask=None, nll_mask=None):
 
     # softmax_mask, nll_mask = labels_to_masks(grammar, labels)
 
-    log_probs = masked_softmax(logits, mask=softmax_mask, dim=-1)
+    log_probs = masked_log_softmax(logits, mask=softmax_mask, dim=-1)
     nll = nll_without_reduction(log_probs, labels)
 
     if nll_mask is None:
@@ -189,6 +195,8 @@ def parse(grammar, model, utterance_ids, max_length, num_beams,
           # , **kwargs
           ):
 
+    # breakpoint()
+
     # if not config.debug:
     batched_output = model.generate(
         input_ids=utterance_ids,
@@ -210,7 +218,7 @@ def parse(grammar, model, utterance_ids, max_length, num_beams,
     #     )
     #     breakpoint()
 
-    batched_token_ids = batched_output[:, 2:]  # removing `decoder_start_token_id (2)` and `bos_token_id (0)`
+    batched_token_ids = batched_output[:, 1:]  # removing `decoder_start_token_id`
     predicted_last_states = tuple(token_id_seq_to_last_state(grammar, token_id_seq)
                                   for token_id_seq in batched_token_ids.tolist())
 

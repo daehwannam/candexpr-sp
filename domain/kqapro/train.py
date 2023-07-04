@@ -1,7 +1,7 @@
 
 import os
 import torch
-from tqdm import tqdm
+# from tqdm import tqdm
 
 from configuration import config
 
@@ -12,7 +12,7 @@ from .execution import postprocess_prediction
 from dhnamlib.pylib import filesys
 from dhnamlib.pylib.context import replace_dir, copy_dir
 # from dhnamlib.pylib.iteration import apply_recursively
-from dhnamlib.pylib.iteration import pairs2dicts, not_none_valued_pairs
+from dhnamlib.pylib.iteration import pairs2dicts, not_none_valued_pairs, xtqdm
 from dhnamlib.pylib.structure import AttrDict
 
 from dhnamlib.pylib.torchlib.optimization import get_linear_schedule_with_warmup
@@ -62,11 +62,13 @@ def train(
 
     train_data_loader = make_data_loader(
         encoded_dataset=encoded_train_set,
+        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=train_batch_size,
         shuffle=True)
     val_data_loader = make_data_loader(
         encoded_dataset=encoded_val_set,
+        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=val_batch_size,
         shuffle=False)
@@ -100,11 +102,16 @@ def train(
         model.train()
         # if config.debug:
         #     batch_idx = -1
-        for batch in tqdm(train_data_loader):
+        loss = torch.tensor(0.)
+        for batch in xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
             # if config.debug:
             #     batch_idx += 1
             #     if batch_idx >= 100:
             #         break
+
+            # TODO
+            # - Use `model.config.decoder_start_token_id` as the first id of sequences.
+            # - decoder_start_token_id -> bos_token_id -> others ...
             batched_input = dict(
                 input_ids=batch['utterance_token_ids'].to(device),
                 attention_mask=batch['attention_mask'].to(device),
@@ -204,14 +211,14 @@ def validate(
         all_predicted_last_states = []
         all_answer_last_states = []
 
-    if config.debug:
-        batch_idx = -1
+    # if config.debug:
+    #     batch_idx = -1
 
-    for batch in tqdm(data_loader):
-        if config.debug:
-            batch_idx += 1
-            if batch_idx >= 30:
-                break
+    for batch in xtqdm(data_loader):
+        # if config.debug:
+        #     batch_idx += 1
+        #     if batch_idx >= 5:
+        #         break
 
         last_states = learning.parse(
             grammar=grammar,

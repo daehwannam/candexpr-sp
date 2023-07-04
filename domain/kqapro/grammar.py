@@ -40,6 +40,7 @@ class KoPLGrammar(Grammar):
         super().__init__(formalism=formalism, super_types_dict=super_types_dict, actions=actions, start_action=start_action,
                          meta_actions=meta_actions, register=register, use_reduce=use_reduce)
 
+        self.model_config = learning.load_model_config(pretrained_model_name_or_path)
         self.initialize_from_base_actions()
         register_all(register, self, self.lf_tokenizer)
         self.add_actions(kopl_transfer.iter_nl_token_actions(
@@ -114,6 +115,7 @@ class KoPLGrammar(Grammar):
         fifo_dict = FIFODict(cache_size)
 
         # START_TOKEN_ID = model.config.decoder_start_token_id
+        DECODER_START_TOKEN_ID = self.model_config.decoder_start_token_id
         BOS_TOKEN_ID = self.lf_tokenizer.bos_token_id
         EOS_TOKEN_ID = self.lf_tokenizer.eos_token_id
         PAD_TOKEN_ID = self.lf_tokenizer.pad_token_id
@@ -165,6 +167,7 @@ class KoPLGrammar(Grammar):
             _prefix_token_id_seq = prefix_token_id_seq.tolist()
 
             if len(_prefix_token_id_seq) == 1:
+                # when `_prefix_token_id_seq` has only `DECODER_START_TOKEN_ID`
                 return [BOS_TOKEN_ID]
             else:
                 # if len(_prefix_token_id_seq) >= 3:

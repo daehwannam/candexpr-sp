@@ -15,6 +15,7 @@ config = Environment(
     model_dir_path=os.path.join(_model_dir_root_path, initial_date_str),
 
     learning_rate=3e-5,
+    # learning_rate=1e-3,
     adam_epsilon=1e-8,
     weight_decay=1e-5,
     train_batch_size=16,

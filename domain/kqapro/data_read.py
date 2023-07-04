@@ -9,7 +9,7 @@ from dhnamlib.pylib.structure import LazyDict, LazyEval
 # from dhnamlib.pylib.function import identity
 
 
-def make_collate(pad_token_id):
+def make_collate(decoder_start_token_id, pad_token_id):
     def make_batched_long_tensor(lists):
         return torch.tensor(pad_sequence(lists, pad_token_id), dtype=torch.int64)
 
@@ -23,18 +23,22 @@ def make_collate(pad_token_id):
             init_fn=batched_mask_init_fn)
 
     def collate(examples):
+        batch_size = len(examples)
         batched_example = dict(dicts2pairs(*examples))
 
         utterance_token_ids = make_batched_long_tensor(batched_example['utterance_token_ids'])
         attention_mask = id_tensor_to_mask(utterance_token_ids, pad_token_id)
 
         if 'action_ids' in batched_example:
-            action_ids = make_batched_long_tensor(batched_example['action_ids'])
+            _action_ids = make_batched_long_tensor(batched_example['action_ids'])
+            action_ids = torch.concat([torch.ones(batch_size, 1, dtype=torch.int64) * decoder_start_token_id, _action_ids], dim=1)
+            # `action_ids[some_index]` is a sequence like
+            # [decoder_start_token_id, bos_token_id, ..., some-token-id, ..., eos_token_id, pad_token_id, pad_token_id, ...]
 
             # except the last tokens (either PAD or EOS)
             decoder_input_ids = LazyEval(lambda: action_ids[:, :-1].contiguous())
 
-            # except the first tokens (BOS)
+            # except the first tokens (decoder_start_token_id)
             labels = LazyEval(lambda: action_ids[:, 1:].contiguous())
         else:
             action_ids = None
@@ -62,7 +66,7 @@ def make_collate(pad_token_id):
     return collate
 
 
-def make_data_loader(encoded_dataset, encoded_mask_dataset=None, *, pad_token_id, batch_size, shuffle):
+def make_data_loader(encoded_dataset, encoded_mask_dataset=None, *, decoder_start_token_id, pad_token_id, batch_size, shuffle):
     if encoded_mask_dataset is None:
         _encoded_dataset = encoded_dataset
     else:
@@ -74,5 +78,5 @@ def make_data_loader(encoded_dataset, encoded_mask_dataset=None, *, pad_token_id
         SimpleDataset(_encoded_dataset),
         batch_size=batch_size,
         shuffle=shuffle,
-        collate_fn=make_collate(pad_token_id),
+        collate_fn=make_collate(decoder_start_token_id, pad_token_id),
     )
