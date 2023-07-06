@@ -1,23 +1,15 @@
 
-from __future__ import annotations
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    import torch
-
 import copy
-from typing import List
-import warnings
 
 from configuration import config
 from logic.grammar import Grammar
-from logic.formalism import make_program_tree_cls, make_search_state_cls, InvalidCandidateActionError
+from logic.formalism import make_program_tree_cls, make_search_state_cls
 
-from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary, deprecated
+from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block
-from dhnamlib.pylib.iteration import distinct_values, index, NotFoundError
+from dhnamlib.pylib.iteration import distinct_values
 from dhnamlib.pylib.hflib.transformers import iter_id_token_pairs, join_tokens as _join_tokens
-from dhnamlib.pylib.data_structure import FIFODict
 from dhnamlib.hissplib.expression import repr_as_hash_str
 
 from . import kb_analysis
@@ -108,86 +100,6 @@ class KoPLGrammar(Grammar):
     @classmethod
     def get_invalid_state(cls):
         return cls._INVALID_STATE
-
-    def make_prefix_allowed_tokens_fn(self, batch_size, num_beams):
-        # multiplying "2" is for caching both previous states and the next sates
-        cache_size = batch_size * num_beams * 2
-        fifo_dict = FIFODict(cache_size)
-
-        # START_TOKEN_ID = model.config.decoder_start_token_id
-        DECODER_START_TOKEN_ID = self.model_config.decoder_start_token_id
-        BOS_TOKEN_ID = self.lf_tokenizer.bos_token_id
-        EOS_TOKEN_ID = self.lf_tokenizer.eos_token_id
-        PAD_TOKEN_ID = self.lf_tokenizer.pad_token_id
-
-        def action_id_seq_to_state(action_id_seq):
-            assert isinstance(action_id_seq, tuple)
-            curr_state = None
-
-            if action_id_seq in fifo_dict:
-                return fifo_dict[action_id_seq]
-            else:
-                if len(action_id_seq) == 0:
-                    curr_state = self.search_state_cls.create()
-                else:
-                    if action_id_seq[:-1] in fifo_dict:
-                        prev_state = fifo_dict[action_id_seq[:-1]]
-                        if self.is_invalid_state(prev_state):
-                            curr_state = self.get_invalid_state()
-                        else:
-                            next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
-                    else:
-                        warnings.warn('cache_size is not enough')
-                        prev_state = None
-                        next_action_id_seq = action_id_seq
-
-                    if curr_state is None:
-                        try:
-                            action_seq = tuple(map(self.id_to_action, next_action_id_seq))
-                        except NotFoundError:
-                            curr_state = self.get_invalid_state()
-                        else:
-                            try:
-                                curr_state = self.search_state_cls.get_last_state(action_seq, initial_state=prev_state, verifying=True)
-                            except InvalidCandidateActionError:
-                                curr_state = self.get_invalid_state()
-
-                fifo_dict[action_id_seq] = curr_state
-                return curr_state
-
-        def prefix_allowed_tokens_fn(batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
-            '''
-            This function is passed to `torch.PrefixConstrainedLogitsProcessor`, which is used by generate `transformers.generate`.
-
-            :param batch_id: the index of an example in the input batch of search
-            :param prefix_token_id_seq: a sequence of token ids
-            :return: a list of allowed candidate token ids
-            '''
-
-            _prefix_token_id_seq = prefix_token_id_seq.tolist()
-
-            if len(_prefix_token_id_seq) == 1:
-                # when `_prefix_token_id_seq` has only `DECODER_START_TOKEN_ID`
-                return [BOS_TOKEN_ID]
-            else:
-                # if len(_prefix_token_id_seq) >= 3:
-                #     breakpoint()
-                last_token_id = _prefix_token_id_seq[-1]
-                if last_token_id in [PAD_TOKEN_ID, EOS_TOKEN_ID]:
-                    return [PAD_TOKEN_ID]
-                else:
-                    start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
-                    assert bos_token_id == BOS_TOKEN_ID
-                    curr_state = action_id_seq_to_state(tuple(action_id_seq))
-
-                    if self.is_invalid_state(curr_state):
-                        return []
-                    if curr_state.tree.is_closed_root():
-                        return [EOS_TOKEN_ID]
-                    else:
-                        return curr_state.get_candidate_action_ids()
-
-        return prefix_allowed_tokens_fn
 
 
 def register_all(register, grammar, lf_tokenizer):

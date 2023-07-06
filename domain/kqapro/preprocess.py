@@ -142,8 +142,10 @@ def encode_dataset(grammar, augmented_dataset):
 
         # `utterance_token_ids` and `action_ids` include BOS and EOS.
         encoded_example = dict(
-            utterance_token_ids=grammar.utterance_tokenizer(example['question'])['input_ids'],
-            answer=example['answer'])
+            utterance_token_ids=grammar.utterance_tokenizer(example['question'])['input_ids'])
+
+        if 'answer' in example:
+            encoded_example.update(answer=example['answer'])
 
         if 'action_name_seq' in example:
             action_ids = list(chain(
@@ -204,7 +206,8 @@ def _main():
             'augmented_val_set',
             'encoded_train_set',
             'encoded_val_set',
-            'encoded_train_mask'
+            'encoded_test_set',
+            # 'encoded_train_mask'
         ])
 
     args = parser.parse_args(config.remaining_cmd_args)
@@ -229,6 +232,10 @@ def _main():
         preprocess_for_encoded_dataset(
             augmented_dataset=config.augmented_val_set,
             encoded_dataset_file_path=config.encoded_val_set_file_path)
+    elif args.goal == 'encoded_test_set':
+        preprocess_for_encoded_dataset(
+            augmented_dataset=config.raw_test_set,
+            encoded_dataset_file_path=config.encoded_test_set_file_path)
     elif args.goal == 'encoded_train_mask':
         raise NotImplementedError
         preprocess_for_encoded_mask(

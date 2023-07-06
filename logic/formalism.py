@@ -698,7 +698,20 @@ class SearchState(metaclass=ABCMeta):
             action_ids = opened_action.arg_candidate(self.tree)
         if self.using_arg_filter and opened_action.arg_filter is not None:
             action_ids = tuple(opened_action.arg_filter(self.tree, action_ids))
+
         return action_ids
+
+    def get_candidate_source(self):
+        opened_tree, children = self.tree.get_opened_tree_children()
+        source = set()
+        opened_action = opened_tree.value
+        if opened_action.arg_candidate is None:
+            source.add('typed_candidate')
+        else:
+            source.add('arg_candidate')
+        if self.using_arg_filter and opened_action.arg_filter is not None:
+            source.add('arg_filter')
+        return source
 
     @deprecated
     @abstractmethod

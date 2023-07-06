@@ -7,12 +7,12 @@ from dhnamlib.pylib.context import LazyEval
 from util.time import initial_date_str
 
 
-_model_dir_root_path = './model-instance'
+_model_learning_dir_root_path = './model-instance'
 
 
 config = Environment(
     mode='train',
-    model_dir_path=os.path.join(_model_dir_root_path, initial_date_str),
+    model_learning_dir_path=os.path.join(_model_learning_dir_root_path, initial_date_str),
 
     learning_rate=3e-5,
     # learning_rate=1e-3,
@@ -32,7 +32,7 @@ config = Environment(
 
 # config = Environment(
 #     mode='train',
-#     model_dir_path='./model-instance',
+#     model_learning_dir_path='./model-instance',
 #     finetuned_model_path=os.path.join(model_instance_dir_path, )
 
 #     learning_rate=3e-5,

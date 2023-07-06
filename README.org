@@ -53,12 +53,19 @@ python -m domain.kqapro.preprocess --goal augmented_train_set
 python -m domain.kqapro.preprocess --goal augmented_val_set
 python -m domain.kqapro.preprocess --goal encoded_train_set
 python -m domain.kqapro.preprocess --goal encoded_val_set
+python -m domain.kqapro.preprocess --goal encoded_test_set
 # python -m domain.kqapro.preprocess --goal encoded_train_mask
 #+end_src
 
 ** Training
 #+begin_src sh
-python -m domain.kqapro.train --config config.train_strong_sup
+python -m domain.kqapro.execution --config config.train_strong_sup
+#+end_src>
+
+** Testing
+#+begin_src sh
+MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
+python -m domain.kqapro.run --config config.test --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src>
 
 # * Running

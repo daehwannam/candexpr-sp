@@ -1,6 +1,9 @@
 
 import os
 from itertools import chain
+from typing import List
+import warnings
+# import math
 
 import torch
 import torch.nn.functional as F
@@ -10,12 +13,15 @@ from configuration import config
 
 from .execution import postprocess_prediction, invalid_program, get_counting_context
 
+from logic.formalism import InvalidCandidateActionError
+
 from dhnamlib.pylib import filesys
 from dhnamlib.pylib.hflib.transformers import logit_rescaling
 from dhnamlib.pylib import iteration
-from dhnamlib.pylib.decoration import deprecated
+from dhnamlib.pylib.decoration import deprecated, construct
 from dhnamlib.pylib.exception import NotFoundError
 from dhnamlib.pylib.torchlib.dnn import candidate_ids_to_mask, lengths_to_mask, masked_log_softmax, nll_without_reduction, pad_sequence
+from dhnamlib.pylib.data_structure import FIFODict
 
 
 def is_finetuned(pretrained_model_name_or_path):
@@ -44,6 +50,14 @@ def load_tokenizer(pretrained_model_name_or_path, add_prefix_space, non_nl_token
     return tokenizer
 
 
+def get_last_dir_path(model_learning_dir_path):
+    return os.path.join(model_learning_dir_path, 'last')
+
+
+def get_best_dir_path(model_learning_dir_path):
+    return os.path.join(model_learning_dir_path, 'best')
+
+
 def load_model(pretrained_model_name_or_path, num_tokens=None):
     model = BartForConditionalGeneration.from_pretrained(pretrained_model_name_or_path)
     if num_tokens is None:
@@ -53,6 +67,10 @@ def load_model(pretrained_model_name_or_path, num_tokens=None):
             assert model.config.vocab_size == num_tokens
         else:
             model.resize_token_embeddings(num_tokens)
+
+    # Not to make `NoRepeatNGramLogitsProcessor` in `GenerationMixin._get_logits_processor`
+    model.config.no_repeat_ngram_size = None
+
     return model
 
 
@@ -89,6 +107,7 @@ def save_model(model, dir_path):
 
 def _token_id_seq_to_action_seq(grammar, token_id_seq):
     eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id, reverse=True)
+    assert token_id_seq[0] == grammar.lf_tokenizer.bos_token_id
     action_id_seq = token_id_seq[1: eos_token_id_idx]  # index 0 has bos_token_id, which should be skipped
     action_seq = tuple(map(grammar.id_to_action, action_id_seq))
     return action_seq
@@ -186,20 +205,19 @@ def token_id_seq_to_program(grammar, token_id_seq):
 
 def utterances_to_ids(grammar, utterances):
     encoded_utterances = grammar.utterance_tokenizer(utterances)
-    utterance_ids = encoded_utterances['input_ids']
-    return utterance_ids
+    utterance_token_ids = encoded_utterances['input_ids']
+    return utterance_token_ids
 
 
-def parse(grammar, model, utterance_ids, max_length, num_beams,
-          prefix_allowed_tokens_fn=None, logits_processor=transformers.LogitsProcessorList()
-          # , **kwargs
-          ):
-
+@construct(tuple)
+def generate_token_id_seqs(
+        grammar, model, utterance_token_ids, max_length, num_beams,
+        prefix_allowed_tokens_fn=None, logits_processor=transformers.LogitsProcessorList()
+        # , **kwargs
+):
     # breakpoint()
-
-    # if not config.debug:
     batched_output = model.generate(
-        input_ids=utterance_ids,
+        input_ids=utterance_token_ids,
         max_length=max_length,
         num_beams=num_beams,
         prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
@@ -207,20 +225,20 @@ def parse(grammar, model, utterance_ids, max_length, num_beams,
         # **kwargs
     )
 
-    # if config.debug:
-    #     batched_output = model.generate(
-    #         input_ids=utterance_ids,
-    #         max_length=max_length,
-    #         num_beams=num_beams,
-    #         # prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
-    #         # logits_processor=logits_processor
-    #         # **kwargs
-    #     )
-    #     breakpoint()
-
     batched_token_ids = batched_output[:, 1:]  # removing `decoder_start_token_id`
+
+    for token_id_seq in batched_token_ids.tolist():
+        try:
+            eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id, reverse=True)
+            token_id_seq_without_padding = token_id_seq[:eos_token_id_idx + 1]
+        except NotFoundError:
+            token_id_seq_without_padding = token_id_seq
+        yield token_id_seq_without_padding
+
+
+def token_id_seqs_to_last_states(grammar, token_id_seqs):
     predicted_last_states = tuple(token_id_seq_to_last_state(grammar, token_id_seq)
-                                  for token_id_seq in batched_token_ids.tolist())
+                                  for token_id_seq in token_id_seqs)
 
     return predicted_last_states
 
@@ -294,15 +312,101 @@ def load_status(dir_path):
     return filesys.json_load(get_status_file_path(dir_path))
 
 
-def get_logits_processor(grammar, batch_size, num_beams):
-    '''logits processor for masked softmax only'''
-
-    prefix_allowed_tokens_fn = grammar.make_prefix_allowed_tokens_fn(batch_size, num_beams)
-    logits_processor = transformers.LogitsProcessorList([
-        logit_rescaling(transformers.PrefixConstrainedLogitsProcessor(prefix_allowed_tokens_fn, num_beams))])
-    return logits_processor
-
-
 def save_analysis(analysis, dir_path):
     analysis_file_path = os.path.join(dir_path, 'analysis.json')
     filesys.json_pretty_save(analysis, analysis_file_path)
+
+
+def save_predictions(predictions, dir_path):
+    predictions_file_path = os.path.join(dir_path, 'predictions.txt')
+    filesys.write_lines(predictions_file_path, predictions)
+
+
+def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
+    # multiplying "2" is for caching both previous states and the next sates
+    cache_size = batch_size * num_beams * 2
+    fifo_dict = FIFODict(cache_size)
+
+    DECODER_START_TOKEN_ID = grammar.model_config.decoder_start_token_id
+    BOS_TOKEN_ID = grammar.lf_tokenizer.bos_token_id
+    EOS_TOKEN_ID = grammar.lf_tokenizer.eos_token_id
+    PAD_TOKEN_ID = grammar.lf_tokenizer.pad_token_id
+
+    def action_id_seq_to_state(action_id_seq):
+        assert isinstance(action_id_seq, tuple)
+        curr_state = None
+
+        if action_id_seq in fifo_dict:
+            return fifo_dict[action_id_seq]
+        else:
+            if len(action_id_seq) == 0:
+                curr_state = grammar.search_state_cls.create()
+            else:
+                if action_id_seq[:-1] in fifo_dict:
+                    prev_state = fifo_dict[action_id_seq[:-1]]
+                    if grammar.is_invalid_state(prev_state):
+                        curr_state = grammar.get_invalid_state()
+                    else:
+                        next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
+                else:
+                    warnings.warn('cache_size is not enough')
+                    prev_state = None
+                    next_action_id_seq = action_id_seq
+
+                if curr_state is None:
+                    try:
+                        action_seq = tuple(map(grammar.id_to_action, next_action_id_seq))
+                    except NotFoundError:
+                        curr_state = grammar.get_invalid_state()
+                    else:
+                        try:
+                            curr_state = grammar.search_state_cls.get_last_state(action_seq, initial_state=prev_state, verifying=True)
+                        except InvalidCandidateActionError:
+                            curr_state = grammar.get_invalid_state()
+
+            fifo_dict[action_id_seq] = curr_state
+            return curr_state
+
+    def prefix_allowed_tokens_fn(batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
+        '''
+        This function is passed to `torch.PrefixConstrainedLogitsProcessor`, which is used by generate `transformers.generate`.
+
+        :param batch_id: the index of an example in the input batch of search
+        :param prefix_token_id_seq: a sequence of token ids
+        :return: a list of allowed candidate token ids
+        '''
+
+        _prefix_token_id_seq = prefix_token_id_seq.tolist()
+
+        if len(_prefix_token_id_seq) == 1:
+            # when `_prefix_token_id_seq` has only `DECODER_START_TOKEN_ID`
+            return [BOS_TOKEN_ID]
+        else:
+            # if len(_prefix_token_id_seq) >= 3:
+            #     breakpoint()
+            last_token_id = _prefix_token_id_seq[-1]
+            if last_token_id in [PAD_TOKEN_ID, EOS_TOKEN_ID]:
+                return [PAD_TOKEN_ID]
+            else:
+                decoder_start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
+                assert decoder_start_token_id == DECODER_START_TOKEN_ID
+                assert bos_token_id == BOS_TOKEN_ID
+                curr_state = action_id_seq_to_state(tuple(action_id_seq))
+
+                if grammar.is_invalid_state(curr_state):
+                    return []
+                if curr_state.tree.is_closed_root():
+                    return [EOS_TOKEN_ID]
+                else:
+                    return curr_state.get_candidate_action_ids()
+
+    return prefix_allowed_tokens_fn
+
+
+def get_logits_processor(grammar, batch_size, num_beams):
+    '''logits processor for masked softmax only'''
+
+    prefix_allowed_tokens_fn = make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams)
+    logits_processor = transformers.LogitsProcessorList([
+        logit_rescaling(transformers.PrefixConstrainedLogitsProcessor(prefix_allowed_tokens_fn, num_beams))])
+    return logits_processor

@@ -8,6 +8,7 @@ from dhnamlib.pylib.context import Environment, LazyEval
 from dhnamlib.pylib.decoration import Register, lru_cache, variable
 from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, pickle_load, mkpdirs_unless_exist, mkloc_unless_exist, make_logger
 from dhnamlib.pylib.iteration import apply_recursively, distinct_pairs, not_none_valued_pairs
+from dhnamlib.pylib.text import parse_bool
 # from dhnamlib.pylib.package import import_from_module
 from dhnamlib.pylib.version_control import get_git_hash
 
@@ -25,6 +26,7 @@ _augmented_train_set_file_path = './processed/kqapro/augmented_train.jsonl'
 _augmented_val_set_file_path = './processed/kqapro/augmented_val.jsonl'
 _encoded_train_set_file_path = './processed/kqapro/encoded_train.jsonl'
 _encoded_val_set_file_path = './processed/kqapro/encoded_val.jsonl'
+_encoded_test_set_file_path = './processed/kqapro/encoded_test.jsonl'
 # _encoded_train_mask_dataset_file_path = './processed/kqapro/encoded_train_mask.jsonl'
 
 _grammar_file_path = './domain/kqapro/grammar.lissp'
@@ -59,16 +61,25 @@ def _is_training_mode(mode):
 
 def _make_logger():
     if _is_training_mode(config.mode):
-        log_file_path = os.path.join(config.model_dir_path, f'{initial_date_str}_{config.mode}.log')
+        log_file_path = os.path.join(config.model_learning_dir_path, f'{initial_date_str}_{config.mode}.log')
+        mkpdirs_unless_exist(log_file_path)
     else:
         log_file_path = None
-    mkpdirs_unless_exist(log_file_path)
     return make_logger(
         name=config.mode,
         log_file_path=log_file_path)
 
 
-_config = Environment(
+def _get_xtqdm():
+    if config.using_tqdm:
+        from dhnamlib.pylib.iteration import xtqdm
+    else:
+        def xtqdm(iterator, /, *args, **kwargs):
+            return iterator
+    return xtqdm
+
+
+_default_config = Environment(
     register=Register(strategy='conditional'),
 
     kb=LazyEval(lambda: json_load(_kb_file_path)),
@@ -83,6 +94,7 @@ _config = Environment(
     augmented_val_set=LazyEval(lambda: jsonl_load(_augmented_val_set_file_path)),
     encoded_train_set=LazyEval(lambda: jsonl_load(_encoded_train_set_file_path)),
     encoded_val_set=LazyEval(lambda: jsonl_load(_encoded_val_set_file_path)),
+    encoded_test_set=LazyEval(lambda: jsonl_load(_encoded_test_set_file_path)),
     # encoded_train_mask_dataset=LazyEval(lambda: pickle_load(_encoded_train_mask_dataset_file_path)),
 
     grammar=LazyEval(_make_grammar),
@@ -94,6 +106,7 @@ _config = Environment(
     augmented_val_set_file_path=_augmented_val_set_file_path,
     encoded_train_set_file_path=_encoded_train_set_file_path,
     encoded_val_set_file_path=_encoded_val_set_file_path,
+    encoded_test_set_file_path=_encoded_test_set_file_path,
     # encoded_train_mask_dataset_file_path=_encoded_train_mask_dataset_file_path,
 
     device=LazyEval(_get_device),
@@ -105,13 +118,18 @@ _config = Environment(
 
     git_hash=get_git_hash(),
     debug=_DEBUG,
+    using_tqdm=True,
+    xtqdm=LazyEval(_get_xtqdm),
 )
+
 
 @lru_cache
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test)')
-    parser.add_argument('--model-dir', dest='model_dir_path', help='a path to the directory of a model')
+    parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of a model')
+    # parser.add_argument('--mode', dest='mode', help='an execution mode', choices=['train', 'test'])
+    parser.add_argument('--using-tqdm', dest='using_tqdm', type=parse_bool, help='whether using tqdm')
 
     args, unknown = parser.parse_known_args()
     cmd_arg_dict = dict(not_none_valued_pairs(vars(args).items()))
@@ -138,7 +156,7 @@ def config():
  
     config = Environment(
         distinct_pairs(chain(
-            _config.items(),
+            _default_config.items(),
             _specific_config.items(),
             _cmd_arg_dict.items()
         )))
@@ -162,7 +180,7 @@ def _config_to_json_dict(config):
 
 
 def save_config_info():
-    dir_path = config.model_dir_path
+    dir_path = config.model_learning_dir_path
     json_dict = _config_to_json_dict(config)
     config_info_path = os.path.join(dir_path, 'config-info')
     mkloc_unless_exist(config_info_path)
