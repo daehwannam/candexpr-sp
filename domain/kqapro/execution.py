@@ -62,7 +62,7 @@ def postprocess_denotation(denotation):
     return new_denotation
 
 
-def postprocess_prediction(answer):
+def postprocess_prediction(answer, strict=False):
     '''
     Modify the result from `postprocess_denotation`
     '''
@@ -72,7 +72,10 @@ def postprocess_prediction(answer):
     elif isinstance(answer, list) and len(answer) > 0:
         new_answer = answer[0]
     elif isinstance(answer, list) and len(answer) == 0:
-        new_answer = 'None'     # None is returned in KQAPro_Baselines
+        if strict:
+            new_answer = 'None'     # None is returned in KQAPro_Baselines
+        else:
+            new_answer = 'no'
     else:
         new_answer = answer
     return new_answer
