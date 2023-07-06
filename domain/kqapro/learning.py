@@ -319,13 +319,13 @@ def save_analysis(analysis, dir_path):
 
 def save_predictions(predictions, dir_path):
     predictions_file_path = os.path.join(dir_path, 'predictions.txt')
-    filesys.write_lines(predictions_file_path, predictions)
+    filesys.write_lines(predictions_file_path, tuple(map(str, predictions)))
 
 
 def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
     # multiplying "2" is for caching both previous states and the next sates
     cache_size = batch_size * num_beams * 2
-    fifo_dict = FIFODict(cache_size)
+    state_fifo_dict = FIFODict(cache_size)
 
     DECODER_START_TOKEN_ID = grammar.model_config.decoder_start_token_id
     BOS_TOKEN_ID = grammar.lf_tokenizer.bos_token_id
@@ -336,14 +336,14 @@ def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
         assert isinstance(action_id_seq, tuple)
         curr_state = None
 
-        if action_id_seq in fifo_dict:
-            return fifo_dict[action_id_seq]
+        if action_id_seq in state_fifo_dict:
+            return state_fifo_dict[action_id_seq]
         else:
             if len(action_id_seq) == 0:
                 curr_state = grammar.search_state_cls.create()
             else:
-                if action_id_seq[:-1] in fifo_dict:
-                    prev_state = fifo_dict[action_id_seq[:-1]]
+                if action_id_seq[:-1] in state_fifo_dict:
+                    prev_state = state_fifo_dict[action_id_seq[:-1]]
                     if grammar.is_invalid_state(prev_state):
                         curr_state = grammar.get_invalid_state()
                     else:
@@ -364,7 +364,7 @@ def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
                         except InvalidCandidateActionError:
                             curr_state = grammar.get_invalid_state()
 
-            fifo_dict[action_id_seq] = curr_state
+            state_fifo_dict[action_id_seq] = curr_state
             return curr_state
 
     def prefix_allowed_tokens_fn(batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:

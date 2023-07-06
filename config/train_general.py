@@ -11,7 +11,7 @@ _model_learning_dir_root_path = './model-instance'
 
 
 config = Environment(
-    mode='train',
+    run_mode='train',
     model_learning_dir_path=os.path.join(_model_learning_dir_root_path, initial_date_str),
 
     learning_rate=3e-5,

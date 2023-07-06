@@ -72,7 +72,7 @@ def postprocess_prediction(answer):
     elif isinstance(answer, list) and len(answer) > 0:
         new_answer = answer[0]
     elif isinstance(answer, list) and len(answer) == 0:
-        new_answer = 'None'
+        new_answer = 'None'     # None is returned in KQAPro_Baselines
     else:
         new_answer = answer
     return new_answer

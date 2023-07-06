@@ -51,22 +51,22 @@ def _get_device():
     return 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-def _is_valid_mode(mode):
-    return mode in ['train', 'retrain', 'finetune', 'test']
+def _is_valid_run_mode(run_mode):
+    return run_mode in ['train', 'retrain', 'finetune', 'test', 'test-on-val-set']
 
 
-def _is_training_mode(mode):
-    assert _is_valid_mode(config.mode)
-    return mode in ['train', 'retrain', 'finetune']
+def _is_training_run_mode(run_mode):
+    assert _is_valid_run_mode(config.run_mode)
+    return run_mode in ['train', 'retrain', 'finetune']
 
 def _make_logger():
-    if _is_training_mode(config.mode):
-        log_file_path = os.path.join(config.model_learning_dir_path, f'{initial_date_str}_{config.mode}.log')
+    if _is_training_run_mode(config.run_mode):
+        log_file_path = os.path.join(config.model_learning_dir_path, f'{initial_date_str}_{config.run_mode}.log')
         mkpdirs_unless_exist(log_file_path)
     else:
         log_file_path = None
     return make_logger(
-        name=config.mode,
+        name=config.run_mode,
         log_file_path=log_file_path)
 
 
@@ -128,7 +128,7 @@ def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test)')
     parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of a model')
-    # parser.add_argument('--mode', dest='mode', help='an execution mode', choices=['train', 'test'])
+    # parser.add_argument('--run_mode', dest='run_mode', help='an execution run_mode', choices=['train', 'test'])
     parser.add_argument('--using-tqdm', dest='using_tqdm', type=parse_bool, help='whether using tqdm')
 
     args, unknown = parser.parse_known_args()
@@ -188,5 +188,5 @@ def save_config_info():
     json_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
 
 
-if 'mode' in config and _is_training_mode(config.mode):
+if 'run_mode' in config and _is_training_run_mode(config.run_mode):
     save_config_info()

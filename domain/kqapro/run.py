@@ -9,6 +9,8 @@ from . import learning
 from .data_read import make_data_loader
 from .execution import postprocess_prediction
 
+from kqapro.evaluate import whether_equal
+
 from dhnamlib.pylib import filesys
 from dhnamlib.pylib.context import replace_dir, copy_dir
 # from dhnamlib.pylib.iteration import apply_recursively
@@ -156,7 +158,8 @@ def train(
             data_loader=val_data_loader,
             batch_size=val_batch_size,
             num_beams=num_prediction_beams,
-            generation_max_length=generation_max_length)
+            generation_max_length=generation_max_length,
+            evaluating=True)
 
         performance = validation['performance']
 
@@ -193,6 +196,7 @@ def train(
 
 
 def validate(
+        *,
         grammar,
         compiler,
         model,
@@ -202,6 +206,7 @@ def validate(
         num_beams,
         generation_max_length,
         analyzing=True,
+        evaluating,
         softmax_masking=False,
 ):
     assert not model.training
@@ -214,22 +219,24 @@ def validate(
             prefix_allowed_tokens_fn=learning.make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams))
 
     all_predictions = []
-    all_answers = []
+    if evaluating:
+        all_answers = []
 
     if analyzing:
         all_utterances = []
         all_predicted_token_id_seqs = []
         all_predicted_last_states = []
-        all_answer_last_states = []
+        if evaluating:
+            all_answer_last_states = []
 
-    # if config.debug:
-    #     batch_idx = -1
+    if config.debug:
+        batch_idx = -1
 
     for batch in config.xtqdm(data_loader):
-        # if config.debug:
-        #     batch_idx += 1
-        #     if batch_idx >= 2:
-        #         break
+        if config.debug:
+            batch_idx += 1
+            if batch_idx >= 2:
+                break
 
         token_id_seqs = learning.generate_token_id_seqs(
             grammar=grammar,
@@ -245,14 +252,16 @@ def validate(
         predictions = learning.programs_to_predictions(context, programs)
         all_predictions.extend(predictions)
 
-        if 'answer' in batch:
+        if evaluating:
+            assert 'answer' in batch
             answers = batch['answer']
             all_answers.extend(answers)
 
         if analyzing:
             utterances = grammar.utterance_tokenizer.batch_decode(
                 batch['utterance_token_ids'], skip_special_tokens=True)
-            if 'labels' in batch:
+            if evaluating:
+                assert 'labels' in batch
                 answer_last_states = tuple(learning.token_id_seq_to_last_state(grammar, token_id_seq)
                                            for token_id_seq in batch['labels'].tolist())
                 all_answer_last_states.extend(answer_last_states)
@@ -260,8 +269,8 @@ def validate(
             all_predicted_token_id_seqs.extend(token_id_seqs)
             all_predicted_last_states.extend(last_states)
 
-    if len(all_answers) > 0:
-        assert len(all_predictions) == len(all_answers)
+    if evaluating:
+        assert len(all_predictions) == len(all_answers) == len(all_answer_last_states)
         accuracy = compute_accuracy(all_predictions, all_answers)
         performance = get_performance(accuracy=accuracy)
     else:
@@ -302,13 +311,14 @@ def validate(
             )))
             return program_analysis
 
+        # breakpoint()
+
         analysis = list(pairs2dicts(not_none_valued_pairs(
             utterance=all_utterances,
-            answer=all_answers,
+            answer=all_answers if evaluating else None,
             prediction=all_predictions,
             predicted_program=analyze_program(all_predicted_last_states, all_predicted_token_id_seqs),
-            answer_program=(analyze_program(all_answer_last_states)
-                            if len(all_answer_last_states) > 0 else None))))
+            answer_program=(analyze_program(all_answer_last_states) if evaluating else None))))
 
     validation = dict(not_none_valued_pairs(
         performance=performance,
@@ -323,7 +333,7 @@ def compute_accuracy(predictions, answers):
     num_examples = len(predictions)
 
     num_correct = sum(
-        int(prediction == answer)
+        int(whether_equal(answer=answer, prediction=prediction))
         for prediction, answer in zip(predictions, answers))
 
     return num_correct / num_examples
@@ -344,6 +354,7 @@ def test(
         context=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
+        evaluating,
 ):
     model = learning.load_model(
         learning.get_best_dir_path(model_learning_dir_path),
@@ -364,21 +375,26 @@ def test(
         data_loader=test_data_loader,
         batch_size=test_batch_size,
         num_beams=num_prediction_beams,
-        generation_max_length=generation_max_length)
+        generation_max_length=generation_max_length,
+        evaluating=evaluating)
+
+    filesys.mkloc_unless_exist(test_dir_path)
 
     learning.save_analysis(validation['analysis'], test_dir_path)
     learning.save_predictions(validation['predictions'], test_dir_path)
+    filesys.json_save(validation['performance'], os.path.join(test_dir_path, 'performance.json'))
 
     logger.info(f'Results are saved in "{test_dir_path}"')
 
 
 if __name__ == '__main__':
-    if config.mode == 'train':
+    if config.run_mode == 'train':
         train(model_learning_dir_path=config.model_learning_dir_path)
-    elif config.mode == 'test':
-        test()
-        # test(encoded_test_set=config.encoded_val_set,
-        #      test_batch_size=1)
+    elif config.run_mode == 'test':
+        test(evaluating=False)
+    elif config.run_mode == 'test-on-val-set':
+        test(encoded_test_set=config.encoded_val_set,
+             evaluating=True)
     else:
         raise Exception('Unknown execution type')
 

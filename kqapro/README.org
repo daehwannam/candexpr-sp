@@ -1,0 +1,4 @@
+
+* Note
+This directory include the official code from [[https://github.com/shijx12/KQAPro_Baselines][KQAPro_Baselines]].
+The code is slightly refactored.

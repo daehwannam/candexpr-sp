@@ -26,3 +26,6 @@ _tmp_*
 
 # model-instance
 /model-instance
+
+# model-test
+/model-test

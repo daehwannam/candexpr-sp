@@ -16,7 +16,7 @@ _test_dir_root_path = './model-test'
 
 def get_test_dir_path():
     model_learning_dir_name = os.path.basename(configuration.config.model_learning_dir_path)
-    dir_name_sep = '|'
+    dir_name_sep = '#'
     common_test_dir_path = os.path.join(_test_dir_root_path, model_learning_dir_name)
     test_dir_paths = glob.glob(common_test_dir_path + dir_name_sep + '*')
 
@@ -38,7 +38,7 @@ def get_test_dir_path():
 
 
 config = Environment(
-    mode='test',
+    run_mode='test',
     test_dir_path=LazyEval(get_test_dir_path),
     test_batch_size=64,
 )
