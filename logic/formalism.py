@@ -368,23 +368,22 @@ class Formalism:
             next_param_idx = current_num_args
         return next_param_idx
 
-    @keyed_cache(lambda self, param_type, type_to_candidates_dicts: (
-        param_type, tuple(sorted(map(id, type_to_candidates_dicts)))))
-    def _type_to_candidates(self, param_type, type_to_candidates_dicts):
-        return tuple(chain(*(type_to_actions_dict.get(param_type, [])
-                             for type_to_actions_dict in type_to_candidates_dicts)))
+    @keyed_cache(lambda self, param_type, type_to_candidates_dicts, optionally_reducible, to_id: (
+        param_type, tuple(sorted(map(id, type_to_candidates_dicts))), optionally_reducible, to_id))
+    def _get_candidates_from_cache(self, param_type, type_to_candidates_dicts, optionally_reducible, to_id):
+        additional_candidates = ([self.reduce_action.id if to_id else self.reduce_action] if optionally_reducible else [])
+        return tuple(chain(
+            *(type_to_actions_dict.get(param_type, []) for type_to_actions_dict in type_to_candidates_dicts),
+            additional_candidates))
 
     def _get_candidates(self, opened_action, current_num_args, type_to_candidates_dicts, to_id=False):
         next_param_idx = self._get_next_param_idx(opened_action, current_num_args)
         param_type = opened_action.param_types[next_param_idx]
 
-        candidates = self._type_to_candidates(param_type, type_to_candidates_dicts)
-        additional_candidates = ([self.reduce_action.id if to_id else self.reduce_action]
-                                 if Formalism._optionally_reducible(opened_action, current_num_args) else [])
-        if len(additional_candidates) > 0:
-            return tuple(chain(candidates, additional_candidates))
-        else:
-            return candidates
+        optionally_reducible = Formalism._optionally_reducible(opened_action, current_num_args)
+        candidates = self._get_candidates_from_cache(param_type, type_to_candidates_dicts, optionally_reducible, to_id)
+
+        return candidates
 
     def get_candidate_action_ids(self, opened_action, current_num_args, type_to_action_ids_dicts):
         return self._get_candidates(opened_action, current_num_args, type_to_action_ids_dicts, to_id=True)
@@ -701,18 +700,6 @@ class SearchState(metaclass=ABCMeta):
 
         return action_ids
 
-    def get_candidate_source(self):
-        opened_tree, children = self.tree.get_opened_tree_children()
-        source = set()
-        opened_action = opened_tree.value
-        if opened_action.arg_candidate is None:
-            source.add('typed_candidate')
-        else:
-            source.add('arg_candidate')
-        if self.using_arg_filter and opened_action.arg_filter is not None:
-            source.add('arg_filter')
-        return source
-
     @deprecated
     @abstractmethod
     def get_type_to_actions_dicts(self):
@@ -756,9 +743,10 @@ class InvalidCandidateActionError(Exception):
     pass
 
 
-def make_search_state_cls(grammar, name=None, using_arg_filter=False):
+def make_search_state_cls(grammar, name=None, using_arg_filter=False, ids_to_mask_fn=None):
     class BasicSearchState(SearchState):
         interface = Interface(SearchState)
+        _mask_cache = dict()
 
         @staticmethod
         @interface.implement
@@ -793,6 +781,30 @@ def make_search_state_cls(grammar, name=None, using_arg_filter=False):
         @interface.implement
         def get_name_to_id_dicts(self):
             return grammar.get_name_to_id_dicts()
+
+        def _compute_mask_key_for_typed_candidates(self, opened_action, current_num_args, type_to_action_ids_dicts):
+            assert opened_action.id is not None
+            return (opened_action.id, current_num_args, tuple(map(id, type_to_action_ids_dicts)))
+
+        def get_candidate_action_id_mask(self):
+            opened_tree, children = self.tree.get_opened_tree_children()
+            opened_action = opened_tree.value
+
+            using_arg_candidate = opened_action.arg_candidate is not None
+            using_arg_filter = self.using_arg_filter and opened_action.arg_filter is not None
+
+            if (not using_arg_candidate) and (not using_arg_filter):
+                args_for_typed_candidates = (opened_action, len(children), self.get_type_to_action_ids_dicts())
+                cache_key = self._compute_mask_key_for_typed_candidates(*args_for_typed_candidates)
+                if cache_key not in self._mask_cache:
+                    action_ids = self.formalism.get_candidate_action_ids(*args_for_typed_candidates)
+                    self._mask_cache[cache_key] = ids_to_mask_fn(action_ids)
+                candidate_mask = self._mask_cache[cache_key]
+            else:
+                action_ids = self.get_candidate_action_ids()
+                candidate_mask = ids_to_mask_fn(action_ids)
+
+            return candidate_mask
 
     if name is not None:
         BasicSearchState.__name__ = BasicSearchState.__qualname__ = name

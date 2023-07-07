@@ -16,7 +16,7 @@ from .execution import postprocess_prediction, invalid_program, get_counting_con
 from logic.formalism import InvalidCandidateActionError
 
 from dhnamlib.pylib import filesys
-from dhnamlib.pylib.hflib.transformers import logit_rescaling
+from dhnamlib.pylib.hflib.transforming import logit_rescaling, MaskedLogitsProcessor
 from dhnamlib.pylib import iteration
 from dhnamlib.pylib.decoration import deprecated, construct
 from dhnamlib.pylib.exception import NotFoundError
@@ -322,30 +322,36 @@ def save_predictions(predictions, dir_path):
     filesys.write_lines(predictions_file_path, tuple(map(str, predictions)))
 
 
-def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
-    # multiplying "2" is for caching both previous states and the next sates
-    cache_size = batch_size * num_beams * 2
-    state_fifo_dict = FIFODict(cache_size)
+class SequencePrefixProcessor:
+    def __init__(self, grammar, batch_size, num_beams, additional_mask_cache: dict = None):
+        self.grammar = grammar
 
-    DECODER_START_TOKEN_ID = grammar.model_config.decoder_start_token_id
-    BOS_TOKEN_ID = grammar.lf_tokenizer.bos_token_id
-    EOS_TOKEN_ID = grammar.lf_tokenizer.eos_token_id
-    PAD_TOKEN_ID = grammar.lf_tokenizer.pad_token_id
+        # multiplying "2" is for caching both previous states and the next sates
+        self.cache_size = batch_size * num_beams * 2
+        self.state_fifo_dict = FIFODict(self.cache_size)
 
-    def action_id_seq_to_state(action_id_seq):
+        self.DECODER_START_TOKEN_ID = grammar.model_config.decoder_start_token_id
+        self.BOS_TOKEN_ID = grammar.lf_tokenizer.bos_token_id
+        self.EOS_TOKEN_ID = grammar.lf_tokenizer.eos_token_id
+        self.PAD_TOKEN_ID = grammar.lf_tokenizer.pad_token_id
+
+        self.vocab_size = len(grammar.lf_tokenizer)
+        self.additional_mask_cache = additional_mask_cache
+
+    def action_id_seq_to_state(self, action_id_seq):
         assert isinstance(action_id_seq, tuple)
         curr_state = None
 
-        if action_id_seq in state_fifo_dict:
-            return state_fifo_dict[action_id_seq]
+        if action_id_seq in self.state_fifo_dict:
+            return self.state_fifo_dict[action_id_seq]
         else:
             if len(action_id_seq) == 0:
-                curr_state = grammar.search_state_cls.create()
+                curr_state = self.grammar.search_state_cls.create()
             else:
-                if action_id_seq[:-1] in state_fifo_dict:
-                    prev_state = state_fifo_dict[action_id_seq[:-1]]
-                    if grammar.is_invalid_state(prev_state):
-                        curr_state = grammar.get_invalid_state()
+                if action_id_seq[:-1] in self.state_fifo_dict:
+                    prev_state = self.state_fifo_dict[action_id_seq[:-1]]
+                    if self.grammar.is_invalid_state(prev_state):
+                        curr_state = self.grammar.get_invalid_state()
                     else:
                         next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
                 else:
@@ -355,21 +361,22 @@ def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
 
                 if curr_state is None:
                     try:
-                        action_seq = tuple(map(grammar.id_to_action, next_action_id_seq))
+                        action_seq = tuple(map(self.grammar.id_to_action, next_action_id_seq))
                     except NotFoundError:
-                        curr_state = grammar.get_invalid_state()
+                        curr_state = self.grammar.get_invalid_state()
                     else:
                         try:
-                            curr_state = grammar.search_state_cls.get_last_state(action_seq, initial_state=prev_state, verifying=True)
+                            curr_state = self.grammar.search_state_cls.get_last_state(action_seq, initial_state=prev_state, verifying=True)
                         except InvalidCandidateActionError:
-                            curr_state = grammar.get_invalid_state()
+                            curr_state = self.grammar.get_invalid_state()
 
-            state_fifo_dict[action_id_seq] = curr_state
+            self.state_fifo_dict[action_id_seq] = curr_state
             return curr_state
 
-    def prefix_allowed_tokens_fn(batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
+    @deprecated
+    def prefix_allowed_tokens_fn(self, batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
         '''
-        This function is passed to `torch.PrefixConstrainedLogitsProcessor`, which is used by generate `transformers.generate`.
+        This function is passed to `transformers.PrefixConstrainedLogitsProcessor`, which is used by generate `transformers.generate`.
 
         :param batch_id: the index of an example in the input batch of search
         :param prefix_token_id_seq: a sequence of token ids
@@ -379,34 +386,98 @@ def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
         _prefix_token_id_seq = prefix_token_id_seq.tolist()
 
         if len(_prefix_token_id_seq) == 1:
-            # when `_prefix_token_id_seq` has only `DECODER_START_TOKEN_ID`
-            return [BOS_TOKEN_ID]
+            # when `_prefix_token_id_seq` has only `self.DECODER_START_TOKEN_ID`
+            return [self.BOS_TOKEN_ID]
         else:
             # if len(_prefix_token_id_seq) >= 3:
             #     breakpoint()
             last_token_id = _prefix_token_id_seq[-1]
-            if last_token_id in [PAD_TOKEN_ID, EOS_TOKEN_ID]:
-                return [PAD_TOKEN_ID]
+            if last_token_id in [self.PAD_TOKEN_ID, self.EOS_TOKEN_ID]:
+                return [self.PAD_TOKEN_ID]
             else:
                 decoder_start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
-                assert decoder_start_token_id == DECODER_START_TOKEN_ID
-                assert bos_token_id == BOS_TOKEN_ID
-                curr_state = action_id_seq_to_state(tuple(action_id_seq))
+                assert decoder_start_token_id == self.DECODER_START_TOKEN_ID
+                assert bos_token_id == self.BOS_TOKEN_ID
+                curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
 
-                if grammar.is_invalid_state(curr_state):
+                if self.grammar.is_invalid_state(curr_state):
                     return []
-                if curr_state.tree.is_closed_root():
-                    return [EOS_TOKEN_ID]
+                elif curr_state.tree.is_closed_root():
+                    return [self.EOS_TOKEN_ID]
                 else:
                     return curr_state.get_candidate_action_ids()
 
-    return prefix_allowed_tokens_fn
+    def candidate_ids_to_mask(self, candidate_ids):
+        return candidate_ids_to_mask(candidate_ids, self.vocab_size)
+
+    def prefix_to_mask_fn(self, batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
+        '''
+        This function is passed to `dhnamlib.pylib.hflib.transforming.MaskedLogitsProcessor`,
+        which is used by generate `transformers.generate`.
+
+        :param batch_id: the index of an example in the input batch of search
+        :param prefix_token_id_seq: a sequence of token ids
+        :return: a list of allowed candidate token ids
+        '''
+
+        _prefix_token_id_seq = tuple(prefix_token_id_seq.tolist())
+
+        def cache_mask(mask):
+            self.additional_mask_cache[prefix_token_id_seq] = mask
+
+        if _prefix_token_id_seq in self.additional_mask_cache:
+            mask = self.additional_mask_cache[_prefix_token_id_seq]
+        else:
+            if len(_prefix_token_id_seq) == 1:
+                # when `_prefix_token_id_seq` has only `self.DECODER_START_TOKEN_ID`
+                mask = self.candidate_ids_to_mask([self.BOS_TOKEN_ID])
+                cache_mask(mask)
+            else:
+                last_token_id = _prefix_token_id_seq[-1]
+                if last_token_id in [self.PAD_TOKEN_ID, self.EOS_TOKEN_ID]:
+                    mask = self.candidate_ids_to_mask([self.PAD_TOKEN_ID])
+                    cache_mask(mask)
+                else:
+                    decoder_start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
+                    assert decoder_start_token_id == self.DECODER_START_TOKEN_ID
+                    assert bos_token_id == self.BOS_TOKEN_ID
+                    curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
+
+                    if self.grammar.is_invalid_state(curr_state):
+                        mask = self.candidate_ids_to_mask([])
+                        cache_mask(mask)
+                    elif curr_state.tree.is_closed_root():
+                        mask = self.candidate_ids_to_mask([self.EOS_TOKEN_ID])
+                        cache_mask(mask)
+                    else:
+                        # Not caching this mask
+                        mask = curr_state.get_candidate_action_id_mask()
+        return mask
 
 
-def get_logits_processor(grammar, batch_size, num_beams):
-    '''logits processor for masked softmax only'''
+_additional_mask_cache = dict()
 
-    prefix_allowed_tokens_fn = make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams)
+
+@deprecated
+def _get_rescaled_logits_processor(grammar, batch_size, num_beams):
+    '''
+    A logits processor with masked softmax.
+    Don't use it if renormalizing sores is unnecessary.
+    '''
+
+    sequence_prefix_processor = SequencePrefixProcessor(grammar, batch_size, num_beams)
+    prefix_allowed_tokens_fn = sequence_prefix_processor.prefix_allowed_tokens_fn
     logits_processor = transformers.LogitsProcessorList([
         logit_rescaling(transformers.PrefixConstrainedLogitsProcessor(prefix_allowed_tokens_fn, num_beams))])
+    return logits_processor
+
+
+def get_logits_processor(grammar, batch_size, num_beams, renormalizing):
+    '''logits processor for constrained decoding'''
+
+    sequence_prefix_processor = SequencePrefixProcessor(
+        grammar, batch_size, num_beams, additional_mask_cache=_additional_mask_cache)
+    prefix_to_mask_fn = sequence_prefix_processor.prefix_to_mask_fn
+    masked_logits_processor = MaskedLogitsProcessor(prefix_to_mask_fn, num_beams, renormalizing)
+    logits_processor = transformers.LogitsProcessorList([masked_logits_processor])
     return logits_processor

@@ -1,8 +1,17 @@
+
 import argparse
 import json
 from datetime import date
 from tqdm import tqdm
 
+# This code is modified from `evaluate.py` in https://github.com/shijx12/KQAPro_Baselines
+
+'''
+Usage:
+    $ TEST_DATA_SET_PATH='path/to/test/data/set.json'
+    $ PREDICTION_FILE_PATH='path/to/predictions.txt'
+    $ python -m domain.kqapro.evaluate --auxiliary --test $TEST_DATA_SET_PATH --pred $PREDICTION_FILE_PATH
+'''
 
 def whether_equal(answer, prediction):
     def truncate_float(x):
@@ -57,14 +66,7 @@ def load(f):
     return data
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Evaluation')
-    parser.add_argument('--train', dest='train_file_path', help='a path to the train set file')
-    parser.add_argument('--test', dest='test_file_path', help='a path to the test set file')
-    parser.add_argument('--pred', dest='pred_file_path', help='a path to the prediction file')
-
-    args = parser.parse_args()
-
+def test(args):
     with open(args.test_file_path) as f:
         test_set = json.load(f)
     predictions = [x.strip() for x in open(args.pred_file_path).readlines()]  # one prediction per line
@@ -121,6 +123,50 @@ def main():
         print('{}: {:.2f}% ({}/{})'.format(k, correct[k]/total[k] * 100, correct[k], total[k]))
     if len(predictions) < len(test_set):
         print('WARNING: there are only {} predictions (need {})'.format(len(predictions), len(test_set)))
+
+
+def auxiliary_test(args):
+    with open(args.test_file_path) as f:
+        test_set = json.load(f)
+    predictions = [x.strip() for x in open(args.pred_file_path).readlines()]  # one prediction per line
+
+    labels = ['overall']
+    total = {k: 0 for k in labels}
+    correct = {k: 0 for k in labels}
+
+    for i in tqdm(range(len(predictions))):
+        cur_labels = ['overall']
+
+        choices = test_set[i]['choices']
+
+        if any(whether_equal(choice, predictions[i]) for choice in choices):
+            for k in cur_labels:
+                correct[k] += 1
+
+        for k in cur_labels:
+            total[k] += 1
+
+    for k in labels:
+        print('{}: {:.2f}% ({}/{})'.format(k, correct[k]/total[k] * 100, correct[k], total[k]))
+
+    if len(predictions) < len(test_set):
+        print('WARNING: there are only {} predictions (need {})'.format(len(predictions), len(test_set)))
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Evaluation')
+    parser.add_argument('--auxiliary', dest='auxiliary', action='store_true', help='whether to perform auxiliary test')
+    parser.add_argument('--train', dest='train_file_path', help='a path to the train set file')
+    parser.add_argument('--test', dest='test_file_path', help='a path to the test set file')
+    parser.add_argument('--pred', dest='pred_file_path', help='a path to the prediction file')
+    # auxiliary
+
+    args = parser.parse_args()
+
+    if args.auxiliary:
+        auxiliary_test(args)
+    else:
+        test(args)
 
 
 if __name__ == '__main__':

@@ -43,6 +43,7 @@ class Grammar:
         self._name_to_base_action_dict = formalism.make_name_to_action_dict(self.base_actions)
         self._meta_name_to_meta_action_dict = formalism.make_name_to_action_dict(meta_actions, meta=True)
         self._type_to_base_actions_dict = formalism.make_type_to_actions_dict(self.base_actions, super_types_dict)
+        self.start_action.id = self._start_action_id
         self._set_action_ids(self.base_actions)
         self._id_to_base_action_dict = formalism.make_id_to_action_dict(self.base_actions)
         self._type_to_base_action_ids_dict = formalism.make_type_to_action_ids_dict(self.base_actions, super_types_dict)
@@ -52,6 +53,10 @@ class Grammar:
         self._type_to_added_actions_dict = dict()
         self._type_to_added_action_ids_dict = dict()
         self._id_to_added_action_dict = dict()
+
+    @property
+    def _start_action_id(self):
+        return -1
 
     def _set_action_ids(self, actions):
         name_to_id_dicts = self.get_name_to_id_dicts()

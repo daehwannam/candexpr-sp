@@ -7,7 +7,8 @@ import argparse
 from dhnamlib.pylib.context import Environment, LazyEval
 from dhnamlib.pylib.decoration import Register, lru_cache, variable
 from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, pickle_load, mkpdirs_unless_exist, mkloc_unless_exist, make_logger
-from dhnamlib.pylib.iteration import apply_recursively, distinct_pairs, not_none_valued_pairs
+# from dhnamlib.pylib.iteration import apply_recursively
+from dhnamlib.pylib.iteration import distinct_pairs, not_none_valued_pairs
 from dhnamlib.pylib.text import parse_bool
 # from dhnamlib.pylib.package import import_from_module
 from dhnamlib.pylib.version_control import get_git_hash
@@ -83,7 +84,8 @@ _default_config = Environment(
     register=Register(strategy='conditional'),
 
     kb=LazyEval(lambda: json_load(_kb_file_path)),
-    context=LazyEval(lambda: _context_cls(apply_recursively(config.kb))),
+    # context=LazyEval(lambda: _context_cls(apply_recursively(config.kb))),
+    context=LazyEval(lambda: _context_cls(config.kb)),
     max_num_program_iterations=200000,
 
     raw_train_set=LazyEval(lambda: json_load(_train_set_file_path)),

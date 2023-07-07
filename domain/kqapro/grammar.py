@@ -9,8 +9,9 @@ from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessar
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.iteration import distinct_values
-from dhnamlib.pylib.hflib.transformers import iter_id_token_pairs, join_tokens as _join_tokens
+from dhnamlib.pylib.hflib.transforming import iter_id_token_pairs, join_tokens as _join_tokens
 from dhnamlib.hissplib.expression import repr_as_hash_str
+from dhnamlib.pylib.torchlib.dnn import candidate_ids_to_mask
 
 from . import kb_analysis
 from .execution import KoPLCompiler
@@ -85,7 +86,10 @@ class KoPLGrammar(Grammar):
     @lru_cache
     @interface.implement
     def get_search_state_cls(self):
-        return make_search_state_cls(self, name='KoPLSearchState')
+        def ids_to_mask_fn(action_ids):
+            return candidate_ids_to_mask(action_ids, len(self.lf_tokenizer))
+
+        return make_search_state_cls(self, name='KoPLSearchState', ids_to_mask_fn=ids_to_mask_fn)
 
     @interface.implement
     def get_compiler_cls(self):

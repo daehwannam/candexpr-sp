@@ -104,9 +104,9 @@ def train(
     for epoch in range(status['last_epoch'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
         model.train()
-        if config.debug:
-            if epoch > 3:
-                break
+        # if config.debug:
+        #     if epoch > 3:
+        #         break
 
         # if config.debug:
         #     batch_idx = -1
@@ -211,12 +211,13 @@ def validate(
 ):
     assert not model.training
 
-    if softmax_masking:
-        generation_kwargs = dict(
-            logits_processor=learning.get_logits_processor(grammar, batch_size, num_beams))
-    else:
-        generation_kwargs = dict(
-            prefix_allowed_tokens_fn=learning.make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams))
+    
+    # if softmax_masking:
+    #     generation_kwargs = dict(
+    #         logits_processor=learning.get_logits_processor(grammar, batch_size, num_beams))
+    # else:
+    #     generation_kwargs = dict(
+    #         prefix_allowed_tokens_fn=learning.make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams))
 
     all_predictions = []
     if evaluating:
@@ -229,14 +230,14 @@ def validate(
         if evaluating:
             all_answer_last_states = []
 
-    if config.debug:
-        batch_idx = -1
+    # if config.debug:
+    #     batch_idx = -1
 
     for batch in config.xtqdm(data_loader):
-        if config.debug:
-            batch_idx += 1
-            if batch_idx >= 2:
-                break
+        # if config.debug:
+        #     batch_idx += 1
+        #     if batch_idx >= 2:
+        #         break
 
         token_id_seqs = learning.generate_token_id_seqs(
             grammar=grammar,
@@ -244,7 +245,9 @@ def validate(
             utterance_token_ids=batch['utterance_token_ids'].to(model.device),
             max_length=generation_max_length,
             num_beams=num_beams,
-            **generation_kwargs
+            logits_processor=learning.get_logits_processor(
+                grammar, batch_size, num_beams, renormalizing=softmax_masking)
+            # **generation_kwargs
         )
         last_states = learning.token_id_seqs_to_last_states(grammar, token_id_seqs)
         programs = learning.last_states_to_programs(grammar, compiler, last_states, tolerant=True)
