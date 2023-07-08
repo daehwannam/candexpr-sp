@@ -13,7 +13,7 @@ from dhnamlib.pylib.text import parse_bool
 # from dhnamlib.pylib.package import import_from_module
 from dhnamlib.pylib.version_control import get_git_hash
 
-from util.time import initial_date_str
+from utility.time import initial_date_str
 from logic.grammar import read_grammar
 
 from domain.kqapro.execution import KoPLContext, KoPLDebugContext
@@ -117,6 +117,8 @@ _default_config = Environment(
     # generation_max_length=500,
     generation_max_length=200,
     num_prediction_beams=1,
+    softmax_masking=True,
+    constrained_decoding=True,
 
     git_hash=get_git_hash(),
     debug=_DEBUG,

@@ -1,9 +1,9 @@
 
 import os
 from itertools import chain
-from typing import List
+from typing import List, Tuple, Callable
+import math
 import warnings
-# import math
 
 import torch
 import torch.nn.functional as F
@@ -20,7 +20,8 @@ from dhnamlib.pylib.hflib.transforming import logit_rescaling, MaskedLogitsProce
 from dhnamlib.pylib import iteration
 from dhnamlib.pylib.decoration import deprecated, construct
 from dhnamlib.pylib.exception import NotFoundError
-from dhnamlib.pylib.torchlib.dnn import candidate_ids_to_mask, lengths_to_mask, masked_log_softmax, nll_without_reduction, pad_sequence
+from dhnamlib.pylib.torchlib.dnn import (
+    candidate_ids_to_mask, lengths_to_mask, masked_log_softmax, nll_without_reduction, pad_sequence)
 from dhnamlib.pylib.data_structure import FIFODict
 
 
@@ -122,7 +123,8 @@ def token_id_seq_to_last_state(grammar, token_id_seq):
     except NotFoundError:
         return grammar.get_invalid_state()
 
-def labels_to_masks(grammar, labels):
+@deprecated
+def _slow__labels_to_masks(grammar, labels):
     '''
     :param grammar:
     :param labels: a tensor of shape (batch_size, seq_len)
@@ -139,7 +141,7 @@ def labels_to_masks(grammar, labels):
                                              candidate_action_ids_seq,
                                              [[grammar.lf_tokenizer.eos_token_id]]))
         candidate_token_ids_seqs.append(candidate_token_ids_seq)
-        seq_lengths.append(len(candidate_action_ids_seq))  # except couting EOS
+        seq_lengths.append(len(candidate_token_ids_seqs))  # including BOS and EOS
 
         # Note:
         # `len(candidate_action_ids_seq)` could be the length to either the last reduce action or EOS.
@@ -149,11 +151,64 @@ def labels_to_masks(grammar, labels):
 
     padded_candidate_token_ids_seqs = pad_sequence(candidate_token_ids_seqs, [grammar.lf_tokenizer.pad_token_id], dim=1)
     softmax_mask = candidate_ids_to_mask(padded_candidate_token_ids_seqs, len(grammar.lf_tokenizer))
-    nll_mask = lengths_to_mask(seq_lengths, max_length=max(seq_lengths) + 1)
-    # The "+1" of max_length is for EOS, so nll_mask and nll tensor have the same size
+    nll_mask = lengths_to_mask(seq_lengths, max_length=max(seq_lengths))
+    # nll_mask and nll tensor have the same size
 
     return softmax_mask, nll_mask
 
+
+def labels_to_masks(grammar, labels):
+    '''
+    :param grammar:
+    :param labels: a tensor of shape (batch_size, seq_len)
+    '''
+    assert labels.dim() == 2
+
+    allowed_and_ids_pairs_seqs = []
+    seq_lengths = []
+
+    for token_id_seq in labels.tolist():
+        action_seq = _token_id_seq_to_action_seq(grammar, token_id_seq)
+        _allowed_and_ids_pairs_seq = grammar.search_state_cls.action_seq_to_allowed_and_ids_pairs_seq(action_seq)
+        allowed_and_ids_pairs_seq = list(chain(
+            [(True, [grammar.lf_tokenizer.bos_token_id])],
+            _allowed_and_ids_pairs_seq,
+            [(True, [grammar.lf_tokenizer.eos_token_id])]
+        ))
+        allowed_and_ids_pairs_seqs.append(allowed_and_ids_pairs_seq)
+        seq_lengths.append(len(allowed_and_ids_pairs_seq))  # including BOS and EOS
+
+        # Note:
+        # `len(candidate_action_ids_seq)` could be the length to either the last reduce action or EOS.
+        # Actually, EOS token doesn't need to be considered,
+        # since the probability of EOS after the last reduce action is always 1 during beam-search
+        # due to logits_processor that ignores all actions except EOS.
+
+    padded_candidate_token_ids_seqs = pad_sequence(allowed_and_ids_pairs_seqs, (True, [grammar.lf_tokenizer.pad_token_id]), dim=1)
+    softmax_mask = _allowed_and_ids_pairs_seqs_to_softmax_mask(padded_candidate_token_ids_seqs, len(grammar.lf_tokenizer))
+    nll_mask = lengths_to_mask(seq_lengths, max_length=max(seq_lengths))
+    # nll_mask and nll tensor have the same size
+
+    return softmax_mask, nll_mask
+
+
+def _allowed_and_ids_pairs_seqs_to_softmax_mask(allowed_and_ids_pairs_seqs, vocab_size):
+    batch_size = len(allowed_and_ids_pairs_seqs)
+    assert iteration.all_same(map(len, allowed_and_ids_pairs_seqs))
+    seq_len = len(allowed_and_ids_pairs_seqs[0])
+
+    softmax_mask = torch.full([batch_size, seq_len, vocab_size], fill_value=0, dtype=torch.int64)
+
+    for idx_in_batch, allowed_and_ids_pairs_seq in enumerate(allowed_and_ids_pairs_seqs):
+        for idx_in_seq, allowed_and_ids_pairs in enumerate(allowed_and_ids_pairs_seq):
+            allowed, token_ids = allowed_and_ids_pairs
+            if allowed:
+                softmax_mask[idx_in_batch, idx_in_seq, token_ids] = 1
+            else:
+                softmax_mask[idx_in_batch, idx_in_seq, :] = 1
+                softmax_mask[idx_in_batch, idx_in_seq, token_ids] = 0
+
+    return softmax_mask
 
 def labels_to_nll_mask(grammar, labels):
     '''
@@ -373,6 +428,29 @@ class SequencePrefixProcessor:
             self.state_fifo_dict[action_id_seq] = curr_state
             return curr_state
 
+    def prefix_allowed_and_ids_pair_fn(self, batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
+        _prefix_token_id_seq = prefix_token_id_seq.tolist()
+
+        if len(_prefix_token_id_seq) == 1:
+            # when `_prefix_token_id_seq` has only `self.DECODER_START_TOKEN_ID`
+            return True, [self.BOS_TOKEN_ID]
+        else:
+            last_token_id = _prefix_token_id_seq[-1]
+            if last_token_id in [self.PAD_TOKEN_ID, self.EOS_TOKEN_ID]:
+                return True, [self.PAD_TOKEN_ID]
+            else:
+                decoder_start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
+                assert decoder_start_token_id == self.DECODER_START_TOKEN_ID
+                assert bos_token_id == self.BOS_TOKEN_ID
+                curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
+
+                if self.grammar.is_invalid_state(curr_state):
+                    return True, []
+                elif curr_state.tree.is_closed_root():
+                    return True, [self.EOS_TOKEN_ID]
+                else:
+                    return curr_state.get_allowed_and_ids_pairs()
+
     @deprecated
     def prefix_allowed_tokens_fn(self, batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
         '''
@@ -407,9 +485,11 @@ class SequencePrefixProcessor:
                 else:
                     return curr_state.get_candidate_action_ids()
 
+    @deprecated
     def candidate_ids_to_mask(self, candidate_ids):
         return candidate_ids_to_mask(candidate_ids, self.vocab_size)
 
+    @deprecated
     def prefix_to_mask_fn(self, batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
         '''
         This function is passed to `dhnamlib.pylib.hflib.transforming.MaskedLogitsProcessor`,
@@ -455,7 +535,9 @@ class SequencePrefixProcessor:
         return mask
 
 
-_additional_mask_cache = dict()
+def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
+    sequence_prefix_processor = SequencePrefixProcessor(grammar, batch_size, num_beams)
+    return sequence_prefix_processor.prefix_allowed_tokens_fn
 
 
 @deprecated
@@ -472,7 +554,11 @@ def _get_rescaled_logits_processor(grammar, batch_size, num_beams):
     return logits_processor
 
 
-def get_logits_processor(grammar, batch_size, num_beams, renormalizing):
+_additional_mask_cache = dict()
+
+
+@deprecated
+def _old__get_logits_processor(grammar, batch_size, num_beams, renormalizing):
     '''logits processor for constrained decoding'''
 
     sequence_prefix_processor = SequencePrefixProcessor(
@@ -481,3 +567,48 @@ def get_logits_processor(grammar, batch_size, num_beams, renormalizing):
     masked_logits_processor = MaskedLogitsProcessor(prefix_to_mask_fn, num_beams, renormalizing)
     logits_processor = transformers.LogitsProcessorList([masked_logits_processor])
     return logits_processor
+
+
+def get_logits_processor(grammar, batch_size, num_beams, renormalizing):
+    '''logits processor for constrained decoding'''
+    sequence_prefix_processor = SequencePrefixProcessor(grammar, batch_size, num_beams)
+    prefix_allowed_and_ids_pair_fn = sequence_prefix_processor.prefix_allowed_and_ids_pair_fn
+    fast_prefix_constrained_logits_processor = FastPrefixConstrainedLogitsProcessor(
+        prefix_allowed_and_ids_pair_fn, num_beams=num_beams)
+    if renormalizing:
+        fast_prefix_constrained_logits_processor = logit_rescaling(fast_prefix_constrained_logits_processor)
+    logits_processor = transformers.LogitsProcessorList([fast_prefix_constrained_logits_processor])
+    return logits_processor
+
+
+class FastPrefixConstrainedLogitsProcessor(transformers.LogitsProcessor):
+    r"""
+    [`LogitsProcessor`] that enforces constrained generation and is useful for prefix-conditioned constrained
+    generation. This class is modified from `transformers.PrefixConstrainedLogitsProcessor`.
+
+    Args: prefix_allowed_and_ids_pair_fn: (`Callable[[int, torch.Tensor], Tuple[bool, List[int]]]`): This
+        function constraints the beam search to allowed tokens only at each step. This function takes 2
+        arguments `inputs_ids` and the batch ID `batch_id`. It has to return a bool object and a token
+        ids. When the bool object is True, the token ids should be allowed for the next generation step. When
+        the bool object is False, the token ids should not be allowed for the next generation step. The bool
+        object and toke ids are created conditioned on the previously generated tokens `inputs_ids` and the
+        batch ID `batch_id`.
+
+    """
+
+    def __init__(self, prefix_allowed_and_ids_pair_fn: Callable[[int, torch.Tensor], Tuple[bool, List[int]]], num_beams: int):
+        self._prefix_allowed_and_ids_pair_fn = prefix_allowed_and_ids_pair_fn
+        self._num_beams = num_beams
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+        mask = torch.full_like(scores, -math.inf)
+        for batch_id, beam_sent in enumerate(input_ids.view(-1, self._num_beams, input_ids.shape[-1])):
+            for beam_id, sent in enumerate(beam_sent):
+                allowed, token_ids = self._prefix_allowed_and_ids_pair_fn(batch_id, sent)
+                if allowed:
+                    mask[batch_id * self._num_beams + beam_id, token_ids] = 0
+                else:
+                    mask[batch_id * self._num_beams + beam_id, :] = 0
+                    mask[batch_id * self._num_beams + beam_id, token_ids] = -math.inf
+
+        return scores + mask

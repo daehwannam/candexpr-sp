@@ -59,7 +59,7 @@ python -m domain.kqapro.preprocess --goal encoded_test_set
 
 ** Training
 #+begin_src sh
-python -m domain.kqapro.execution --config config.train_strong_sup
+python -m domain.kqapro.run --config config.train_strong_sup
 #+end_src>
 
 ** Testing on the validation set

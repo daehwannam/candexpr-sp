@@ -8,7 +8,7 @@ from dhnamlib.pylib.context import Environment
 from dhnamlib.pylib.context import LazyEval
 from dhnamlib.pylib.decoration import variable, construct
 
-# from util.time import initial_date_str
+# from utility.time import initial_date_str
 
 
 _test_dir_root_path = './model-test'

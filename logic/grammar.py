@@ -1,4 +1,7 @@
 
+from functools import lru_cache
+from itertools import chain
+
 from hissp.munger import munge, demunge
 
 from dhnamlib.pylib.lisp import (remove_comments, replace_prefixed_parens, is_keyword, keyword_to_symbol)
@@ -53,6 +56,9 @@ class Grammar:
         self._type_to_added_actions_dict = dict()
         self._type_to_added_action_ids_dict = dict()
         self._id_to_added_action_dict = dict()
+
+    def iter_all_actions(self):
+        return chain(self.base_actions, self.added_actions)
 
     @property
     def _start_action_id(self):

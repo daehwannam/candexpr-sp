@@ -388,6 +388,28 @@ class Formalism:
     def get_candidate_action_ids(self, opened_action, current_num_args, type_to_action_ids_dicts):
         return self._get_candidates(opened_action, current_num_args, type_to_action_ids_dicts, to_id=True)
 
+    @keyed_cache(lambda self, param_type, type_to_candidates_dicts, optionally_reducible, all_id_set: (
+        param_type, tuple(sorted(map(id, type_to_candidates_dicts))), optionally_reducible, id(all_id_set)))
+    def get_disallowed_ids(self, param_type, type_to_candidates_dicts, optionally_reducible, all_id_set):
+        allowed_ids = self._get_candidates_from_cache(param_type, type_to_candidates_dicts, optionally_reducible, to_id=True)
+        disallowed_ids = tuple(all_id_set.difference(allowed_ids))
+        return disallowed_ids
+
+    def get_allowed_and_ids_pairs(self, opened_action, current_num_args, type_to_candidates_dicts, all_id_set, threshold):
+        next_param_idx = self._get_next_param_idx(opened_action, current_num_args)
+        param_type = opened_action.param_types[next_param_idx]
+
+        optionally_reducible = Formalism._optionally_reducible(opened_action, current_num_args)
+        candidate_ids = self._get_candidates_from_cache(
+            param_type, type_to_candidates_dicts, optionally_reducible, to_id=True)
+
+        if len(candidate_ids) < threshold:
+            return True, candidate_ids
+        else:
+            disallowed_ids = self.get_disallowed_ids(
+                param_type, type_to_candidates_dicts, optionally_reducible, all_id_set)
+            return False, disallowed_ids
+
     def extend_actions(self, actions, use_reduce=True):
         if use_reduce:
             default_actions = tuple(chain([self.reduce_action], actions))
@@ -628,42 +650,67 @@ class SearchState(metaclass=ABCMeta):
         return updated_state
 
     @classmethod
-    def _map_action_seq(cls, action_seq, *, initial_state=None, including_initial=False, including_candidates, verifying=False):
+    def _map_action_seq(cls, action_seq, *, initial_state=None, including_initial=False, including_candidate_ids,
+                        including_allowed_and_ids_pairs=False, verifying=False):
         state = cls.create() if initial_state is None else initial_state
 
         if including_initial:
-            yield dict(candidate_action_ids=None, state=state)
+            yield dict(candidate_action_ids=None, state=state, allowed_and_ids_pairs=None)
 
         for action in action_seq:
-            if including_candidates or verifying:
+            if including_candidate_ids or verifying:
                 _candidate_action_ids = state.get_candidate_action_ids()
                 if verifying and (action.id not in _candidate_action_ids):
                     raise InvalidCandidateActionError(f'{action} is not a candidate action in the current action tree {state.tree}')
-                candidate_action_ids = _candidate_action_ids if including_candidates else None
+                candidate_action_ids = _candidate_action_ids if including_candidate_ids else None
             else:
                 candidate_action_ids = None
+
+            if including_allowed_and_ids_pairs:
+                allowed_and_ids_pairs = state.get_allowed_and_ids_pairs()
+            else:
+                allowed_and_ids_pairs = None
+
+            # update state
             state = state.get_next_state(action)
+
             yield dict(not_none_valued_pairs(
                 candidate_action_ids=candidate_action_ids,
-                state=state))
+                state=state,
+                allowed_and_ids_pairs=allowed_and_ids_pairs))
 
     @classmethod
     @construct(tuple)
     def action_seq_to_state_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
         for info in cls._map_action_seq(
                 action_seq, initial_state=initial_state,
-                including_initial=including_initial, including_candidates=False,
+                including_initial=including_initial,
+                including_candidate_ids=False,
+                including_allowed_and_ids_pairs=False,
                 verifying=verifying):
             yield info['state']
 
     @classmethod
     @construct(tuple)
-    def action_seq_to_candidate_action_ids_seq(cls, action_seq, initial_state=None, including_initial=False, verifying=False):
+    def action_seq_to_candidate_action_ids_seq(cls, action_seq, initial_state=None, verifying=False):
         for info in cls._map_action_seq(
                 action_seq, initial_state=initial_state,
-                including_initial=including_initial, including_candidates=True,
+                including_initial=False,
+                including_candidate_ids=True,
+                including_allowed_and_ids_pairs=False,
                 verifying=verifying):
             yield info['candidate_action_ids']
+
+    @classmethod
+    @construct(tuple)
+    def action_seq_to_allowed_and_ids_pairs_seq(cls, action_seq, initial_state=None, verifying=False):
+        for info in cls._map_action_seq(
+                action_seq, initial_state=initial_state,
+                including_initial=False,
+                including_candidate_ids=False,
+                including_allowed_and_ids_pairs=True,
+                verifying=verifying):
+            yield info['allowed_and_ids_pairs']
 
     @classmethod
     def get_last_state(cls, action_seq, initial_state=None, verifying=False):
@@ -700,6 +747,24 @@ class SearchState(metaclass=ABCMeta):
 
         return action_ids
 
+    def get_allowed_and_ids_pairs(self):
+        opened_tree, children = self.tree.get_opened_tree_children()
+        opened_action = opened_tree.value
+        if opened_action.arg_candidate is None:
+            all_id_set = self.get_all_id_set()
+            threshold = len(all_id_set) // 2
+            allowed, action_ids = self.formalism.get_allowed_and_ids_pairs(
+                opened_action, len(children), self.get_type_to_action_ids_dicts(),
+                all_id_set, threshold)
+        else:
+            action_ids = opened_action.arg_candidate(self.tree)
+            allowed = True
+        if self.using_arg_filter and opened_action.arg_filter is not None:
+            assert allowed
+            action_ids = tuple(opened_action.arg_filter(self.tree, action_ids))
+
+        return allowed, action_ids
+
     @deprecated
     @abstractmethod
     def get_type_to_actions_dicts(self):
@@ -707,6 +772,10 @@ class SearchState(metaclass=ABCMeta):
 
     @abstractmethod
     def get_type_to_action_ids_dicts(self):
+        pass
+
+    @abstractmethod
+    def get_all_id_set(self):
         pass
  
     @deprecated
@@ -779,13 +848,23 @@ def make_search_state_cls(grammar, name=None, using_arg_filter=False, ids_to_mas
             return grammar.get_type_to_action_ids_dicts()
 
         @interface.implement
+        @classmethod
+        @lru_cache
+        def get_all_id_set(cls):
+            all_id_set = set(action.id for action in grammar.iter_all_actions())
+            assert None not in all_id_set
+            return all_id_set
+
+        @interface.implement
         def get_name_to_id_dicts(self):
             return grammar.get_name_to_id_dicts()
 
+        @deprecated
         def _compute_mask_key_for_typed_candidates(self, opened_action, current_num_args, type_to_action_ids_dicts):
             assert opened_action.id is not None
             return (opened_action.id, current_num_args, tuple(map(id, type_to_action_ids_dicts)))
 
+        @deprecated
         def get_candidate_action_id_mask(self):
             opened_tree, children = self.tree.get_opened_tree_children()
             opened_action = opened_tree.value

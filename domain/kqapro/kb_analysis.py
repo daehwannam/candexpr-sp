@@ -2,7 +2,7 @@
 import re
 from datetime import date
 from collections import defaultdict
-from util.trie import TokenTrie
+from utility.trie import TokenTrie
 # from itertools import chain
 # from tqdm import tqdm
 

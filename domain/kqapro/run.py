@@ -38,8 +38,9 @@ def train(
         num_train_epochs=config.ph,
         num_warmup_epochs=config.ph,
         max_grad_norm=config.ph,
-        # softmax_masking=config.ph,
-        softmax_masking=False,
+        softmax_masking=config.ph,
+        # softmax_masking=False,
+        constrained_decoding=config.ph,
         model_learning_dir_path=None,
         restarting=False,
         context=config.ph,
@@ -159,6 +160,8 @@ def train(
             batch_size=val_batch_size,
             num_beams=num_prediction_beams,
             generation_max_length=generation_max_length,
+            softmax_masking=softmax_masking,
+            constrained_decoding=constrained_decoding,
             evaluating=True)
 
         performance = validation['performance']
@@ -195,6 +198,57 @@ def train(
         logger.info(f'Results are saved in "{model_learning_dir_path}"')
 
 
+@config
+def test(
+        *,
+        model_learning_dir_path=config.ph,
+        test_dir_path=config.ph,
+        grammar=config.ph,
+        compiler=config.ph,
+        device=config.ph,
+        logger=config.ph,
+        encoded_test_set=config.ph,
+        test_batch_size=config.ph,
+        softmax_masking=config.ph,
+        constrained_decoding=config.ph,
+        context=config.ph,
+        num_prediction_beams=config.ph,
+        generation_max_length=config.ph,
+        evaluating,
+):
+    model = learning.load_model(
+        learning.get_best_dir_path(model_learning_dir_path),
+        num_tokens=len(grammar.lf_tokenizer))
+    test_data_loader = make_data_loader(
+        encoded_dataset=encoded_test_set,
+        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
+        pad_token_id=grammar.lf_tokenizer.pad_token_id,
+        batch_size=test_batch_size,
+        shuffle=False)
+
+    model.eval()
+    validation = validate(
+        grammar=grammar,
+        compiler=compiler,
+        model=model,
+        context=context,
+        data_loader=test_data_loader,
+        batch_size=test_batch_size,
+        num_beams=num_prediction_beams,
+        generation_max_length=generation_max_length,
+        evaluating=evaluating,
+        softmax_masking=softmax_masking,
+        constrained_decoding=constrained_decoding)
+
+    filesys.mkloc_unless_exist(test_dir_path)
+
+    learning.save_analysis(validation['analysis'], test_dir_path)
+    learning.save_predictions(validation['predictions'], test_dir_path)
+    filesys.json_save(validation['performance'], os.path.join(test_dir_path, 'performance.json'))
+
+    logger.info(f'Results are saved in "{test_dir_path}"')
+
+
 def validate(
         *,
         grammar,
@@ -206,15 +260,15 @@ def validate(
         num_beams,
         generation_max_length,
         analyzing=True,
+        softmax_masking,
+        constrained_decoding,
         evaluating,
-        softmax_masking=False,
 ):
     assert not model.training
 
-    
     # if softmax_masking:
     #     generation_kwargs = dict(
-    #         logits_processor=learning.get_logits_processor(grammar, batch_size, num_beams))
+    #         logits_processor=learning.get_rescaled_logits_processor(grammar, batch_size, num_beams))
     # else:
     #     generation_kwargs = dict(
     #         prefix_allowed_tokens_fn=learning.make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams))
@@ -342,62 +396,17 @@ def compute_accuracy(predictions, answers):
     return num_correct / num_examples
 
 
-@config
-def test(
-        *,
-        model_learning_dir_path=config.ph,
-        test_dir_path=config.ph,
-        grammar=config.ph,
-        compiler=config.ph,
-        device=config.ph,
-        logger=config.ph,
-        encoded_test_set=config.ph,
-        test_batch_size=config.ph,
-        softmax_masking=False,
-        context=config.ph,
-        num_prediction_beams=config.ph,
-        generation_max_length=config.ph,
-        evaluating,
-):
-    model = learning.load_model(
-        learning.get_best_dir_path(model_learning_dir_path),
-        num_tokens=len(grammar.lf_tokenizer))
-    test_data_loader = make_data_loader(
-        encoded_dataset=encoded_test_set,
-        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
-        pad_token_id=grammar.lf_tokenizer.pad_token_id,
-        batch_size=test_batch_size,
-        shuffle=False)
-
-    model.eval()
-    validation = validate(
-        grammar=grammar,
-        compiler=compiler,
-        model=model,
-        context=context,
-        data_loader=test_data_loader,
-        batch_size=test_batch_size,
-        num_beams=num_prediction_beams,
-        generation_max_length=generation_max_length,
-        evaluating=evaluating)
-
-    filesys.mkloc_unless_exist(test_dir_path)
-
-    learning.save_analysis(validation['analysis'], test_dir_path)
-    learning.save_predictions(validation['predictions'], test_dir_path)
-    filesys.json_save(validation['performance'], os.path.join(test_dir_path, 'performance.json'))
-
-    logger.info(f'Results are saved in "{test_dir_path}"')
-
-
 if __name__ == '__main__':
     if config.run_mode == 'train':
         train(model_learning_dir_path=config.model_learning_dir_path)
+        # from dhnamlib.pylib.cProfiling import run_context
+        # run_context('train(model_learning_dir_path=config.model_learning_dir_path)', sort='cumtime')
     elif config.run_mode == 'test':
         test(evaluating=False)
     elif config.run_mode == 'test-on-val-set':
-        test(encoded_test_set=config.encoded_val_set,
-             evaluating=True)
+        # test(encoded_test_set=config.encoded_val_set, evaluating=True)
+        from dhnamlib.pylib.cProfiling import run_context
+        run_context('test(encoded_test_set=config.encoded_val_set, evaluating=True)', sort='cumtime')
     else:
         raise Exception('Unknown execution type')
 

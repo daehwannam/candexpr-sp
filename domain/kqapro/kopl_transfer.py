@@ -5,7 +5,7 @@ import re
 from itertools import chain
 
 from configuration import config
-from util.trie import TokenTrie
+from utility.trie import TokenTrie
 
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.hflib.transforming import iter_default_non_special_tokens

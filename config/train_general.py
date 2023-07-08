@@ -4,7 +4,7 @@ import os
 from dhnamlib.pylib.context import Environment
 from dhnamlib.pylib.context import LazyEval
 
-from util.time import initial_date_str
+from utility.time import initial_date_str
 
 
 _model_learning_dir_root_path = './model-instance'
@@ -24,7 +24,6 @@ config = Environment(
     num_train_epochs=25,
     num_warmup_epochs=2,
     max_grad_norm=1,
-    # softmax_masking=True,
 )
 
 # model_instance_dir_path = './model-instance'
