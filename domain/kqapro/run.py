@@ -284,13 +284,28 @@ def validate(
         if evaluating:
             all_answer_last_states = []
 
+    if evaluating:
+        realtime_num_correct = 0
+
+        def update_realtime_accuracy():
+            nonlocal realtime_num_correct
+            realtime_num_correct += compute_num_correct(predictions, answers)
+            assert len(all_predictions) == len(all_answers)
+            return realtime_num_correct / len(all_predictions)
+
+        xtqdm_kwargs = dict(
+            desc='accuracy: none',
+            desc_fn=lambda: 'accuracy: {:4.1f}'.format(update_realtime_accuracy()))
+    else:
+        xtqdm_kwargs = dict()
+
     # if config.debug:
     #     batch_idx = -1
 
-    for batch in config.xtqdm(data_loader):
+    for batch in config.xtqdm(data_loader, **xtqdm_kwargs):
         # if config.debug:
         #     batch_idx += 1
-        #     if batch_idx >= 2:
+        #     if batch_idx >= 10:
         #         break
 
         token_id_seqs = learning.generate_token_id_seqs(
@@ -385,15 +400,22 @@ def validate(
     return validation
 
 
-def compute_accuracy(predictions, answers):
+def compute_num_correct(predictions, answers):
     assert len(predictions) == len(answers)
-    num_examples = len(predictions)
 
     num_correct = sum(
         int(whether_equal(answer=answer, prediction=prediction))
         for prediction, answer in zip(predictions, answers))
 
-    return num_correct / num_examples
+    return num_correct
+
+
+def compute_accuracy(predictions, answers):
+    assert len(predictions) == len(answers)
+    num_examples = len(predictions)
+
+    accuracy = compute_num_correct(predictions, answers) / num_examples
+    return accuracy
 
 
 if __name__ == '__main__':
