@@ -187,6 +187,7 @@ def train(
         with replace_dir(last_dir_path) as temp_last_dir_path:
             # save
             learning.save_status(status, temp_last_dir_path)
+            learning.save_performance(performance, temp_last_dir_path)
             learning.save_optimizer(optimizer, temp_last_dir_path)
             learning.save_scheduler(scheduler, temp_last_dir_path)
             learning.save_model(model, temp_last_dir_path)
@@ -219,6 +220,8 @@ def test(
     model = learning.load_model(
         learning.get_best_dir_path(model_learning_dir_path),
         num_tokens=len(grammar.lf_tokenizer))
+    model.to(device)
+
     test_data_loader = make_data_loader(
         encoded_dataset=encoded_test_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
@@ -240,11 +243,14 @@ def test(
         softmax_masking=softmax_masking,
         constrained_decoding=constrained_decoding)
 
+    logger.info('Performance: {}'.format(validation['performance']))
+
     filesys.mkloc_unless_exist(test_dir_path)
 
     learning.save_analysis(validation['analysis'], test_dir_path)
     learning.save_predictions(validation['predictions'], test_dir_path)
-    filesys.json_save(validation['performance'], os.path.join(test_dir_path, 'performance.json'))
+    if evaluating:
+        learning.save_performance(validation['performance'], test_dir_path)
 
     logger.info(f'Results are saved in "{test_dir_path}"')
 
@@ -295,7 +301,7 @@ def validate(
 
         xtqdm_kwargs = dict(
             desc='accuracy: none',
-            desc_fn=lambda: 'accuracy: {:4.1f}'.format(update_realtime_accuracy()))
+            desc_fn=lambda: 'accuracy: {:4.1f}'.format(update_realtime_accuracy() * 100))
     else:
         xtqdm_kwargs = dict()
 
@@ -426,9 +432,9 @@ if __name__ == '__main__':
     elif config.run_mode == 'test':
         test(evaluating=False)
     elif config.run_mode == 'test-on-val-set':
-        # test(encoded_test_set=config.encoded_val_set, evaluating=True)
-        from dhnamlib.pylib.cProfiling import run_context
-        run_context('test(encoded_test_set=config.encoded_val_set, evaluating=True)', sort='cumtime')
+        test(encoded_test_set=config.encoded_val_set, evaluating=True)
+        # from dhnamlib.pylib.cProfiling import run_context
+        # run_context('test(encoded_test_set=config.encoded_val_set, evaluating=True)', sort='cumtime')
     else:
         raise Exception('Unknown execution type')
 

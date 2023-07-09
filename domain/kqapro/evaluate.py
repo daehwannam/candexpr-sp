@@ -125,7 +125,7 @@ def test(args):
         print('WARNING: there are only {} predictions (need {})'.format(len(predictions), len(test_set)))
 
 
-def auxiliary_test(args):
+def auxiliary_test(args, except_yes_or_no_question=True):
     with open(args.test_file_path) as f:
         test_set = json.load(f)
     predictions = [x.strip() for x in open(args.pred_file_path).readlines()]  # one prediction per line
@@ -138,6 +138,8 @@ def auxiliary_test(args):
         cur_labels = ['overall']
 
         choices = test_set[i]['choices']
+        if except_yes_or_no_question and is_yes_or_no_question(choices):
+            continue
 
         if any(whether_equal(choice, predictions[i]) for choice in choices):
             for k in cur_labels:
@@ -151,6 +153,10 @@ def auxiliary_test(args):
 
     if len(predictions) < len(test_set):
         print('WARNING: there are only {} predictions (need {})'.format(len(predictions), len(test_set)))
+
+
+def is_yes_or_no_question(choices):
+    return set(choices) == {'yes', 'no', 'unknown'}
 
 
 def main():

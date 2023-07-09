@@ -388,14 +388,14 @@ class Formalism:
     def get_candidate_action_ids(self, opened_action, current_num_args, type_to_action_ids_dicts):
         return self._get_candidates(opened_action, current_num_args, type_to_action_ids_dicts, to_id=True)
 
-    @keyed_cache(lambda self, param_type, type_to_candidates_dicts, optionally_reducible, all_id_set: (
-        param_type, tuple(sorted(map(id, type_to_candidates_dicts))), optionally_reducible, id(all_id_set)))
-    def get_disallowed_ids(self, param_type, type_to_candidates_dicts, optionally_reducible, all_id_set):
+    @keyed_cache(lambda self, param_type, type_to_candidates_dicts, optionally_reducible, all_token_id_set: (
+        param_type, tuple(sorted(map(id, type_to_candidates_dicts))), optionally_reducible, id(all_token_id_set)))
+    def get_disallowed_ids(self, param_type, type_to_candidates_dicts, optionally_reducible, all_token_id_set):
         allowed_ids = self._get_candidates_from_cache(param_type, type_to_candidates_dicts, optionally_reducible, to_id=True)
-        disallowed_ids = tuple(all_id_set.difference(allowed_ids))
+        disallowed_ids = tuple(all_token_id_set.difference(allowed_ids))
         return disallowed_ids
 
-    def get_allowed_and_ids_pairs(self, opened_action, current_num_args, type_to_candidates_dicts, all_id_set, threshold):
+    def get_allowed_and_ids_pairs(self, opened_action, current_num_args, type_to_candidates_dicts, all_token_id_set, threshold):
         next_param_idx = self._get_next_param_idx(opened_action, current_num_args)
         param_type = opened_action.param_types[next_param_idx]
 
@@ -407,7 +407,7 @@ class Formalism:
             return True, candidate_ids
         else:
             disallowed_ids = self.get_disallowed_ids(
-                param_type, type_to_candidates_dicts, optionally_reducible, all_id_set)
+                param_type, type_to_candidates_dicts, optionally_reducible, all_token_id_set)
             return False, disallowed_ids
 
     def extend_actions(self, actions, use_reduce=True):
@@ -751,11 +751,11 @@ class SearchState(metaclass=ABCMeta):
         opened_tree, children = self.tree.get_opened_tree_children()
         opened_action = opened_tree.value
         if opened_action.arg_candidate is None:
-            all_id_set = self.get_all_id_set()
-            threshold = len(all_id_set) // 2
+            all_token_id_set = self.get_all_token_id_set()
+            threshold = len(all_token_id_set) // 2
             allowed, action_ids = self.formalism.get_allowed_and_ids_pairs(
                 opened_action, len(children), self.get_type_to_action_ids_dicts(),
-                all_id_set, threshold)
+                all_token_id_set, threshold)
         else:
             action_ids = opened_action.arg_candidate(self.tree)
             allowed = True
@@ -775,7 +775,7 @@ class SearchState(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def get_all_id_set(self):
+    def get_all_token_id_set(self):
         pass
  
     @deprecated
@@ -850,10 +850,9 @@ def make_search_state_cls(grammar, name=None, using_arg_filter=False, ids_to_mas
         @interface.implement
         @classmethod
         @lru_cache
-        def get_all_id_set(cls):
-            all_id_set = set(action.id for action in grammar.iter_all_actions())
-            assert None not in all_id_set
-            return all_id_set
+        def get_all_token_id_set(cls):
+            all_token_id_set = set(grammar.iter_all_token_ids())
+            return all_token_id_set
 
         @interface.implement
         def get_name_to_id_dicts(self):

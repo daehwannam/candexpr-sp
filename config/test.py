@@ -11,7 +11,7 @@ from dhnamlib.pylib.decoration import variable, construct
 # from utility.time import initial_date_str
 
 
-_test_dir_root_path = './model-test'
+_test_dir_root_path = './model-evaluation'
 
 
 def get_test_dir_path():

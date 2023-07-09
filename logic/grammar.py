@@ -57,9 +57,6 @@ class Grammar:
         self._type_to_added_action_ids_dict = dict()
         self._id_to_added_action_dict = dict()
 
-    def iter_all_actions(self):
-        return chain(self.base_actions, self.added_actions)
-
     @property
     def _start_action_id(self):
         return -1
@@ -143,6 +140,10 @@ class Grammar:
     @abstractfunction
     def get_compiler_cls(self):
         pass
+
+    @abstractfunction
+    def iter_all_token_ids(self):
+        raise NotImplementedError
 
 
 def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):

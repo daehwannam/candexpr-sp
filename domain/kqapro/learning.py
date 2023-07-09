@@ -367,6 +367,10 @@ def load_status(dir_path):
     return filesys.json_load(get_status_file_path(dir_path))
 
 
+def save_performance(performance, dir_path):
+    filesys.json_pretty_save(performance, os.path.join(dir_path, 'performance.json'))
+
+
 def save_analysis(analysis, dir_path):
     analysis_file_path = os.path.join(dir_path, 'analysis.json')
     filesys.json_pretty_save(analysis, analysis_file_path)
@@ -382,6 +386,7 @@ class SequencePrefixProcessor:
         self.grammar = grammar
 
         # multiplying "2" is for caching both previous states and the next sates
+        self.num_beams = num_beams
         self.cache_size = batch_size * num_beams * 2
         self.state_fifo_dict = FIFODict(self.cache_size)
 
@@ -421,7 +426,12 @@ class SequencePrefixProcessor:
                         curr_state = self.grammar.get_invalid_state()
                     else:
                         try:
-                            curr_state = self.grammar.search_state_cls.get_last_state(action_seq, initial_state=prev_state, verifying=True)
+                            if prev_state.tree.is_closed_root():
+                                # breakpoint()
+                                assert self.num_beams > 1
+                                curr_state = self.grammar.get_invalid_state()
+                            else:
+                                curr_state = self.grammar.search_state_cls.get_last_state(action_seq, initial_state=prev_state, verifying=True)
                         except InvalidCandidateActionError:
                             curr_state = self.grammar.get_invalid_state()
 
@@ -430,6 +440,23 @@ class SequencePrefixProcessor:
 
     def prefix_allowed_and_ids_pair_fn(self, batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
         _prefix_token_id_seq = prefix_token_id_seq.tolist()
+
+        # # Start of DEBUG
+        # from .kopl_transfer import token_to_action_name
+        # test_token_seq = ["<s>", "<count>", "<union>", "<filter-concept>", "<keyword-concept>", "Ġcounty", "Ġof", "ĠPennsylvania", "<reduce>", "<filter-number>", "<keyword-attribute-number>", "Ġpopulation", "<reduce>", "<constant-number>", "<constant-quantity>", "Ġ7", "800", "<reduce>", "<constant-unit>", "<reduce>", "<op-gt>", "<all-entities>", "<filter-concept>", "<keyword-concept>", "Ġcounty", "Ġof", "ĠPennsylvania", "<reduce>", "<filter-number>", "<keyword-attribute-number>", "Ġpopulation", "<reduce>", "<constant-number>"]
+        # test_token_id_seq = [self.DECODER_START_TOKEN_ID, self.BOS_TOKEN_ID] + list(
+        #     self.grammar.name_to_id(token_to_action_name(token, self.grammar.non_nl_tokens)) for token in test_token_seq[1:])
+        # if test_token_id_seq == _prefix_token_id_seq:
+        #     # breakpoint()
+        #     pass
+        # if test_token_id_seq == _prefix_token_id_seq[:-1]:
+        #     if _prefix_token_id_seq[-1] == 50268:
+        #         breakpoint()
+        #         print(50268)
+        #     if _prefix_token_id_seq[-1] == 3:
+        #         breakpoint()
+        #         print(3)
+        # # End of DEBUG
 
         if len(_prefix_token_id_seq) == 1:
             # when `_prefix_token_id_seq` has only `self.DECODER_START_TOKEN_ID`
@@ -576,7 +603,8 @@ def get_logits_processor(grammar, batch_size, num_beams, renormalizing):
     fast_prefix_constrained_logits_processor = FastPrefixConstrainedLogitsProcessor(
         prefix_allowed_and_ids_pair_fn, num_beams=num_beams)
     if renormalizing:
-        fast_prefix_constrained_logits_processor = logit_rescaling(fast_prefix_constrained_logits_processor)
+        fast_prefix_constrained_logits_processor = logit_rescaling(
+            fast_prefix_constrained_logits_processor, postprocessing_nan=(num_beams > 1))
     logits_processor = transformers.LogitsProcessorList([fast_prefix_constrained_logits_processor])
     return logits_processor
 

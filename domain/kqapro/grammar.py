@@ -95,6 +95,10 @@ class KoPLGrammar(Grammar):
     def get_compiler_cls(self):
         return KoPLCompiler
 
+    @interface.implement
+    def iter_all_token_ids(self):
+        return range(len(self.lf_tokenizer))
+
     _INVALID_STATE = 'INVALID'
 
     @classmethod
