@@ -62,21 +62,23 @@ python -m domain.kqapro.preprocess --goal encoded_test_set
 python -m domain.kqapro.run --config config.train_strong_sup
 #+end_src>
 
-** Evaluation on the validation set
+** Test on the validation set
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
-python -m domain.kqapro.run --config config.test-on-val-set --model-learning-dir $MODEL_LEARNING_DIR_PATH
+python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src>
 
-** Making a prediction file on the test set
+** Test on the test set
+This makes a prediction file without evaluation.
+
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
-python -m domain.kqapro.run --config config.test --model-learning-dir $MODEL_LEARNING_DIR_PATH
+python -m domain.kqapro.run --config config.test_on_test_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src>
 
 ** Evaluation with the official code
-The evaluation code is slighted modified from [[https://github.com/shijx12/KQAPro_Baselines/blob/7cea2738fd095a2c17594d492923ee80a212ac0f/evaluate.py][KQAPro_Baselines]].
-The evaluation code requires a prediction file.
+The evaluation code is slightly modified from [[https://github.com/shijx12/KQAPro_Baselines/blob/7cea2738fd095a2c17594d492923ee80a212ac0f/evaluate.py][KQAPro_Baselines/evaluate.py]].
+The evaluation code requires a prediction file, which is the output from the previous steps.
 
 #+begin_src sh
 TRAIN_DATA_SET_PATH='path/to/train/data/set.json'

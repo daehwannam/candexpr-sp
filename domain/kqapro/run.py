@@ -2,8 +2,9 @@
 import os
 import torch
 # from tqdm import tqdm
+import transformers
 
-from configuration import config
+from configuration import config, save_config_info
 
 from . import learning
 from .data_read import make_data_loader
@@ -12,7 +13,6 @@ from .execution import postprocess_prediction
 from kqapro.evaluate import whether_equal
 
 from dhnamlib.pylib import filesys
-from dhnamlib.pylib.context import replace_dir, copy_dir
 # from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.iteration import pairs2dicts, not_none_valued_pairs
 from dhnamlib.pylib.structure import AttrDict
@@ -22,7 +22,7 @@ from dhnamlib.pylib.torchlib.stat import get_performance, get_measure, is_better
 
 
 @config
-def train(
+def run_train(
         pretrained_model_name_or_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
@@ -36,12 +36,13 @@ def train(
         adam_epsilon=config.ph,
         weight_decay=config.ph,
         num_train_epochs=config.ph,
+        using_scheduler=config.ph,
         num_warmup_epochs=config.ph,
         max_grad_norm=config.ph,
         softmax_masking=config.ph,
         # softmax_masking=False,
         constrained_decoding=config.ph,
-        model_learning_dir_path=None,
+        model_learning_dir_path=config.ph,
         restarting=False,
         context=config.ph,
         num_prediction_beams=config.ph,
@@ -54,6 +55,8 @@ def train(
             model_learning_dir_path = filesys.get_parent_path(pretrained_model_name_or_path)
     else:
         assert model_learning_dir_path is not None
+
+    save_config_info(model_learning_dir_path)
 
     last_dir_path = learning.get_last_dir_path(model_learning_dir_path)
     filesys.mkloc_unless_exist(last_dir_path)
@@ -79,12 +82,16 @@ def train(
         shuffle=False)
 
     param_groups = learning.get_param_groups(model, learning_rate=learning_rate, weight_decay=weight_decay)
-    num_training_steps = len(train_data_loader) * num_train_epochs
-    num_warmup_steps = len(train_data_loader) * num_warmup_epochs
 
     optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, eps=adam_epsilon)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
+
+    if using_scheduler:
+        num_training_steps = len(train_data_loader) * num_train_epochs
+        num_warmup_steps = len(train_data_loader) * num_warmup_epochs
+        scheduler = transformers.get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
+    else:
+        scheduler = transformers.get_constant_schedule(optimizer)
 
     if restarting:
         # TODO: what do optimizer and scheduler save?
@@ -184,7 +191,7 @@ def train(
                 best_epoch=epoch)
             logger.info('Best model is updated')
 
-        with replace_dir(last_dir_path) as temp_last_dir_path:
+        with filesys.replace_dir(last_dir_path) as temp_last_dir_path:
             # save
             learning.save_status(status, temp_last_dir_path)
             learning.save_performance(performance, temp_last_dir_path)
@@ -194,13 +201,13 @@ def train(
             learning.save_analysis(validation['analysis'], temp_last_dir_path)
 
         if updating_best:
-            copy_dir(last_dir_path, best_dir_path, replacing=True)
+            filesys.copy_dir(last_dir_path, best_dir_path, replacing=True)
 
         logger.info(f'Results are saved in "{model_learning_dir_path}"')
 
 
 @config
-def test(
+def run_test(
         *,
         model_learning_dir_path=config.ph,
         test_dir_path=config.ph,
@@ -208,7 +215,7 @@ def test(
         compiler=config.ph,
         device=config.ph,
         logger=config.ph,
-        encoded_test_set=config.ph,
+        encoded_test_set,
         test_batch_size=config.ph,
         softmax_masking=config.ph,
         constrained_decoding=config.ph,
@@ -243,9 +250,11 @@ def test(
         softmax_masking=softmax_masking,
         constrained_decoding=constrained_decoding)
 
-    logger.info('Performance: {}'.format(validation['performance']))
+    if evaluating:
+        logger.info('Performance: {}'.format(validation['performance']))
 
     filesys.mkloc_unless_exist(test_dir_path)
+    save_config_info(test_dir_path)
 
     learning.save_analysis(validation['analysis'], test_dir_path)
     learning.save_predictions(validation['predictions'], test_dir_path)
@@ -271,6 +280,13 @@ def validate(
         evaluating,
 ):
     assert not model.training
+
+    assert constrained_decoding or not softmax_masking
+    if constrained_decoding:
+        logits_processor = learning.get_logits_processor(
+            grammar, batch_size, num_beams, renormalizing=softmax_masking)
+    else:
+        logits_processor = None
 
     # if softmax_masking:
     #     generation_kwargs = dict(
@@ -311,8 +327,18 @@ def validate(
     for batch in config.xtqdm(data_loader, **xtqdm_kwargs):
         # if config.debug:
         #     batch_idx += 1
-        #     if batch_idx >= 10:
-        #         break
+        #     # if batch_idx >= 10:
+        #     #     break
+        #     # if batch_idx < 1000:
+        #     if batch_idx < 500:
+        #         def update_realtime_accuracy():
+        #             return 0
+        #         continue
+        #     utterances = grammar.utterance_tokenizer.batch_decode(batch['utterance_token_ids'], skip_special_tokens=True)
+        #     # assert len(utterances) == 1
+        #     test_utterance = "How many contemporary folk music groups are related to famous Taj Mahal (the one whose ISNI is 0000 0001 1598 8398 or KT Tunstall?"
+        #     if test_utterance in utterances:
+        #         breakpoint()
 
         token_id_seqs = learning.generate_token_id_seqs(
             grammar=grammar,
@@ -320,8 +346,7 @@ def validate(
             utterance_token_ids=batch['utterance_token_ids'].to(model.device),
             max_length=generation_max_length,
             num_beams=num_beams,
-            logits_processor=learning.get_logits_processor(
-                grammar, batch_size, num_beams, renormalizing=softmax_masking)
+            logits_processor=logits_processor,
             # **generation_kwargs
         )
         last_states = learning.token_id_seqs_to_last_states(grammar, token_id_seqs)
@@ -338,6 +363,7 @@ def validate(
         if analyzing:
             utterances = grammar.utterance_tokenizer.batch_decode(
                 batch['utterance_token_ids'], skip_special_tokens=True)
+
             if evaluating:
                 assert 'labels' in batch
                 answer_last_states = tuple(learning.token_id_seq_to_last_state(grammar, token_id_seq)
@@ -392,6 +418,7 @@ def validate(
         # breakpoint()
 
         analysis = list(pairs2dicts(not_none_valued_pairs(
+            example_idx=tuple(range(len(all_utterances))),
             utterance=all_utterances,
             answer=all_answers if evaluating else None,
             prediction=all_predictions,
@@ -426,18 +453,18 @@ def compute_accuracy(predictions, answers):
 
 if __name__ == '__main__':
     if config.run_mode == 'train':
-        train(model_learning_dir_path=config.model_learning_dir_path)
+        run_train()
         # from dhnamlib.pylib.cProfiling import run_context
-        # run_context('train(model_learning_dir_path=config.model_learning_dir_path)', sort='cumtime')
-    elif config.run_mode == 'test':
-        test(evaluating=False)
+        # run_context('run_train(model_learning_dir_path=config.model_learning_dir_path)', sort='cumtime')
     elif config.run_mode == 'test-on-val-set':
-        test(encoded_test_set=config.encoded_val_set, evaluating=True)
+        run_test(encoded_test_set=config.encoded_val_set, evaluating=True)
         # from dhnamlib.pylib.cProfiling import run_context
-        # run_context('test(encoded_test_set=config.encoded_val_set, evaluating=True)', sort='cumtime')
+        # run_context('run_test(encoded_test_set=config.encoded_val_set, evaluating=True)', sort='cumtime')
+    elif config.run_mode == 'test-on-test-set':
+        run_test(encoded_test_set=config.encoded_test_set, evaluating=False)
     else:
-        raise Exception('Unknown execution type')
+        raise Exception(f'Unknown execution type "{config.run_mode}"')
 
     # from dhnamlib.pylib.cProfiling import run_context
     # tuple(config.items(lazy=False))
-    # run_context('train(model_learning_dir_path=config.model_learning_dir_path)', sort='cumtime')
+    # run_context('run_train(model_learning_dir_path=config.model_learning_dir_path)', sort='cumtime')

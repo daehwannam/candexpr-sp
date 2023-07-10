@@ -27,5 +27,5 @@ _tmp_*
 # model-instance
 /model-instance
 
-# model-evaluation
-/model-evaluation
+# model-test
+/model-test

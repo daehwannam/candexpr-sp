@@ -5,7 +5,7 @@ from configuration import config
 from logic.grammar import Grammar
 from logic.formalism import make_program_tree_cls, make_search_state_cls
 
-from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary
+from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary, deprecated
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.iteration import distinct_values
@@ -83,13 +83,20 @@ class KoPLGrammar(Grammar):
     def get_program_tree_cls(self):
         return make_program_tree_cls(self.formalism, name='KoPLProgramTree')
 
+    @config
     @lru_cache
     @interface.implement
     def get_search_state_cls(self):
+        @deprecated
         def ids_to_mask_fn(action_ids):
             return candidate_ids_to_mask(action_ids, len(self.lf_tokenizer))
 
-        return make_search_state_cls(self, name='KoPLSearchState', ids_to_mask_fn=ids_to_mask_fn)
+        return make_search_state_cls(
+            grammar=self,
+            name='KoPLSearchState',
+            using_arg_candidate=config.using_arg_candidate,
+            using_arg_filter=config.using_arg_filter,
+            ids_to_mask_fn=ids_to_mask_fn)
 
     @interface.implement
     def get_compiler_cls(self):

@@ -3,10 +3,12 @@ import os
 from itertools import chain
 from importlib import import_module
 import argparse
+import shutil
 
 from dhnamlib.pylib.context import Environment, LazyEval
 from dhnamlib.pylib.decoration import Register, lru_cache, variable
-from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, pickle_load, mkpdirs_unless_exist, mkloc_unless_exist, make_logger
+from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, mkpdirs_unless_exist, mkloc_unless_exist, make_logger, get_new_path_with_number
+# from dhnamlib.pylib.filesys import pickle_load
 # from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.iteration import distinct_pairs, not_none_valued_pairs
 from dhnamlib.pylib.text import parse_bool
@@ -53,7 +55,7 @@ def _get_device():
 
 
 def _is_valid_run_mode(run_mode):
-    return run_mode in ['train', 'retrain', 'finetune', 'test', 'test-on-val-set']
+    return run_mode in ['train', 'retrain', 'finetune', 'test-on-val-set', 'test-on-test-set']
 
 
 def _is_training_run_mode(run_mode):
@@ -101,6 +103,8 @@ _default_config = Environment(
 
     grammar=LazyEval(_make_grammar),
     compiler=LazyEval(lambda: config.grammar.compiler_cls()),
+    using_arg_candidate=True,
+    using_arg_filter=False,
     
     pretrained_model_name_or_path=_pretrained_model_name_or_path,
 
@@ -117,12 +121,13 @@ _default_config = Environment(
     # generation_max_length=500,
     generation_max_length=200,
     num_prediction_beams=1,
+    # num_prediction_beams=4,
     softmax_masking=True,
     constrained_decoding=True,
 
     git_hash=get_git_hash(),
     debug=_DEBUG,
-    using_tqdm=True,
+    # using_tqdm=True,
     xtqdm=LazyEval(_get_xtqdm),
 )
 
@@ -130,10 +135,11 @@ _default_config = Environment(
 @lru_cache
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
-    parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test)')
+    parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
+    parser.add_argument('--additional-config', dest='additional_config_module', help='an additional config module which can overwrite other configurations')
     parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of a model')
     # parser.add_argument('--run_mode', dest='run_mode', help='an execution run_mode', choices=['train', 'test'])
-    parser.add_argument('--using-tqdm', dest='using_tqdm', type=parse_bool, help='whether using tqdm')
+    parser.add_argument('--using-tqdm', dest='using_tqdm', type=parse_bool, default=True, help='whether using tqdm')
 
     args, unknown = parser.parse_known_args()
     cmd_arg_dict = dict(not_none_valued_pairs(vars(args).items()))
@@ -143,38 +149,58 @@ def _parse_cmd_args():
 
 @lru_cache
 def _get_specific_config_module():
-    _cmd_arg_dict = _parse_cmd_args()
-    if _cmd_arg_dict.get('config_module') is not None:
-        _specific_config_module = import_module(_cmd_arg_dict['config_module'])
+    cmd_arg_dict = _parse_cmd_args()
+    if cmd_arg_dict.get('config_module') is not None:
+        specific_config_module = import_module(cmd_arg_dict['config_module'])
     else:
-        _specific_config_module = None
-    return _specific_config_module
+        specific_config_module = None
+    return specific_config_module
+
+
+@lru_cache
+def _get_additional_config_module():
+    cmd_arg_dict = _parse_cmd_args()
+    if cmd_arg_dict.get('additional_config_module') is not None:
+        _additional_config_module = import_module(cmd_arg_dict['additional_config_module'])
+    else:
+        _additional_config_module = None
+    return _additional_config_module
 
 
 @variable
 def config():
-    _cmd_arg_dict = _parse_cmd_args()
-    _specific_config_module = _get_specific_config_module()
-    _specific_config = (dict() if _specific_config_module is None else
-                        _specific_config_module.config)
+    cmd_arg_dict = _parse_cmd_args()
+    specific_config_module = _get_specific_config_module()
+    specific_config = (dict() if specific_config_module is None else
+                       specific_config_module.config)
+    additional_config_module = _get_additional_config_module()
+    additional_config = (dict() if additional_config_module is None else
+                         additional_config_module.config)
  
     config = Environment(
-        distinct_pairs(chain(
-            _default_config.items(),
-            _specific_config.items(),
-            _cmd_arg_dict.items()
-        )))
+        chain(
+            distinct_pairs(chain(
+                _default_config.items(),
+                specific_config.items(),
+                cmd_arg_dict.items()
+            )),
+            additional_config.items()
+        ))
     return config
 
 
 @variable
 def config_path_dict():
-    _specific_config_module = _get_specific_config_module()
-    _specific_config_module_file_path = (None if _specific_config_module is None else
-                                         _specific_config_module.__file__)
+    specific_config_module = _get_specific_config_module()
+    specific_config_module_file_path = (None if specific_config_module is None else
+                                        specific_config_module.__file__)
+    additional_config_module = _get_additional_config_module()
+    additional_config_module_file_path = (None if additional_config_module is None else
+                                          additional_config_module.__file__)
     return dict(
         general=__file__,
-        specific=_specific_config_module_file_path
+        specific=specific_config_module_file_path,
+        additional=additional_config_module_file_path
     )
 
 
@@ -183,14 +209,18 @@ def _config_to_json_dict(config):
                 if not isinstance(value, (LazyEval, Register)))
 
 
-def save_config_info():
-    dir_path = config.model_learning_dir_path
+def save_config_info(dir_path):
     json_dict = _config_to_json_dict(config)
-    config_info_path = os.path.join(dir_path, 'config-info')
+    config_info_path = get_new_path_with_number(
+        os.path.join(dir_path, f'config-info-{config.run_mode}'),
+        starting_num=1, no_first_num=True
+    )
     mkloc_unless_exist(config_info_path)
     json_save(json_dict, os.path.join(config_info_path, 'config.json'))
     json_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
+    shutil.copytree('./config', config_info_path)
+    shutil.copyfile('./configuration.py', config_info_path)
 
 
-if 'run_mode' in config and _is_training_run_mode(config.run_mode):
-    save_config_info()
+# if 'run_mode' in config and _is_training_run_mode(config.run_mode):
+#     save_config_info(config.model_learning_dir_path)

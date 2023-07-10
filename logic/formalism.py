@@ -616,8 +616,17 @@ class SearchState(metaclass=ABCMeta):
             setattr(self, k, v)
 
     @property
+    def using_arg_candidate(self):
+        return self.get_using_arg_candidate()
+
+    @property
     def using_arg_filter(self):
         return self.get_using_arg_filter()
+
+    @classmethod
+    @abstractmethod
+    def get_using_arg_candidate(cls):
+        pass
 
     @classmethod
     @abstractmethod
@@ -737,11 +746,11 @@ class SearchState(metaclass=ABCMeta):
     def get_candidate_action_ids(self):
         opened_tree, children = self.tree.get_opened_tree_children()
         opened_action = opened_tree.value
-        if opened_action.arg_candidate is None:
+        if self.using_arg_candidate and opened_action.arg_candidate is not None:
+            action_ids = opened_action.arg_candidate(self.tree)
+        else:
             action_ids = self.formalism.get_candidate_action_ids(
                 opened_action, len(children), self.get_type_to_action_ids_dicts())
-        else:
-            action_ids = opened_action.arg_candidate(self.tree)
         if self.using_arg_filter and opened_action.arg_filter is not None:
             action_ids = tuple(opened_action.arg_filter(self.tree, action_ids))
 
@@ -750,15 +759,15 @@ class SearchState(metaclass=ABCMeta):
     def get_allowed_and_ids_pairs(self):
         opened_tree, children = self.tree.get_opened_tree_children()
         opened_action = opened_tree.value
-        if opened_action.arg_candidate is None:
+        if self.using_arg_candidate and opened_action.arg_candidate is not None:
+            action_ids = opened_action.arg_candidate(self.tree)
+            allowed = True
+        else:
             all_token_id_set = self.get_all_token_id_set()
             threshold = len(all_token_id_set) // 2
             allowed, action_ids = self.formalism.get_allowed_and_ids_pairs(
                 opened_action, len(children), self.get_type_to_action_ids_dicts(),
                 all_token_id_set, threshold)
-        else:
-            action_ids = opened_action.arg_candidate(self.tree)
-            allowed = True
         if self.using_arg_filter and opened_action.arg_filter is not None:
             assert allowed
             action_ids = tuple(opened_action.arg_filter(self.tree, action_ids))
@@ -812,7 +821,7 @@ class InvalidCandidateActionError(Exception):
     pass
 
 
-def make_search_state_cls(grammar, name=None, using_arg_filter=False, ids_to_mask_fn=None):
+def make_search_state_cls(grammar, name=None, using_arg_candidate=True, using_arg_filter=False, ids_to_mask_fn=None):
     class BasicSearchState(SearchState):
         interface = Interface(SearchState)
         _mask_cache = dict()
@@ -823,6 +832,12 @@ def make_search_state_cls(grammar, name=None, using_arg_filter=False, ids_to_mas
             return grammar.program_tree_cls
 
         @classmethod
+        @interface.implement
+        def get_using_arg_candidate(cls):
+            return using_arg_candidate
+
+        @classmethod
+        @interface.implement
         def get_using_arg_filter(cls):
             return using_arg_filter
 
@@ -868,7 +883,7 @@ def make_search_state_cls(grammar, name=None, using_arg_filter=False, ids_to_mas
             opened_tree, children = self.tree.get_opened_tree_children()
             opened_action = opened_tree.value
 
-            using_arg_candidate = opened_action.arg_candidate is not None
+            using_arg_candidate = self.using_arg_candidate and opened_action.arg_candidate is not None
             using_arg_filter = self.using_arg_filter and opened_action.arg_filter is not None
 
             if (not using_arg_candidate) and (not using_arg_filter):

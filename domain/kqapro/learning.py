@@ -270,6 +270,9 @@ def generate_token_id_seqs(
         prefix_allowed_tokens_fn=None, logits_processor=transformers.LogitsProcessorList()
         # , **kwargs
 ):
+    if logits_processor is None:
+        logits_processor = transformers.LogitsProcessorList()
+
     # breakpoint()
     batched_output = model.generate(
         input_ids=utterance_token_ids,

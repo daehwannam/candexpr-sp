@@ -5,7 +5,7 @@ from dhnamlib.pylib.context import Environment
 # from dhnamlib.pylib.context import LazyEval
 from dhnamlib.pylib.iteration import distinct_pairs
 
-from .test import config as _config_general
+from .test_general import config as _config_general
 
 
 _config_specific = Environment(
