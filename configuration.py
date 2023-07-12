@@ -218,8 +218,8 @@ def save_config_info(dir_path):
     mkloc_unless_exist(config_info_path)
     json_save(json_dict, os.path.join(config_info_path, 'config.json'))
     json_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
-    shutil.copytree('./config', config_info_path)
-    shutil.copyfile('./configuration.py', config_info_path)
+    shutil.copytree('./config', os.path.join(config_info_path, 'config'))
+    shutil.copyfile('./configuration.py', os.path.join(config_info_path, 'configuration.py'))
 
 
 # if 'run_mode' in config and _is_training_run_mode(config.run_mode):

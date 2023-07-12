@@ -86,7 +86,7 @@ class KoPLGrammar(Grammar):
     @config
     @lru_cache
     @interface.implement
-    def get_search_state_cls(self):
+    def get_search_state_cls(self, using_arg_candidate=config.ph, using_arg_filter=config.ph):
         @deprecated
         def ids_to_mask_fn(action_ids):
             return candidate_ids_to_mask(action_ids, len(self.lf_tokenizer))
@@ -94,8 +94,8 @@ class KoPLGrammar(Grammar):
         return make_search_state_cls(
             grammar=self,
             name='KoPLSearchState',
-            using_arg_candidate=config.using_arg_candidate,
-            using_arg_filter=config.using_arg_filter,
+            using_arg_candidate=using_arg_candidate,
+            using_arg_filter=using_arg_filter,
             ids_to_mask_fn=ids_to_mask_fn)
 
     @interface.implement

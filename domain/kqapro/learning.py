@@ -72,6 +72,18 @@ def load_model(pretrained_model_name_or_path, num_tokens=None):
     # Not to make `NoRepeatNGramLogitsProcessor` in `GenerationMixin._get_logits_processor`
     model.config.no_repeat_ngram_size = None
 
+    # Disable length_penalty for `BeamSearchScorer`
+    model.config.length_penalty = 0
+
+    # Disable early_stopping for `BeamSearchScorer`.
+    # - `beam_search` with `early_stopping=True` results in worse performance than `greedy_search`.
+    # - `early_stopping` stops `beam_search` when it find `self.num_beams` number of complete sequences regardless of their scores.
+    #   Check `from transformers.generation_beam_search.BeamHypotheses.is_done`.
+    model.config.early_stopping = False
+
+    # 0 is the default value for MinLengthLogitsProcessor
+    model.config.min_length = 0  
+
     return model
 
 

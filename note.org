@@ -24,3 +24,6 @@ its output is a dict type object who key is
 **** loss and logits
 - ~loss~ is computed from ~logits~ and labels with ~CrossEntropyLoss~
 - ~CrossEntropyLoss~ uses ~torch.nn.LogSoftmax~ and ~torch.nn.NLLLoss~
+
+* Beamsearch fix
+[[file:~/program/miniconda3/envs/kqapro/lib/python3.10/site-packages/transformers/generation_beam_search.py::length_penalty: Optional[float] = 1.0,][BeamSearchScorer.length_penalty]]  --> 0
