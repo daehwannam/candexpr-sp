@@ -1,0 +1,7 @@
+;;; -*- mode: emacs-lisp; -*-
+;;;
+;;; Directory Local Variables
+;;; For more information see (info "(emacs) Directory Variables")
+
+;; ((python-mode . ((eval . (setq-local python-shell-interpreter (dhnam/get-conda-environment-python-interpreter-path "kqapro"))))))
+((python-mode . ((python-shell-interpreter . "/home/dhnam/program/miniconda3/envs/kqapro/bin/python"))))

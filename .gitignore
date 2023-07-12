@@ -6,6 +6,9 @@ _tmp_*
 *~
 \#*#
 
+# emacs directory local variables file
+/.dir-locals.el
+
 # python temporary file
 *.pyc
 
