@@ -25,7 +25,7 @@ mkdir -p ./dataset
 ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset/kqapro
 #+end_src
 
-** Pre-trained model
+** Pre-trained model (optional)
 #+begin_src sh
 DOWNLOAD_PATH=../download
 PRETRAINED_PATH=../pretrained
