@@ -82,6 +82,13 @@ def _get_xtqdm():
     return xtqdm
 
 
+def _get_git_hash():
+    try:
+        return get_git_hash()
+    except FileNotFoundError:
+        return None
+
+
 _default_config = Environment(
     register=Register(strategy='conditional'),
 
@@ -125,7 +132,7 @@ _default_config = Environment(
     softmax_masking=True,
     constrained_decoding=True,
 
-    git_hash=get_git_hash(),
+    git_hash=_get_git_hash(),
     debug=_DEBUG,
     # using_tqdm=True,
     xtqdm=LazyEval(_get_xtqdm),
