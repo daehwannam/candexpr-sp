@@ -8,7 +8,8 @@ if [ -z "$CONFIG_NAME" ]; then
 else
     FILE_PATH=".dir-locals-files/$CONFIG_NAME"
     if [ -f "$FILE_PATH" ]; then
-        ln -s ".dir-locals-files/$CONFIG_NAME" .dir-locals.el
+        # ln -s ".dir-locals-files/$CONFIG_NAME" .dir-locals.el  # soft link is not working for .dir-locals.el
+        cp ".dir-locals-files/$CONFIG_NAME" .dir-locals.el
         echo ".dir-locals.el is linked to .dir-locals-files/$CONFIG_NAME"
     else
         echo "$FILE_PATH does not exist"
