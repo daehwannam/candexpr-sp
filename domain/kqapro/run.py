@@ -87,7 +87,7 @@ def run_train(
 
     if using_scheduler:
         num_training_steps = len(train_data_loader) * num_train_epochs
-        num_warmup_steps = len(train_data_loader) * num_warmup_epochs
+        num_warmup_steps = round(len(train_data_loader) * num_warmup_epochs)
         scheduler = transformers.get_linear_schedule_with_warmup(
             optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
     else:
@@ -417,11 +417,18 @@ def validate(
 
         # breakpoint()
 
+        if evaluating:
+            correct_list = [whether_equal(answer=answer, prediction=prediction)
+                            for prediction, answer in zip(all_predictions, all_answers)]
+        else:
+            correct_list = None
+
         analysis = list(pairs2dicts(not_none_valued_pairs(
             example_idx=tuple(range(len(all_utterances))),
             utterance=all_utterances,
             answer=all_answers if evaluating else None,
             prediction=all_predictions,
+            correct=correct_list,
             predicted_program=analyze_program(all_predicted_last_states, all_predicted_token_id_seqs),
             answer_program=(analyze_program(all_answer_last_states) if evaluating else None))))
 

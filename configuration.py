@@ -129,7 +129,7 @@ _default_config = Environment(
     generation_max_length=200,
     num_prediction_beams=1,
     # num_prediction_beams=4,
-    softmax_masking=True,
+    softmax_masking=False,
     constrained_decoding=True,
 
     git_hash=_get_git_hash(),

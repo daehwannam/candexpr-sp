@@ -22,8 +22,8 @@ config = Environment(
     val_batch_size=LazyEval(lambda: config.train_batch_size * 4),
     # val_batch_size=1,
     num_train_epochs=25,
-    using_scheduler=False,
-    num_warmup_epochs=2,
+    using_scheduler=True,
+    num_warmup_epochs=LazyEval(lambda: config.num_train_epochs / 10),
     max_grad_norm=1,
 )
 
