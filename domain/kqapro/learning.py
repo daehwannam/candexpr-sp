@@ -14,6 +14,7 @@ from configuration import config
 from .execution import postprocess_prediction, invalid_program, get_counting_context
 
 from logic.formalism import InvalidCandidateActionError
+from utility.trie import SpanTrie
 
 from dhnamlib.pylib import filesys
 from dhnamlib.pylib.hflib.transforming import logit_rescaling, MaskedLogitsProcessor
@@ -169,7 +170,7 @@ def _slow__labels_to_masks(grammar, labels):
     return softmax_mask, nll_mask
 
 
-def labels_to_masks(grammar, labels):
+def labels_to_masks(grammar, labels, utterance_token_ids):
     '''
     :param grammar:
     :param labels: a tensor of shape (batch_size, seq_len)
@@ -179,9 +180,11 @@ def labels_to_masks(grammar, labels):
     allowed_and_ids_pairs_seqs = []
     seq_lengths = []
 
-    for token_id_seq in labels.tolist():
+    for token_id_seq, utterance_token_id_seq in zip(labels.tolist(), utterance_token_ids.tolist()):
         action_seq = _token_id_seq_to_action_seq(grammar, token_id_seq)
-        _allowed_and_ids_pairs_seq = grammar.search_state_cls.action_seq_to_allowed_and_ids_pairs_seq(action_seq)
+        dynamic_trie = _utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
+        with grammar.let_dynamic_trie(dynamic_trie):
+            _allowed_and_ids_pairs_seq = grammar.search_state_cls.action_seq_to_allowed_and_ids_pairs_seq(action_seq)
         allowed_and_ids_pairs_seq = list(chain(
             [(True, [grammar.lf_tokenizer.bos_token_id])],
             _allowed_and_ids_pairs_seq,
@@ -221,6 +224,19 @@ def _allowed_and_ids_pairs_seqs_to_softmax_mask(allowed_and_ids_pairs_seqs, voca
                 softmax_mask[idx_in_batch, idx_in_seq, token_ids] = 0
 
     return softmax_mask
+
+
+def _utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq):
+    eos_token_id_idx = iteration.index(utterance_token_id_seq, grammar.utterance_tokenizer.eos_token_id, reverse=True)
+    assert utterance_token_id_seq[0] == grammar.utterance_tokenizer.bos_token_id
+    _utterance_token_id_seq = utterance_token_id_seq[1: eos_token_id_idx]
+    first_utterance_token = grammar.utterance_tokenizer.convert_ids_to_tokens(_utterance_token_id_seq[0])
+    if not first_utterance_token.startswith('Ġ'):
+        _utterance_token_id_seq[0] = grammar.utterance_tokenizer.convert_tokens_to_ids('Ġ' + first_utterance_token)
+    end_of_seq_id = grammar.reduce_token_id
+    dynamic_trie = SpanTrie(_utterance_token_id_seq, end_of_seq_id)
+    return dynamic_trie
+
 
 def labels_to_nll_mask(grammar, labels):
     '''
@@ -397,8 +413,9 @@ def save_predictions(predictions, dir_path):
 
 
 class SequencePrefixProcessor:
-    def __init__(self, grammar, batch_size, num_beams, additional_mask_cache: dict = None):
+    def __init__(self, grammar, batch_size, num_beams, dynamic_tries, additional_mask_cache: dict = None):
         self.grammar = grammar
+        self.dynamic_tries = dynamic_tries
 
         # multiplying "2" is for caching both previous states and the next sates
         self.num_beams = num_beams
@@ -491,7 +508,8 @@ class SequencePrefixProcessor:
                 elif curr_state.tree.is_closed_root():
                     return True, [self.EOS_TOKEN_ID]
                 else:
-                    return curr_state.get_allowed_and_ids_pairs()
+                    with self.grammar.let_dynamic_trie(self.dynamic_tries[batch_id]):
+                        return curr_state.get_allowed_and_ids_pairs()
 
     @deprecated
     def prefix_allowed_tokens_fn(self, batch_id: int, prefix_token_id_seq: torch.Tensor) -> List[int]:
@@ -577,6 +595,7 @@ class SequencePrefixProcessor:
         return mask
 
 
+@deprecated
 def make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams):
     sequence_prefix_processor = SequencePrefixProcessor(grammar, batch_size, num_beams)
     return sequence_prefix_processor.prefix_allowed_tokens_fn
@@ -611,9 +630,11 @@ def _old__get_logits_processor(grammar, batch_size, num_beams, renormalizing):
     return logits_processor
 
 
-def get_logits_processor(grammar, batch_size, num_beams, renormalizing):
+def get_logits_processor(grammar, batch_size, num_beams, renormalizing, utterance_token_ids):
     '''logits processor for constrained decoding'''
-    sequence_prefix_processor = SequencePrefixProcessor(grammar, batch_size, num_beams)
+    dynamic_tries = tuple(_utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
+                          for utterance_token_id_seq in utterance_token_ids.tolist())
+    sequence_prefix_processor = SequencePrefixProcessor(grammar, batch_size, num_beams, dynamic_tries)
     prefix_allowed_and_ids_pair_fn = sequence_prefix_processor.prefix_allowed_and_ids_pair_fn
     fast_prefix_constrained_logits_processor = FastPrefixConstrainedLogitsProcessor(
         prefix_allowed_and_ids_pair_fn, num_beams=num_beams)

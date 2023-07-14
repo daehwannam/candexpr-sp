@@ -1,5 +1,6 @@
 
 import copy
+from itertools import chain
 
 from configuration import config
 from logic.grammar import Grammar
@@ -7,7 +8,7 @@ from logic.formalism import make_program_tree_cls, make_search_state_cls
 
 from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary, deprecated
 from dhnamlib.pylib.klass import Interface
-from dhnamlib.pylib.context import block
+from dhnamlib.pylib.context import block, Environment
 from dhnamlib.pylib.iteration import distinct_values
 from dhnamlib.pylib.hflib.transforming import iter_id_token_pairs, join_tokens as _join_tokens
 from dhnamlib.hissplib.expression import repr_as_hash_str
@@ -35,7 +36,8 @@ class KoPLGrammar(Grammar):
 
         self.model_config = learning.load_model_config(pretrained_model_name_or_path)
         self.initialize_from_base_actions()
-        register_all(register, self, self.lf_tokenizer)
+        self.dynamic_scope = Environment()
+        register_all(register, self, self.lf_tokenizer, self.dynamic_scope)
         self.add_actions(kopl_transfer.iter_nl_token_actions(
             self.meta_name_to_meta_action, self.lf_tokenizer))
 
@@ -78,6 +80,16 @@ class KoPLGrammar(Grammar):
     def token_to_id(self, token):
         return self._get_token_to_id_dict()[token]
 
+    @property
+    @lru_cache
+    def reduce_token(self):
+        return kopl_transfer.action_name_to_special_token(self.reduce_action.name)
+
+    @property
+    @lru_cache
+    def reduce_token_id(self):
+        self.lf_tokenizer.convert_tokens_to_ids(self.reduce_token)
+
     @lru_cache
     @interface.implement
     def get_program_tree_cls(self):
@@ -116,8 +128,11 @@ class KoPLGrammar(Grammar):
     def get_invalid_state(cls):
         return cls._INVALID_STATE
 
+    def let_dynamic_trie(self, dynamic_trie):
+        return self.dynamic_scope.let(dynamic_trie=dynamic_trie)
 
-def register_all(register, grammar, lf_tokenizer):
+
+def register_all(register, grammar, lf_tokenizer, dynamic_scope):
     @register(['name', 'nl-token'])
     def get_nl_token_name(token):
         return kopl_transfer.nl_token_to_action_name(token)
@@ -162,7 +177,7 @@ def register_all(register, grammar, lf_tokenizer):
     def concat_quantity_unit(quantity, unit):
         return repr_as_hash_str(f'{quantity} {unit}'.rstrip())
 
-    reduce_token = kopl_transfer.action_name_to_special_token(grammar.reduce_action.name)
+    reduce_token = grammar.reduce_token
 
     with block:
         # filter
@@ -201,7 +216,7 @@ def register_all(register, grammar, lf_tokenizer):
         def get_candidate_action_name(token):
             return kopl_transfer.token_to_action_name(token, special_tokens=[reduce_token])
 
-        def make_arg_candidate(trie):
+        def make_static_arg_candidate(trie):
             def arg_candidate(tree):
                 opened_tree, children = tree.get_opened_tree_children()
                 # token_seq_prefix = tuple(child.value.get_meta_arg('token') for child in children)
@@ -210,14 +225,24 @@ def register_all(register, grammar, lf_tokenizer):
                 id_seq_prefix = tuple(grammar.token_to_id(child.value.get_meta_arg('token'))
                                       for child in children)
                 return tuple(trie.candidate_ids(id_seq_prefix))
+            return arg_candidate
 
+        @dynamic_scope
+        def make_entity_arg_candidate(static_trie, dynamic_trie=dynamic_scope.ph):
+            def arg_candidate(tree):
+                opened_tree, children = tree.get_opened_tree_children()
+                id_seq_prefix = tuple(grammar.token_to_id(child.value.get_meta_arg('token'))
+                                      for child in children)
+                return tuple(chain(dynamic_trie.candidate_ids(id_seq_prefix),
+                                   static_trie.candidate_ids(id_seq_prefix)))
             return arg_candidate
 
         for act_type, trie in kopl_transfer.iter_act_type_trie_pairs(lf_tokenizer=lf_tokenizer, end_of_seq=reduce_token):
             if act_type == 'kw-entity':
-                # KoPL doesn't consider valid entity names
-                continue
-            register(['candidate', act_type], make_arg_candidate(trie))
+                arg_candidate = make_entity_arg_candidate(trie, dynamic_scope)
+            else:
+                arg_candidate = make_static_arg_candidate(trie)
+            register(['candidate', act_type], arg_candidate)
 
 
 #

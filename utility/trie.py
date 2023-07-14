@@ -2,6 +2,7 @@
 from itertools import chain
 
 from dhnamlib.pylib.iteration import all_same
+from dhnamlib.pylib.decoration import construct
 
 import pygtrie
 
@@ -79,6 +80,40 @@ class TokenTrie:
         return merged_token_trie
 
     __iter__ = token_seqs
+
+
+class SpanTrie:
+    def __init__(self, id_seq, end_of_seq_id):
+        self.id_seq = id_seq    # id_seq does not include BOS and EOS. We also assume "add_prefix_space=True".
+        self.end_of_seq_id = end_of_seq_id
+
+        id_to_index_set = dict()
+        for index, token_id in enumerate(id_seq):
+            id_to_index_set.setdefault(token_id, set()).add(index)
+        self.id_to_index_set = id_to_index_set
+
+    @construct(lambda x: sorted(set(x)))
+    def candidate_ids(self, id_seq_prefix):
+        if len(id_seq_prefix) == 0:
+            yield from self.id_seq
+        else:
+            token_id_iter = iter(id_seq_prefix)
+            index_set = self.id_to_index_set[next(token_id_iter)]
+            for token_id in token_id_iter:
+                next_index_set = set()
+                for index in index_set:
+                    next_index = index + 1
+                    if next_index < len(self.id_seq) and self.id_seq[next_index] == token_id:
+                        next_index_set.add(next_index)
+                index_set = next_index_set
+            if len(index_set) > 0:
+                yield self.end_of_seq_id
+                for index in index_set:
+                    next_index = index + 1
+                    if next_index < len(self.id_seq):
+                        yield self.id_seq[next_index]
+            else:
+                yield from []
 
 
 if __name__ == '__main__':

@@ -142,7 +142,7 @@ def run_train(
             #     softmax_mask = batch['softmax_mask'].to(device)
             # nll_mask = batch['nll_mask'].to(device)
             if softmax_masking:
-                softmax_mask, nll_mask = learning.labels_to_masks(grammar, labels)
+                softmax_mask, nll_mask = learning.labels_to_masks(grammar, labels, batch['utterance_token_ids'])
             else:
                 softmax_mask = None
                 nll_mask = learning.labels_to_nll_mask(grammar, labels)
@@ -281,13 +281,6 @@ def validate(
 ):
     assert not model.training
 
-    assert constrained_decoding or not softmax_masking
-    if constrained_decoding:
-        logits_processor = learning.get_logits_processor(
-            grammar, batch_size, num_beams, renormalizing=softmax_masking)
-    else:
-        logits_processor = None
-
     # if softmax_masking:
     #     generation_kwargs = dict(
     #         logits_processor=learning.get_rescaled_logits_processor(grammar, batch_size, num_beams))
@@ -339,6 +332,14 @@ def validate(
         #     test_utterance = "How many contemporary folk music groups are related to famous Taj Mahal (the one whose ISNI is 0000 0001 1598 8398 or KT Tunstall?"
         #     if test_utterance in utterances:
         #         breakpoint()
+
+        assert constrained_decoding or not softmax_masking
+        if constrained_decoding:
+            logits_processor = learning.get_logits_processor(
+                grammar, batch_size, num_beams, renormalizing=softmax_masking,
+                utterance_token_ids=batch['utterance_token_ids'])
+        else:
+            logits_processor = None
 
         token_id_seqs = learning.generate_token_id_seqs(
             grammar=grammar,
