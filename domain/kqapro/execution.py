@@ -46,7 +46,7 @@ def runtime_exception_handler(context):
     return NO_DENOTATION
 
 
-def invalid_program(*args, **kwargs):
+def invalid_program(context):
     '''
     This function is used as the output program of parsing when the final paring states are incomplete.
     '''
@@ -62,25 +62,26 @@ def postprocess_denotation(denotation):
     return new_denotation
 
 
-def postprocess_prediction(answer, strict=False):
+def postprocess_prediction(prediction, strict=False):
     '''
     Modify the result from `postprocess_denotation`
     '''
     # in KQAPro_Baselines, 'None' is used as the default value
-    default_answer = 'None' if strict else 'no'
+    default_prediction = 'None' if strict else 'no'
 
-    if answer is NO_DENOTATION:
-        new_answer = default_answer
-    elif isinstance(answer, list):
-        if len(answer) > 1:
-            new_answer = sorted(answer)[0]
-        elif len(answer) > 0:
-            new_answer = answer[0]
-        elif len(answer) == 0:
-            new_answer = default_answer
+    if prediction is NO_DENOTATION:
+        new_prediction = default_prediction
+    elif isinstance(prediction, list):
+        if len(prediction) > 1:
+            # sorting for consistent prediction
+            new_prediction = sorted(prediction)[0]
+        elif len(prediction) > 0:
+            new_prediction = prediction[0]
+        elif len(prediction) == 0:
+            new_prediction = default_prediction
     else:
-        new_answer = answer
-    return new_answer
+        new_prediction = prediction
+    return new_prediction
 
 
 # # MAX_NUM_LOOPS = 1000000

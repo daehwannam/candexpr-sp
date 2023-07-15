@@ -60,21 +60,23 @@ python -m domain.kqapro.preprocess --goal encoded_test_set
 ** Training
 #+begin_src sh
 python -m domain.kqapro.run --config config.train_strong_sup
-#+end_src>
+#+end_src
 
 ** Test on the validation set
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
+# e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
 python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
-#+end_src>
+#+end_src
 
 ** Test on the test set
 This makes a prediction file without evaluation.
 
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
+# e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
 python -m domain.kqapro.run --config config.test_on_test_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
-#+end_src>
+#+end_src
 
 ** Evaluation with the official code
 The evaluation code is slightly modified from [[https://github.com/shijx12/KQAPro_Baselines/blob/7cea2738fd095a2c17594d492923ee80a212ac0f/evaluate.py][KQAPro_Baselines/evaluate.py]].
@@ -85,7 +87,17 @@ TRAIN_DATA_SET_PATH='path/to/train/data/set.json'
 TEST_DATA_SET_PATH='path/to/test/data/set.json'
 PREDICTION_FILE_PATH='path/to/predictions.txt'
 python -m kqapro.evaluate --train $TRAIN_DATA_SET_PATH --test $TEST_DATA_SET_PATH --pred $PREDICTION_FILE_PATH
-#+end_src>
+#+end_src
+
+*** Example: evaluation on the validation set with the official code
+#+begin_src sh
+TRAIN_DATA_SET_PATH='./dataset/kqapro/train.json'
+TEST_DATA_SET_PATH='./dataset/kqapro/val.json'
+TEST_DIR_NAME='YOUR-TEST-DIRECTORY-NAME'
+# e.g. TEST_DIR_NAME=2023-07-15_10:10:24_916400#0
+PREDICTION_FILE_PATH="./model-test/$TEST_DIR_NAME/predictions.txt"
+python -m kqapro.evaluate --train $TRAIN_DATA_SET_PATH --test $TEST_DATA_SET_PATH --pred $PREDICTION_FILE_PATH
+#+end_src
 
 * Acknowledgements
 We thank to the authors of [[https://github.com/shijx12/][KQA Pro]] dataset. Our code also exploits the [[https://github.com/shijx12/KQAPro_Baselines][BART seq2seq program parser]] they released.

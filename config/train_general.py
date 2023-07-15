@@ -25,6 +25,7 @@ config = Environment(
     using_scheduler=True,
     num_warmup_epochs=LazyEval(lambda: config.num_train_epochs / 10),
     max_grad_norm=1,
+    saving_scheduler=False,
 )
 
 # model_instance_dir_path = './model-instance'

@@ -47,6 +47,7 @@ def run_train(
         context=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
+        saving_scheduler=config.ph,
 ):
     if restarting:
         assert learning.is_finetuned(pretrained_model_name_or_path)
@@ -196,7 +197,8 @@ def run_train(
             learning.save_status(status, temp_last_dir_path)
             learning.save_performance(performance, temp_last_dir_path)
             learning.save_optimizer(optimizer, temp_last_dir_path)
-            learning.save_scheduler(scheduler, temp_last_dir_path)
+            if saving_scheduler:
+                learning.save_scheduler(scheduler, temp_last_dir_path)
             learning.save_model(model, temp_last_dir_path)
             learning.save_analysis(validation['analysis'], temp_last_dir_path)
 
@@ -350,8 +352,10 @@ def validate(
             logits_processor=logits_processor,
             # **generation_kwargs
         )
-        last_states = learning.token_id_seqs_to_last_states(grammar, token_id_seqs)
-        programs = learning.last_states_to_programs(grammar, compiler, last_states, tolerant=True)
+        last_states = learning.token_id_seqs_to_last_states(
+            grammar, token_id_seqs, ignoring_parsing_errors=not constrained_decoding)
+        programs = learning.last_states_to_programs(
+            grammar, compiler, last_states, tolerant=True, ignoring_compilation_errors=not constrained_decoding)
 
         # if config.debug:
         #     if batch_idx == 1:
@@ -371,8 +375,8 @@ def validate(
 
             if evaluating:
                 assert 'labels' in batch
-                answer_last_states = tuple(learning.token_id_seq_to_last_state(grammar, token_id_seq)
-                                           for token_id_seq in batch['labels'].tolist())
+                answer_last_states = learning.token_id_seqs_to_last_states(
+                    grammar, batch['labels'].tolist(), ignoring_parsing_errors=not constrained_decoding)
                 all_answer_last_states.extend(answer_last_states)
             all_utterances.extend(utterances)
             all_predicted_token_id_seqs.extend(token_id_seqs)

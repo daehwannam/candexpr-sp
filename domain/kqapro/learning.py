@@ -127,7 +127,7 @@ def _token_id_seq_to_action_seq(grammar, token_id_seq):
     return action_seq
 
 
-def token_id_seq_to_last_state(grammar, token_id_seq):
+def token_id_seq_to_last_state(grammar, token_id_seq, ignoring_parsing_errors=False):
     try:
         action_seq = _token_id_seq_to_action_seq(grammar, token_id_seq)
         last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=config.debug)
@@ -135,6 +135,11 @@ def token_id_seq_to_last_state(grammar, token_id_seq):
         return last_state
     except NotFoundError:
         return grammar.get_invalid_state()
+    except Exception as error:
+        if ignoring_parsing_errors:
+            return grammar.get_invalid_state()
+        else:
+            raise error
 
 @deprecated
 def _slow__labels_to_masks(grammar, labels):
@@ -322,20 +327,27 @@ def generate_token_id_seqs(
         yield token_id_seq_without_padding
 
 
-def token_id_seqs_to_last_states(grammar, token_id_seqs):
-    predicted_last_states = tuple(token_id_seq_to_last_state(grammar, token_id_seq)
-                                  for token_id_seq in token_id_seqs)
+def token_id_seqs_to_last_states(grammar, token_id_seqs, ignoring_parsing_errors=False):
+    predicted_last_states = tuple(
+        token_id_seq_to_last_state(grammar, token_id_seq, ignoring_parsing_errors=ignoring_parsing_errors)
+        for token_id_seq in token_id_seqs)
 
     return predicted_last_states
 
 
-def last_states_to_programs(grammar, compiler, last_states, tolerant=False):
+def last_states_to_programs(grammar, compiler, last_states, tolerant=False, ignoring_compilation_errors=False):
     def state_to_program(state):
         if grammar.is_invalid_state(state):
             return invalid_program
         else:
             if state.tree.is_closed_root():
-                return compiler.compile_tree(state.tree, tolerant=tolerant)
+                try:
+                    return compiler.compile_tree(state.tree, tolerant=tolerant)
+                except Exception as error:
+                    if ignoring_compilation_errors:
+                        return invalid_program
+                    else:
+                        raise error
             else:
                 # when generation process reaches the max_length
                 return invalid_program
