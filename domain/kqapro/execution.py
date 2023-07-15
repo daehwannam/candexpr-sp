@@ -34,7 +34,7 @@ class KoPLCompiler(Compiler):
     def compile_tree(self, tree, tolerant=False):
         program = eval_lissp(tree.get_expr_str(), extra_ns=self.extra_ns)
         if tolerant:
-            return excepting(Exception, runtime_exception_handler)(program)
+            return excepting(Exception, default_fn=runtime_exception_handler)(program)
         else:
             return program
 
@@ -42,7 +42,7 @@ class KoPLCompiler(Compiler):
 NO_DENOTATION = object()
 
 
-def runtime_exception_handler(exception: Exception):
+def runtime_exception_handler(context):
     return NO_DENOTATION
 
 
@@ -66,16 +66,18 @@ def postprocess_prediction(answer, strict=False):
     '''
     Modify the result from `postprocess_denotation`
     '''
+    # in KQAPro_Baselines, 'None' is used as the default value
+    default_answer = 'None' if strict else 'no'
 
     if answer is NO_DENOTATION:
-        new_answer = 'no'
-    elif isinstance(answer, list) and len(answer) > 0:
-        new_answer = answer[0]
-    elif isinstance(answer, list) and len(answer) == 0:
-        if strict:
-            new_answer = 'None'     # None is returned in KQAPro_Baselines
-        else:
-            new_answer = 'no'
+        new_answer = default_answer
+    elif isinstance(answer, list):
+        if len(answer) > 1:
+            new_answer = sorted(answer)[0]
+        elif len(answer) > 0:
+            new_answer = answer[0]
+        elif len(answer) == 0:
+            new_answer = default_answer
     else:
         new_answer = answer
     return new_answer

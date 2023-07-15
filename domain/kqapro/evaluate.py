@@ -10,7 +10,7 @@ from tqdm import tqdm
 Usage:
     $ TEST_DATA_SET_PATH='path/to/test/data/set.json'
     $ PREDICTION_FILE_PATH='path/to/predictions.txt'
-    $ python -m domain.kqapro.evaluate --auxiliary --test $TEST_DATA_SET_PATH --pred $PREDICTION_FILE_PATH
+    $ python -m domain.kqapro.evaluate --auxiliary --except-yn --test $TEST_DATA_SET_PATH --pred $PREDICTION_FILE_PATH
 '''
 
 def whether_equal(answer, prediction):
@@ -125,7 +125,7 @@ def test(args):
         print('WARNING: there are only {} predictions (need {})'.format(len(predictions), len(test_set)))
 
 
-def auxiliary_test(args, except_yes_or_no_question=True):
+def auxiliary_test(args):
     with open(args.test_file_path) as f:
         test_set = json.load(f)
     predictions = [x.strip() for x in open(args.pred_file_path).readlines()]  # one prediction per line
@@ -138,7 +138,7 @@ def auxiliary_test(args, except_yes_or_no_question=True):
         cur_labels = ['overall']
 
         choices = test_set[i]['choices']
-        if except_yes_or_no_question and is_yes_or_no_question(choices):
+        if args.except_yes_or_no_question and is_yes_or_no_question(choices):
             continue
 
         if any(whether_equal(choice, predictions[i]) for choice in choices):
@@ -162,6 +162,8 @@ def is_yes_or_no_question(choices):
 def main():
     parser = argparse.ArgumentParser(description='Evaluation')
     parser.add_argument('--auxiliary', dest='auxiliary', action='store_true', help='whether to perform auxiliary test')
+    parser.add_argument('--except-yn', dest='except_yes_or_no_question', action='store_true',
+                        help='whether to include yes-or-no questions for auxiliary test')
     parser.add_argument('--train', dest='train_file_path', help='a path to the train set file')
     parser.add_argument('--test', dest='test_file_path', help='a path to the test set file')
     parser.add_argument('--pred', dest='pred_file_path', help='a path to the prediction file')

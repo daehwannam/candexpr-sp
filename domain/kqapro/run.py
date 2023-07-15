@@ -353,6 +353,10 @@ def validate(
         last_states = learning.token_id_seqs_to_last_states(grammar, token_id_seqs)
         programs = learning.last_states_to_programs(grammar, compiler, last_states, tolerant=True)
 
+        # if config.debug:
+        #     if batch_idx == 1:
+        #         breakpoint()
+
         predictions = learning.programs_to_predictions(context, programs)
         all_predictions.extend(predictions)
 
