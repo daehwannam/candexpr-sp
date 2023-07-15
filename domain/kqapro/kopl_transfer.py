@@ -66,7 +66,7 @@ with block:
             'kp-concept', 'kp-entity', 'kp-relation',
             'kp-attr-string', 'kp-attr-number', 'kp-attr-time',
             'kp-q-string', 'kp-q-number', 'kp-q-time',
-            'vp-string', 'vp_unit']
+            'vp-string', 'vp-unit']
 
         if is_digit_seq or is_special_quantity:
             union_type.append('vp-quantity')
