@@ -18,7 +18,7 @@ from . import learning
 
 
 @config
-def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbose=1, verifying=True):
+def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbose=1, verifying=True, verifying_grammar=True):
     compiler = grammar.compiler_cls()
 
     tm = TimeMeasure()
@@ -46,7 +46,13 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
                 continue
 
             with tm:
-                last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=True)
+                if verifying_grammar:
+                    utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
+                    dynamic_trie = learning._utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
+                    with grammar.let_dynamic_trie(dynamic_trie):
+                        last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+                else:
+                    last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
             get_last_state_cumtime += tm.interval
 
             with tm:
@@ -61,7 +67,11 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
                 prediction = postprocess_prediction(denotation)
             postprocess_prediction_cumtime += tm.interval
 
-            if verbose >= 2:
+            if verifying:
+                denotation_by_kopl = execute_kopl_program(config.context, labeled_kopl_program)
+                assert denotation == denotation_by_kopl
+
+            if False and verbose >= 2:
                 if answer != prediction:
                     denotation_by_kopl = execute_kopl_program(config.context, labeled_kopl_program)
                     if denotation == denotation_by_kopl:
