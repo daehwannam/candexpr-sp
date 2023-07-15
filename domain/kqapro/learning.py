@@ -175,7 +175,7 @@ def _slow__labels_to_masks(grammar, labels):
     return softmax_mask, nll_mask
 
 
-def labels_to_masks(grammar, labels, utterance_token_ids):
+def labels_to_masks(grammar, labels, utterance_token_ids, except_eos=False):
     '''
     :param grammar:
     :param labels: a tensor of shape (batch_size, seq_len)
@@ -206,7 +206,11 @@ def labels_to_masks(grammar, labels, utterance_token_ids):
 
     padded_candidate_token_ids_seqs = pad_sequence(allowed_and_ids_pairs_seqs, (True, [grammar.lf_tokenizer.pad_token_id]), dim=1)
     softmax_mask = _allowed_and_ids_pairs_seqs_to_softmax_mask(padded_candidate_token_ids_seqs, len(grammar.lf_tokenizer))
-    nll_mask = lengths_to_mask(seq_lengths, max_length=max(seq_lengths))
+    if except_eos:
+        _seq_lengths = list(seq_length - 1 for seq_length in seq_lengths)
+    else:
+        _seq_lengths = seq_lengths
+    nll_mask = lengths_to_mask(_seq_lengths, max_length=max(seq_lengths) + int(except_eos))
     # nll_mask and nll tensor have the same size
 
     return softmax_mask, nll_mask
@@ -243,7 +247,7 @@ def _utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq):
     return dynamic_trie
 
 
-def labels_to_nll_mask(grammar, labels):
+def labels_to_nll_mask(grammar, labels, except_eos=False):
     '''
     :param grammar:
     :param labels: a tensor of shape (batch_size, seq_len)
@@ -254,9 +258,9 @@ def labels_to_nll_mask(grammar, labels):
 
     for token_id_seq in labels.tolist():
         eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id, reverse=True)
-        seq_lengths.append(eos_token_id_idx)  # except couting EOS
+        seq_lengths.append(eos_token_id_idx + int(not except_eos))
 
-    nll_mask = lengths_to_mask(seq_lengths, max_length=max(seq_lengths) + 1)
+    nll_mask = lengths_to_mask(seq_lengths, max_length=max(seq_lengths) + int(except_eos))
     # The "+1" of max_length is for EOS, so nll_mask and nll tensor have the same size
 
     return nll_mask
