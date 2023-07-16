@@ -6,7 +6,8 @@ import argparse
 import shutil
 
 from dhnamlib.pylib.context import Environment, LazyEval
-from dhnamlib.pylib.decoration import Register, lru_cache, variable
+# from dhnamlib.pylib.decoration import Register
+from dhnamlib.pylib.decoration import lru_cache, variable
 from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, mkpdirs_unless_exist, mkloc_unless_exist, make_logger, get_new_path_with_number
 # from dhnamlib.pylib.filesys import pickle_load
 # from dhnamlib.pylib.iteration import apply_recursively
@@ -55,7 +56,10 @@ def _get_device():
 
 
 def _is_valid_run_mode(run_mode):
-    return run_mode in ['train', 'retrain', 'finetune', 'test-on-val-set', 'test-on-test-set']
+    return run_mode in [
+        'train-strong-sup', 'train-for-multiple-decoding-strategies', 'test-on-val-set', 'test-on-test-set',
+        # 'retrain', 'finetune',
+    ]
 
 
 def _is_training_run_mode(run_mode):
@@ -90,7 +94,7 @@ def _get_git_hash():
 
 
 _default_config = Environment(
-    register=Register(strategy='conditional'),
+    # register=Register(strategy='conditional'),
 
     kb=LazyEval(lambda: json_load(_kb_file_path)),
     # context=LazyEval(lambda: _context_cls(apply_recursively(config.kb))),
@@ -213,7 +217,8 @@ def config_path_dict():
 
 def _config_to_json_dict(config):
     return dict([key, value] for key, value in config.items()
-                if not isinstance(value, (LazyEval, Register)))
+                # if not isinstance(value, (LazyEval, Register))
+                if not isinstance(value, (LazyEval,)))
 
 
 def save_config_info(dir_path):

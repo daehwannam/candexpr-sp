@@ -62,6 +62,11 @@ python -m domain.kqapro.preprocess --goal encoded_test_set
 python -m domain.kqapro.run --config config.train_strong_sup
 #+end_src
 
+** Training for multiple decoding strategies
+#+begin_src sh
+python -m domain.kqapro.run --config config.train_for_multiple_decoding_strategies
+#+end_src
+
 ** Test on the validation set
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'

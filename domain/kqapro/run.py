@@ -62,7 +62,7 @@ def run_train(
     last_dir_path = learning.get_last_dir_path(model_learning_dir_path)
     filesys.mkloc_unless_exist(last_dir_path)
     best_dir_path = learning.get_best_dir_path(model_learning_dir_path)
-    filesys.mkloc_unless_exist(best_dir_path)
+    # filesys.mkloc_unless_exist(best_dir_path)
 
     model = learning.load_model(
         pretrained_model_name_or_path,
@@ -209,6 +209,203 @@ def run_train(
 
 
 @config
+def run_train_for_multiple_decoding_strategies(
+        pretrained_model_name_or_path=config.ph,
+        grammar=config.ph,
+        compiler=config.ph,
+        device=config.ph,
+        logger=config.ph,
+        encoded_train_set=config.ph,
+        encoded_val_set=config.ph,
+        train_batch_size=config.ph,
+        val_batch_size=config.ph,
+        learning_rate=config.ph,
+        adam_epsilon=config.ph,
+        weight_decay=config.ph,
+        num_train_epochs=config.ph,
+        using_scheduler=config.ph,
+        num_warmup_epochs=config.ph,
+        max_grad_norm=config.ph,
+        softmax_masking=config.ph,
+        constrained_decoding=config.ph,
+        model_learning_dir_path=config.ph,
+        restarting=False,
+        context=config.ph,
+        num_prediction_beams=config.ph,
+        generation_max_length=config.ph,
+        saving_scheduler=config.ph,
+        decoding_strategy_configs=config.ph,
+):
+    assert model_learning_dir_path is not None
+
+    save_config_info(model_learning_dir_path)
+
+    last_common_dir = learning.get_last_dir_path(model_learning_dir_path, 'last:common')
+    filesys.mkloc_unless_exist(last_common_dir)
+
+    def get_last_dir_path(decoding_strategy_name):
+        last_dir_path = learning.get_last_dir_path(
+            model_learning_dir_path, f'{decoding_strategy_name}:last')
+        filesys.mkloc_unless_exist(last_dir_path)
+        return last_dir_path
+
+    def get_best_dir_path(decoding_strategy_name):
+        best_dir_path = learning.get_best_dir_path(
+            model_learning_dir_path, f'{decoding_strategy_name}:best')
+        filesys.mkloc_unless_exist(best_dir_path)
+        return best_dir_path
+
+    model = learning.load_model(
+        pretrained_model_name_or_path,
+        num_tokens=len(grammar.lf_tokenizer))
+    model.to(device)
+
+    train_data_loader = make_data_loader(
+        encoded_dataset=encoded_train_set,
+        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
+        pad_token_id=grammar.lf_tokenizer.pad_token_id,
+        batch_size=train_batch_size,
+        shuffle=True)
+    val_data_loader = make_data_loader(
+        encoded_dataset=encoded_val_set,
+        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
+        pad_token_id=grammar.lf_tokenizer.pad_token_id,
+        batch_size=val_batch_size,
+        shuffle=False)
+
+    param_groups = learning.get_param_groups(model, learning_rate=learning_rate, weight_decay=weight_decay)
+
+    optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, eps=adam_epsilon)
+
+    if using_scheduler:
+        num_training_steps = len(train_data_loader) * num_train_epochs
+        num_warmup_steps = round(len(train_data_loader) * num_warmup_epochs)
+        scheduler = transformers.get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
+    else:
+        scheduler = transformers.get_constant_schedule(optimizer)
+
+    assert not restarting
+
+    def make_initial_status_measures_pair():
+        _last_performance = get_performance(accuracy=float('-inf'))
+        status = AttrDict(
+            last_epoch=0,
+            best_epoch=0,
+            last_performance=_last_performance,
+            best_performance=_last_performance,
+            history=[])
+        measures = [get_measure('accuracy', True)]
+
+        return status, measures
+
+    status_measures_pair_dict = dict(
+        [decoding_strategy_config.decoding_strategy_name, make_initial_status_measures_pair()]
+        for decoding_strategy_config in decoding_strategy_configs)
+
+    assert not softmax_masking
+
+    for epoch in range(1, num_train_epochs + 1):
+        logger.info(f'Epoch {epoch} starts')
+        model.train()
+
+        # if config.debug:
+        #     batch_cnt = -1
+
+        loss = torch.tensor(0.)
+        for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
+            # if config.debug:
+            #     batch_cnt += 1
+            #     if batch_cnt > 100:
+            #         break
+            batched_input = dict(
+                input_ids=batch['utterance_token_ids'].to(device),
+                attention_mask=batch['attention_mask'].to(device),
+                decoder_input_ids=batch['decoder_input_ids'].to(device))
+
+            optimizer.zero_grad()
+            batched_output = model(**batched_input)
+
+            logits = batched_output['logits']
+            labels = batch['labels'].to(device)
+
+            softmax_mask = None
+            nll_mask = learning.labels_to_nll_mask(grammar, labels)
+
+            loss = learning.compute_loss(grammar, logits, labels,
+                                         softmax_mask=softmax_mask,
+                                         nll_mask=nll_mask)
+
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            optimizer.step()
+            scheduler.step()
+
+        model.eval()
+        last_model_saved = False
+
+        # TODO
+        for decoding_strategy_config in decoding_strategy_configs:
+            with config.let(decoding_strategy_config.items()):
+                logger.info(f'Validation of "{config.decoding_strategy_name}" starts')
+
+                validation = validate(
+                    grammar=grammar,
+                    compiler=compiler,
+                    model=model,
+                    context=context,
+                    data_loader=val_data_loader,
+                    batch_size=val_batch_size,
+                    num_beams=num_prediction_beams,
+                    generation_max_length=generation_max_length,
+                    softmax_masking=softmax_masking,
+                    constrained_decoding=constrained_decoding,
+                    evaluating=True)
+
+                performance = validation['performance']
+
+                status, measures = status_measures_pair_dict[config.decoding_strategy_name]
+
+                status.update(
+                    last_performance=performance,
+                    last_epoch=epoch)
+                status.history.append(
+                    dict(epoch=epoch,
+                         performance=performance))
+
+                logger.info(f'Decoding strategy: {config.decoding_strategy_name} / Performance: {str(performance)}')
+
+                updating_best = is_better_performance(performance, status.best_performance, measures)
+
+                if updating_best:
+                    status.update(
+                        best_performance=performance,
+                        best_epoch=epoch)
+                    logger.info('Best model is updated')
+
+                if not last_model_saved:
+                    # save a model
+                    with filesys.replace_dir(last_common_dir) as temp_last_dir_path:
+                        learning.save_optimizer(optimizer, temp_last_dir_path)
+                        if saving_scheduler:
+                            learning.save_scheduler(scheduler, temp_last_dir_path)
+                        learning.save_model(model, temp_last_dir_path)
+                        last_model_saved = True
+
+                # save for a decoding strategy
+                strategy_last_dir = get_last_dir_path(config.decoding_strategy_name)
+                learning.save_status(status, strategy_last_dir)
+                learning.save_performance(performance, strategy_last_dir)
+                learning.save_analysis(validation['analysis'], strategy_last_dir)
+
+                if updating_best:
+                    strategy_best_dir = get_best_dir_path(config.decoding_strategy_name)
+                    filesys.copy_dir(last_common_dir, strategy_best_dir, replacing=True)
+
+                logger.info(f'Results are saved in "{model_learning_dir_path}"')
+
+
+@config
 def run_test(
         *,
         model_learning_dir_path=config.ph,
@@ -322,8 +519,8 @@ def validate(
     for batch in config.xtqdm(data_loader, **xtqdm_kwargs):
         # if config.debug:
         #     batch_idx += 1
-        #     # if batch_idx >= 10:
-        #     #     break
+        #     if batch_idx >= 3:
+        #         break
         #     # if batch_idx < 1000:
         #     if batch_idx < 500:
         #         def update_realtime_accuracy():
@@ -468,10 +665,12 @@ def compute_accuracy(predictions, answers):
 
 
 if __name__ == '__main__':
-    if config.run_mode == 'train':
+    if config.run_mode == 'train-strong-sup':
         run_train()
         # from dhnamlib.pylib.cProfiling import run_context
         # run_context('run_train(model_learning_dir_path=config.model_learning_dir_path)', sort='cumtime')
+    if config.run_mode == 'train-for-multiple-decoding-strategies':
+        run_train_for_multiple_decoding_strategies()
     elif config.run_mode == 'test-on-val-set':
         run_test(encoded_test_set=config.encoded_val_set, evaluating=True)
         # from dhnamlib.pylib.cProfiling import run_context

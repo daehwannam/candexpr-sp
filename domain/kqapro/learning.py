@@ -52,12 +52,12 @@ def load_tokenizer(pretrained_model_name_or_path, add_prefix_space, non_nl_token
     return tokenizer
 
 
-def get_last_dir_path(model_learning_dir_path):
-    return os.path.join(model_learning_dir_path, 'last')
+def get_last_dir_path(model_learning_dir_path, dir_name='last'):
+    return os.path.join(model_learning_dir_path, dir_name)
 
 
-def get_best_dir_path(model_learning_dir_path):
-    return os.path.join(model_learning_dir_path, 'best')
+def get_best_dir_path(model_learning_dir_path, dir_name='best'):
+    return os.path.join(model_learning_dir_path, dir_name)
 
 
 def load_model(pretrained_model_name_or_path, num_tokens=None):
@@ -402,24 +402,20 @@ def load_and_update_scheduler(scheduler, dir_path):
 STATUS_FILE_NAME = 'status.json'
 
 
-def get_status_file_path(dir_path):
-    return os.path.join(dir_path, STATUS_FILE_NAME)
+def save_status(status, dir_path, file_name=STATUS_FILE_NAME):
+    filesys.json_pretty_save(status, os.path.join(dir_path, file_name))
 
 
-def save_status(status, dir_path):
-    filesys.json_pretty_save(status, get_status_file_path(dir_path))
+def load_status(dir_path, file_name=STATUS_FILE_NAME):
+    return filesys.json_load(os.path.join(dir_path, file_name))
 
 
-def load_status(dir_path):
-    return filesys.json_load(get_status_file_path(dir_path))
+def save_performance(performance, dir_path, file_name='performance.json'):
+    filesys.json_pretty_save(performance, os.path.join(dir_path, file_name))
 
 
-def save_performance(performance, dir_path):
-    filesys.json_pretty_save(performance, os.path.join(dir_path, 'performance.json'))
-
-
-def save_analysis(analysis, dir_path):
-    analysis_file_path = os.path.join(dir_path, 'analysis.json')
+def save_analysis(analysis, dir_path, file_name='analysis.json'):
+    analysis_file_path = os.path.join(dir_path, file_name)
     filesys.json_pretty_save(analysis, analysis_file_path)
 
 

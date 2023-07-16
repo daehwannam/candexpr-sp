@@ -13,7 +13,7 @@ _config_specific = Environment(
 )
 
 _config_overriding = Environment(
-    # specific config here
+    # overriding config here
     run_mode='test-on-val-set',
 )
 
