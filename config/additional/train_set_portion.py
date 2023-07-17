@@ -35,8 +35,8 @@ def _extract_dataset_portion(dataset, percent, expected_dataset_size=None):
 def make_config(percent):
     assert 0 < percent <= 100
 
-    # num_epoch_repeats = math.sqrt(100 / percent)
     num_epoch_repeats = 100 / percent
+    # num_epoch_repeats = math.sqrt(100 / percent)
     num_used_train_examples = round(KQAPRO_TRAN_SET_SIZE * percent / 100)
 
     if percent == 100:
