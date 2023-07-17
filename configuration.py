@@ -66,7 +66,7 @@ def _is_valid_run_mode(run_mode):
 
 def _is_training_run_mode(run_mode):
     assert _is_valid_run_mode(config.run_mode)
-    return run_mode in ['train', 'retrain', 'finetune']
+    return run_mode in ['train-strong-sup', 'train-for-multiple-decoding-strategies']
 
 def _make_logger():
     if _is_training_run_mode(config.run_mode):
