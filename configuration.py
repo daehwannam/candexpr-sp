@@ -31,6 +31,8 @@ _augmented_val_set_file_path = './processed/kqapro/augmented_val.jsonl'
 _encoded_train_set_file_path = './processed/kqapro/encoded_train.jsonl'
 _encoded_val_set_file_path = './processed/kqapro/encoded_val.jsonl'
 _encoded_test_set_file_path = './processed/kqapro/encoded_test.jsonl'
+_shuffled_augmented_train_set_file_path = './processed/kqapro/shuffled_augmented_train.jsonl'
+_shuffled_encoded_train_set_file_path = './processed/kqapro/shuffled_encoded_train.jsonl'
 # _encoded_train_mask_dataset_file_path = './processed/kqapro/encoded_train_mask.jsonl'
 
 _grammar_file_path = './domain/kqapro/grammar.lissp'
@@ -125,6 +127,8 @@ _default_config = Environment(
     encoded_val_set_file_path=_encoded_val_set_file_path,
     encoded_test_set_file_path=_encoded_test_set_file_path,
     # encoded_train_mask_dataset_file_path=_encoded_train_mask_dataset_file_path,
+    shuffled_augmented_train_set_file_path=_shuffled_augmented_train_set_file_path,
+    shuffled_encoded_train_set_file_path=_shuffled_encoded_train_set_file_path,
 
     device=LazyEval(_get_device),
     logger=LazyEval(_make_logger),

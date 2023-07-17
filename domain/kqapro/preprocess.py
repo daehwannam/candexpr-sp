@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 from itertools import chain
 from tqdm import tqdm
 import torch
+import random
 
 from configuration import config
 
@@ -116,6 +117,7 @@ def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_
     print('Augmenting the dataset')
     augmented_dataset = apply_recursively(raw_dataset)
     for example_idx, example in tqdm(enumerate(augmented_dataset), total=len(augmented_dataset)):
+        example['example_id'] = example_idx
         if adding_action_name_seq:
             action_seq = action_seqs[example_idx]
             action_name_seq = [action.name for action in action_seq]
@@ -152,6 +154,7 @@ def encode_dataset(grammar, augmented_dataset):
 
         # `utterance_token_ids` and `action_ids` include BOS and EOS.
         encoded_example = dict(
+            example_id=example['example_id'],
             utterance_token_ids=grammar.utterance_tokenizer(example['question'])['input_ids'])
 
         if 'answer' in example:
@@ -207,6 +210,23 @@ def preprocess_for_encoded_mask(
     print(f'The encoded mask was saved as {encoded_train_mask_dataset_file_path}')
 
 
+def shuffle_dataset(dataset):
+    seed = 42
+    new_dataset = list(dataset)
+    random.Random(seed).shuffle(new_dataset)
+    return new_dataset
+
+
+def preprocess_for_shuffled_dataset(
+        *,
+        dataset,
+        shuffled_dataset_file_path):
+    shuffled_dataset = shuffle_dataset(dataset)
+    mkpdirs_unless_exist(shuffled_dataset_file_path)
+    jsonl_save(shuffled_dataset, shuffled_dataset_file_path)
+    print(f'The shuffled dataset was saved as {shuffled_dataset_file_path}')
+
+
 def _main():
     parser = ArgumentParser(description='Preprocess KoPL dataset',)
     parser.add_argument(
@@ -251,6 +271,14 @@ def _main():
         preprocess_for_encoded_mask(
             encoded_dataset=config.encoded_train_set,
             encoded_train_mask_dataset_file_path=config.encoded_train_mask_dataset_file_path)
+    elif args.goal == 'shuffled_augmented_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.augmented_train_set,
+            shuffled_dataset_file_path=config.shuffled_augmented_train_set_file_path)
+    elif args.goal == 'shuffled_encoded_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.encoded_train_set,
+            shuffled_dataset_file_path=config.shuffled_encoded_train_set_file_path)
     else:
         raise Exception('Unexpected goal')
 

@@ -54,7 +54,8 @@ python -m domain.kqapro.preprocess --goal augmented_val_set
 python -m domain.kqapro.preprocess --goal encoded_train_set
 python -m domain.kqapro.preprocess --goal encoded_val_set
 python -m domain.kqapro.preprocess --goal encoded_test_set
-# python -m domain.kqapro.preprocess --goal encoded_train_mask
+python -m domain.kqapro.preprocess --goal shuffled_augmented_train_set
+python -m domain.kqapro.preprocess --goal shuffled_encoded_train_set
 #+end_src
 
 ** Training

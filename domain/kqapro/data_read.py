@@ -26,6 +26,7 @@ def make_collate(decoder_start_token_id, pad_token_id):
         batch_size = len(examples)
         batched_example = dict(dicts2pairs(*examples))
 
+        example_id = batched_example['example_id']
         utterance_token_ids = make_batched_long_tensor(batched_example['utterance_token_ids'])
         attention_mask = id_tensor_to_mask(utterance_token_ids, pad_token_id)
 
@@ -53,6 +54,7 @@ def make_collate(decoder_start_token_id, pad_token_id):
         #     nll_mask=make_batched_mask_tensor(batched_example['nll_mask'])))
 
         return LazyDict(not_none_valued_pairs(
+            example_id=example_id,
             utterance_token_ids=utterance_token_ids,
             action_ids=action_ids,
             attention_mask=attention_mask,

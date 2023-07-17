@@ -491,6 +491,7 @@ def validate(
         all_answers = []
 
     if analyzing:
+        all_example_ids = []
         all_utterances = []
         all_predicted_token_id_seqs = []
         all_predicted_last_states = []
@@ -566,17 +567,20 @@ def validate(
             all_answers.extend(answers)
 
         if analyzing:
+            all_example_ids.extend(batch['example_id'])
+
             utterances = grammar.utterance_tokenizer.batch_decode(
                 batch['utterance_token_ids'], skip_special_tokens=True)
+
+            all_utterances.extend(utterances)
+            all_predicted_token_id_seqs.extend(token_id_seqs)
+            all_predicted_last_states.extend(last_states)
 
             if evaluating:
                 assert 'labels' in batch
                 answer_last_states = learning.token_id_seqs_to_last_states(
                     grammar, batch['labels'].tolist(), ignoring_parsing_errors=not constrained_decoding)
                 all_answer_last_states.extend(answer_last_states)
-            all_utterances.extend(utterances)
-            all_predicted_token_id_seqs.extend(token_id_seqs)
-            all_predicted_last_states.extend(last_states)
 
     if evaluating:
         assert len(all_predictions) == len(all_answers) == len(all_answer_last_states)
@@ -629,7 +633,7 @@ def validate(
             correct_list = None
 
         analysis = list(pairs2dicts(not_none_valued_pairs(
-            example_idx=tuple(range(len(all_utterances))),
+            example_ids=all_example_ids,
             utterance=all_utterances,
             answer=all_answers if evaluating else None,
             prediction=all_predictions,
