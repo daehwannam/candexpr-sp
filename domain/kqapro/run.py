@@ -344,7 +344,6 @@ def run_train_for_multiple_decoding_strategies(
         model.eval()
         last_model_saved = False
 
-        # TODO
         for decoding_strategy_config in decoding_strategy_configs:
             with config.let(decoding_strategy_config.items()):
                 logger.info(f'Validation of "{config.decoding_strategy_name}" starts')
@@ -359,7 +358,7 @@ def run_train_for_multiple_decoding_strategies(
                     num_beams=num_prediction_beams,
                     generation_max_length=generation_max_length,
                     softmax_masking=softmax_masking,
-                    constrained_decoding=constrained_decoding,
+                    constrained_decoding=config.constrained_decoding,
                     evaluating=True)
 
                 performance = validation['performance']

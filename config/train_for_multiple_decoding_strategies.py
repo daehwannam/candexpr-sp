@@ -14,7 +14,7 @@ _config_specific = Environment(
     run_mode='train-for-multiple-decoding-strategies',
     decoding_strategy_configs=[
         AttrDict(
-            decoding_strategy_name='full-constrains',
+            decoding_strategy_name='full-constraints',
             constrained_decoding=True,
             using_arg_candidate=True,
         ),
