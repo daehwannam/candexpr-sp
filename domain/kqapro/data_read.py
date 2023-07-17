@@ -1,7 +1,7 @@
 
 import torch
 
-from dhnamlib.pylib.torchlib.dnn import pad_sequence, SimpleDataset, id_tensor_to_mask, batch_sequence_tensors
+from dhnamlib.pylib.torchlib.dnn import pad_sequence, SimpleDataset, id_tensor_to_mask, batch_sequence_tensors, EpochRepeatingDataLoader
 # from dhnamlib.pylib.iteration import keys2items
 from dhnamlib.pylib.iteration import dicts2pairs, not_none_valued_pairs, merge_dicts, unique
 # from dhnamlib.pylib.decoration import construct
@@ -68,7 +68,10 @@ def make_collate(decoder_start_token_id, pad_token_id):
     return collate
 
 
-def make_data_loader(encoded_dataset, encoded_mask_dataset=None, *, decoder_start_token_id, pad_token_id, batch_size, shuffle):
+def make_data_loader(
+        encoded_dataset, encoded_mask_dataset=None, *, decoder_start_token_id, pad_token_id,
+        batch_size, shuffle, num_epoch_repeats=1
+):
     if encoded_mask_dataset is None:
         _encoded_dataset = encoded_dataset
     else:
@@ -76,9 +79,14 @@ def make_data_loader(encoded_dataset, encoded_mask_dataset=None, *, decoder_star
         _encoded_dataset = tuple(merge_dicts(examples, merge_fn=unique)
                                  for examples in zip(encoded_dataset, encoded_mask_dataset))
 
-    return torch.utils.data.DataLoader(
+    data_loader = torch.utils.data.DataLoader(
         SimpleDataset(_encoded_dataset),
         batch_size=batch_size,
         shuffle=shuffle,
         collate_fn=make_collate(decoder_start_token_id, pad_token_id),
     )
+
+    if num_epoch_repeats == 1:
+        return data_loader
+    else:
+        return EpochRepeatingDataLoader(data_loader, num_epoch_repeats=num_epoch_repeats)

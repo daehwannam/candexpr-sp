@@ -235,6 +235,7 @@ def run_train_for_multiple_decoding_strategies(
         generation_max_length=config.ph,
         saving_scheduler=config.ph,
         decoding_strategy_configs=config.ph,
+        num_epoch_repeats=config.ph(1),
 ):
     assert model_learning_dir_path is not None
 
@@ -265,7 +266,8 @@ def run_train_for_multiple_decoding_strategies(
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=train_batch_size,
-        shuffle=True)
+        shuffle=True,
+        num_epoch_repeats=num_epoch_repeats)
     val_data_loader = make_data_loader(
         encoded_dataset=encoded_val_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,

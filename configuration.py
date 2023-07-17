@@ -113,6 +113,8 @@ _default_config = Environment(
     encoded_val_set=LazyEval(lambda: jsonl_load(_encoded_val_set_file_path)),
     encoded_test_set=LazyEval(lambda: jsonl_load(_encoded_test_set_file_path)),
     # encoded_train_mask_dataset=LazyEval(lambda: pickle_load(_encoded_train_mask_dataset_file_path)),
+    shuffled_augmented_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_train_set_file_path)),
+    shuffled_encoded_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_train_set_file_path)),
 
     grammar=LazyEval(_make_grammar),
     compiler=LazyEval(lambda: config.grammar.compiler_cls()),
