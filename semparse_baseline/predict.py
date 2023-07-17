@@ -62,7 +62,7 @@ def vis(args, kb, model, data, device, tokenizer):
             print(outputs[0])
 
 
-def predict(args, model, data, device, tokenizer, executor):
+def predict(args, model, data, device, tokenizer, executor, postprocessing_answer: bool):
     model.eval()
     count, correct = 0, 0
     with torch.no_grad():
@@ -101,13 +101,16 @@ def predict(args, model, data, device, tokenizer, executor):
                 ans = executor.forward(func_list, inputs_list, ignore_error = True)
                 if ans is None:
                     ans = 'no'
-                if isinstance(ans, list) and len(ans) > 0:
-                    ans = ans[0]
-                if isinstance(ans, list) and len(ans) == 0:
-                    ans = 'None'
+                elif isinstance(ans, list) and len(ans) > 0:
+                    ans = sorted(ans)[0]
+                elif isinstance(ans, list) and len(ans) == 0:
+                    if postprocessing_answer:
+                        ans = 'no'
+                    else:
+                        ans = 'None'
                 f.write(ans + '\n')
                 
-def validate(model, data, device, tokenizer, executor):
+def validate(model, data, device, tokenizer, executor, postprocessing_answer: bool):
     model.eval()
     count, correct = 0, 0
     with torch.no_grad():
@@ -146,8 +149,11 @@ def validate(model, data, device, tokenizer, executor):
             ans = executor.forward(func_list, inputs_list, ignore_error = True)
             if ans is None:
                 ans = 'no'
-            if isinstance(ans, list) and len(ans) > 0:
-                ans = ans[0]
+            elif isinstance(ans, list) and len(ans) > 0:
+                ans = sorted(ans)[0]
+            elif isinstance(ans, list) and len(ans) == 0:
+                if postprocessing_answer:
+                    ans = 'no'
             if ans == a:
                 correct += 1
             count += 1
@@ -175,7 +181,7 @@ def train(args):
     engine = KoPLEngine(json.load(open(os.path.join(args.input_dir, 'kb.json'))))
     # validate(model, val_loader, device, tokenizer, engine)
 
-    predict(args, model, val_loader, device, tokenizer, engine)
+    predict(args, model, val_loader, device, tokenizer, engine, args.postprocessing_answer)
 
 
 def main():
@@ -188,6 +194,8 @@ def main():
     # training parameters
     parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--seed', type=int, default=42, help='random seed')
+
+    parser.add_argument('--postprocessing-answer', dest='postprocessing_answer', action='store_true', help='post-processing answers')
     
     # validating parameters
     # parser.add_argument('--num_return_sequences', default=1, type=int)

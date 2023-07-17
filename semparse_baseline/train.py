@@ -99,7 +99,7 @@ def train(args):
         logger.info("  Will skip the first %d steps in the first epoch", steps_trained_in_current_epoch)
     logger.info('Checking...')
     logger.info("===================Dev==================")
-    validate(model, val_loader, device, tokenizer, engine)
+    validate(model, val_loader, device, tokenizer, engine, args.postprocessing_answer)
     # tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
     for _ in range(int(args.num_train_epochs)):
@@ -136,7 +136,7 @@ def train(args):
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
                 global_step += 1
-        validate(model, val_loader, device, tokenizer, engine)
+        validate(model, val_loader, device, tokenizer, engine, args.postprocessing_answer)
         output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -183,6 +183,8 @@ def main():
                         help="Number of updates steps to accumulate before performing a backward/update pass.", )
     parser.add_argument("--max_grad_norm", default=1.0, type=float,
                         help="Max gradient norm.")
+    parser.add_argument('--postprocessing-answer', dest='postprocessing_answer', action='store_true',
+                        help='post-processing answers')
     
     # validating parameters
     # parser.add_argument('--num_return_sequences', default=1, type=int)
