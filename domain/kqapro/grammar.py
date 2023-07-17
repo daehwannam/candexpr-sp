@@ -26,7 +26,7 @@ class KoPLGrammar(Grammar):
     interface = Interface(Grammar)
 
     @config
-    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register, use_reduce=True,
+    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register=config.ph, use_reduce=True,
                  pretrained_model_name_or_path=config.ph):
 
         self.pretrained_model_name_or_path = pretrained_model_name_or_path

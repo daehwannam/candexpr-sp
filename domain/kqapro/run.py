@@ -552,7 +552,7 @@ def validate(
             # **generation_kwargs
         )
         last_states = learning.token_id_seqs_to_last_states(
-            grammar, token_id_seqs, ignoring_parsing_errors=not constrained_decoding)
+            grammar, token_id_seqs, ignoring_parsing_errors=not (constrained_decoding and config.using_arg_candidate))
         programs = learning.last_states_to_programs(
             grammar, compiler, last_states, tolerant=True, ignoring_compilation_errors=not constrained_decoding)
 
