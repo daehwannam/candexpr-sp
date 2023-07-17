@@ -149,12 +149,12 @@ def preprocess_for_augmented_dataset(
 
 
 @construct(list)
-def encode_dataset(grammar, augmented_dataset):
-    for example in tqdm(augmented_dataset):
+def encode_dataset(grammar, augmented_dataset, example_idx_as_id=False):
+    for example_idx, example in enumerate(tqdm(augmented_dataset)):
 
         # `utterance_token_ids` and `action_ids` include BOS and EOS.
         encoded_example = dict(
-            example_id=example['example_id'],
+            example_id=example_idx if example_idx_as_id else example['example_id'],
             utterance_token_ids=grammar.utterance_tokenizer(example['question'])['input_ids'])
 
         if 'answer' in example:
@@ -178,8 +178,9 @@ def preprocess_for_encoded_dataset(
         *,
         grammar=config.ph,
         augmented_dataset,
-        encoded_dataset_file_path):
-    encoded_dataset = encode_dataset(grammar, augmented_dataset)
+        encoded_dataset_file_path,
+        example_idx_as_id=False):
+    encoded_dataset = encode_dataset(grammar, augmented_dataset, example_idx_as_id=example_idx_as_id)
     mkpdirs_unless_exist(encoded_dataset_file_path)
     jsonl_save(encoded_dataset, encoded_dataset_file_path)
     print(f'The augmented dataset was saved as {encoded_dataset_file_path}')
@@ -237,7 +238,9 @@ def _main():
             'encoded_train_set',
             'encoded_val_set',
             'encoded_test_set',
-            # 'encoded_train_mask'
+            # 'encoded_train_mask',
+            'shuffled_augmented_train_set',
+            'shuffled_encoded_train_set',
         ])
 
     args = parser.parse_args(config.remaining_cmd_args)
@@ -265,7 +268,8 @@ def _main():
     elif args.goal == 'encoded_test_set':
         preprocess_for_encoded_dataset(
             augmented_dataset=config.raw_test_set,
-            encoded_dataset_file_path=config.encoded_test_set_file_path)
+            encoded_dataset_file_path=config.encoded_test_set_file_path,
+            example_idx_as_id=True)
     elif args.goal == 'encoded_train_mask':
         raise NotImplementedError
         preprocess_for_encoded_mask(
