@@ -40,7 +40,7 @@ def make_config(percent):
     num_used_train_examples = round(KQAPRO_TRAN_SET_SIZE * percent / 100)
 
     if percent == 100:
-        encoded_train_set = configuration.config.shuffled_encoded_train_set
+        encoded_train_set = LazyEval(lambda: configuration.config.shuffled_encoded_train_set)
     else:
         encoded_train_set = LazyEval(lambda: _extract_dataset_portion(
             configuration.config.shuffled_encoded_train_set,
