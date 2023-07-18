@@ -34,11 +34,20 @@ def train(args):
 
     logger.info("Create train_loader and val_loader.........")
     vocab_json = os.path.join(args.input_dir, 'vocab.json')
-    train_pt = os.path.join(args.input_dir, 'train.pt')
+    if args.using_shuffled_train:
+        train_pt_file_name = 'train-shuffled.pt'
+    else:
+        train_pt_file_name = 'train.pt'
+    train_pt = os.path.join(args.input_dir, train_pt_file_name)
     val_pt = os.path.join(args.input_dir, 'val.pt')
     train_loader = DataLoader(vocab_json, train_pt, args.batch_size, training=True, percent=args.train_set_percent)
     if args.train_set_percent != 100:
-        raise NotImplementedError
+        from dhnamlib.pylib.torchlib.dnn import EpochRepeatingDataLoader
+        num_epoch_repeats = 100 / args.train_set_percent
+        old_train_loader = train_loader
+        train_loader = EpochRepeatingDataLoader(train_loader, num_epoch_repeats=num_epoch_repeats)
+        train_loader.dataset = old_train_loader.dataset
+        del old_train_loader
     val_loader = DataLoader(vocab_json, val_pt, 64)
 
     engine = KoPLEngine(json.load(open(os.path.join(args.input_dir, 'kb.json'))))
@@ -107,7 +116,8 @@ def train(args):
     best_accuracy = float('-inf')
     accuracy_history = []
     for epoch_num in range(1, int(args.num_train_epochs) + 1):
-        pbar = ProgressBar(n_total=len(train_loader), desc='Training')
+        if args.using_progress_bar:
+            pbar = ProgressBar(n_total=len(train_loader), desc='Training')
         for step, batch in enumerate(train_loader):
             # Skip past any already trained steps if resuming training
             if steps_trained_in_current_epoch > 0:
@@ -132,7 +142,8 @@ def train(args):
             outputs = model(**inputs)
             loss = outputs['loss']  # outputs[0]
             loss.backward()
-            pbar(step, {'loss': loss.item()})
+            if args.using_progress_bar:
+                pbar(step, {'loss': loss.item()})
             # tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0 or (step + 1) == len(train_loader):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
@@ -204,7 +215,9 @@ def main():
                         help='post-processing answers')
     parser.add_argument('--train-set-percent', dest='train_set_percent', default=100, type=float,
                         help='train set percent')
-    parser.add_argument('--saving-optimizer', dest='saving_optimizer', action='store_true')
+    parser.add_argument('--use-shuffled-train', dest='using_shuffled_train', action='store_true')
+    parser.add_argument('--save-optimizer', dest='saving_optimizer', action='store_true')
+    parser.add_argument('--disable-progress-bar', dest='using_progress_bar', action='store_false')
     
     
     # validating parameters
@@ -225,6 +238,14 @@ def main():
     # args display
     for k, v in vars(args).items():
         logger.info(k+':'+str(v))
+
+    if not args.using_progress_bar:
+        from . import predict as _predict
+
+        def no_tqdm(iterable, *args, **kwargs):
+            return iterable
+
+        _predict.tqdm = no_tqdm
 
     seed_everything(42)
 

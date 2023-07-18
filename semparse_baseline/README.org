@@ -77,9 +77,11 @@ ln -s $(realpath ./dataset/kqapro/kb.json) $PROCESSED_PATH/kb.json
 python -m $MODULE.train --input_dir $PROCESSED_PATH --output_dir $OUTPUT_DIR_PATH --save_dir $TRAIN_LOG_PATH --model_name_or_path "$MODEL_NAME_OR_PATH"
 #+end_src
 
-** Training with post-processing answers and limiting train set
+** Training with post-processing answers and limiting train set (+ with other options)
 #+begin_src sh
-python -m $MODULE.train --input_dir $PROCESSED_PATH --output_dir $OUTPUT_DIR_PATH --save_dir $TRAIN_LOG_PATH --model_name_or_path "$MODEL_NAME_OR_PATH" --postprocessing-answer --train-set-percent 100
+PERCENT=100
+
+python -m $MODULE.train --input_dir $PROCESSED_PATH --output_dir $OUTPUT_DIR_PATH --save_dir $TRAIN_LOG_PATH --model_name_or_path "$MODEL_NAME_OR_PATH" --postprocessing-answer --train-set-percent $PERCENT --use-shuffled-train --disable-progress-bar
 #+end_src
 
 ** Prediction
