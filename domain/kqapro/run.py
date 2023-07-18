@@ -62,7 +62,7 @@ def run_train(
     last_dir_path = learning.get_last_dir_path(model_learning_dir_path)
     filesys.mkloc_unless_exist(last_dir_path)
     best_dir_path = learning.get_best_dir_path(model_learning_dir_path)
-    # filesys.mkloc_unless_exist(best_dir_path)
+    filesys.mkloc_unless_exist(best_dir_path)
 
     model = learning.load_model(
         pretrained_model_name_or_path,
