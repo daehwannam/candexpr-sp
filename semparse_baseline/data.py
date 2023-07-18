@@ -45,7 +45,7 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class DataLoader(torch.utils.data.DataLoader):
-    def __init__(self, vocab_json, question_pt, batch_size, training=False):
+    def __init__(self, vocab_json, question_pt, batch_size, training=False, percent=100):
         vocab = load_vocab(vocab_json)
         if training:
             print('#vocab of answer: %d' % (len(vocab['answer_token_to_idx'])))
@@ -54,6 +54,17 @@ class DataLoader(torch.utils.data.DataLoader):
         with open(question_pt, 'rb') as f:
             for _ in range(5):
                 inputs.append(pickle.load(f))
+
+        assert 0 < percent <= 100
+        if percent != 100:
+            assert len(inputs) == 5
+            num_total_examples = len(inputs[0])
+            num_examples = round(num_total_examples * percent / 100)
+            old_inputs = inputs
+            inputs = []
+            for idx in range(5):
+                inputs.append(old_inputs[idx][:num_examples])
+
         dataset = Dataset(inputs)
         # np.shuffle(dataset)
         # dataset = dataset[:(int)(len(dataset) / 10)]

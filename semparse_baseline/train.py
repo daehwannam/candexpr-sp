@@ -36,7 +36,9 @@ def train(args):
     vocab_json = os.path.join(args.input_dir, 'vocab.json')
     train_pt = os.path.join(args.input_dir, 'train.pt')
     val_pt = os.path.join(args.input_dir, 'val.pt')
-    train_loader = DataLoader(vocab_json, train_pt, args.batch_size, training=True)
+    train_loader = DataLoader(vocab_json, train_pt, args.batch_size, training=True, percent=args.train_set_percent)
+    if args.train_set_percent != 100:
+        raise NotImplementedError
     val_loader = DataLoader(vocab_json, val_pt, 64)
 
     engine = KoPLEngine(json.load(open(os.path.join(args.input_dir, 'kb.json'))))
@@ -102,7 +104,9 @@ def train(args):
     validate(model, val_loader, device, tokenizer, engine, args.postprocessing_answer)
     # tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
-    for _ in range(int(args.num_train_epochs)):
+    best_accuracy = float('-inf')
+    accuracy_history = []
+    for epoch_num in range(1, int(args.num_train_epochs) + 1):
         pbar = ProgressBar(n_total=len(train_loader), desc='Training')
         for step, batch in enumerate(train_loader):
             # Skip past any already trained steps if resuming training
@@ -136,24 +140,37 @@ def train(args):
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
                 global_step += 1
-        validate(model, val_loader, device, tokenizer, engine, args.postprocessing_answer)
-        output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        model_to_save = (
-            model.module if hasattr(model, "module") else model
-        )  # Take care of distributed/parallel training. (e.g. "model = DistributedDataParallel(module=model)")
-        model_to_save.save_pretrained(output_dir)
-        tokenizer.save_pretrained(output_dir)
-        torch.save(args, os.path.join(output_dir, "training_args.bin"))
-        logger.info("Saving model checkpoint to %s", output_dir)
-        # tokenizer.save_vocabulary(output_dir)
-        torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-        torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-        logger.info("Saving optimizer and scheduler states to %s", output_dir)
-        logger.info("\n")
-        if 'cuda' in str(device):
-            torch.cuda.empty_cache()
+        accuracy = validate(model, val_loader, device, tokenizer, engine, args.postprocessing_answer)
+        accuracy_history.append(accuracy)
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+
+            # output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
+            output_dir = os.path.join(args.output_dir, "checkpoint-best")
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            with open(os.path.join(output_dir, 'check_point_info.json'), 'w') as f:
+                check_point_info = dict(epoch=epoch_num,
+                                        global_step=global_step,
+                                        accuracy=best_accuracy,
+                                        accuracy_history=accuracy_history)
+                json.dump(check_point_info, f, indent=4)
+            model_to_save = (
+                model.module if hasattr(model, "module") else model
+            )  # Take care of distributed/parallel training. (e.g. "model = DistributedDataParallel(module=model)")
+            model_to_save.save_pretrained(output_dir)
+            tokenizer.save_pretrained(output_dir)
+            torch.save(args, os.path.join(output_dir, "training_args.bin"))
+            logger.info("Saving model checkpoint to %s", output_dir)
+            # tokenizer.save_vocabulary(output_dir)
+            if args.saving_optimizer:
+                torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                logger.info("Saving the optimizer state to %s", output_dir)
+            torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
+            logger.info("Saving the scheduler state to %s", output_dir)
+            logger.info("\n")
+            if 'cuda' in str(device):
+                torch.cuda.empty_cache()
     return global_step  # , tr_loss / global_step
 
 
@@ -185,6 +202,10 @@ def main():
                         help="Max gradient norm.")
     parser.add_argument('--postprocessing-answer', dest='postprocessing_answer', action='store_true',
                         help='post-processing answers')
+    parser.add_argument('--train-set-percent', dest='train_set_percent', default=100, type=float,
+                        help='train set percent')
+    parser.add_argument('--saving-optimizer', dest='saving_optimizer', action='store_true')
+    
     
     # validating parameters
     # parser.add_argument('--num_return_sequences', default=1, type=int)
@@ -212,4 +233,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

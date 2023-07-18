@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 from itertools import chain
 from tqdm import tqdm
+import random
 
 from transformers import BartTokenizer
 
@@ -85,6 +86,7 @@ def main():
     parser.add_argument('--input_dir', required=True)
     parser.add_argument('--output_dir', required=True)
     parser.add_argument('--model_name_or_path', required=True)
+    parser.add_argument('--shuffling_train', action='store_true')
     args = parser.parse_args()
 
     print('Build kb vocabulary')
@@ -111,7 +113,13 @@ def main():
     tokenizer = BartTokenizer.from_pretrained(args.model_name_or_path)
     for token in new_tokens:
         tokenizer.add_tokens(token, special_tokens = True)
-    for name, dataset in zip(('train', 'val', 'test'), (train_set, val_set, test_set)):
+    if args.shuffling_train:
+        train_name = 'train-shuffled'
+        seed = 42
+        random.Random(seed).shuffle(train_set)
+    else:
+        train_name = 'train'
+    for name, dataset in zip((train_name, 'val', 'test'), (train_set, val_set, test_set)):
         print('Encode {} set'.format(name))
         outputs = encode_dataset(dataset, vocab, tokenizer, name=='test')
         assert len(outputs) == 5

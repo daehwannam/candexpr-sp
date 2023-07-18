@@ -66,16 +66,36 @@ python -m $MODULE.preprocess --input_dir ./dataset/kqapro --output_dir $PROCESSE
 ln -s $(realpath ./dataset/kqapro/kb.json) $PROCESSED_PATH/kb.json
 #+end_src
 
+** Preprocessing with shuffling train set
+#+begin_src sh
+python -m $MODULE.preprocess --input_dir ./dataset/kqapro --output_dir $PROCESSED_PATH --model_name_or_path "$MODEL_NAME_OR_PATH" --shuffling_train
+ln -s $(realpath ./dataset/kqapro/kb.json) $PROCESSED_PATH/kb.json
+#+end_src
+
 ** Training
 #+begin_src sh
 python -m $MODULE.train --input_dir $PROCESSED_PATH --output_dir $OUTPUT_DIR_PATH --save_dir $TRAIN_LOG_PATH --model_name_or_path "$MODEL_NAME_OR_PATH"
 #+end_src
 
+** Training with post-processing answers and limiting train set
+#+begin_src sh
+python -m $MODULE.train --input_dir $PROCESSED_PATH --output_dir $OUTPUT_DIR_PATH --save_dir $TRAIN_LOG_PATH --model_name_or_path "$MODEL_NAME_OR_PATH" --postprocessing-answer --train-set-percent 100
+#+end_src
+
 ** Prediction
 #+begin_src sh
-CKPT_NUM=<number>
+# CKPT_NUM=<number>
+CKPT_NUM=best
 CHECKPOINT_PATH=./output/bart-program-$DATE/checkpoint-$CKPT_NUM
 python -m $MODULE.predict --input_dir $PROCESSED_PATH --save_dir $PREDICT_LOG_PATH --ckpt $CHECKPOINT_PATH
+#+end_src
+
+** Prediction with post-processing answers
+#+begin_src sh
+# CKPT_NUM=<number>
+CKPT_NUM=best
+CHECKPOINT_PATH=./output/bart-program-$DATE/checkpoint-$CKPT_NUM
+python -m $MODULE.predict --input_dir $PROCESSED_PATH --save_dir $PREDICT_LOG_PATH --ckpt $CHECKPOINT_PATH --postprocessing-answer
 #+end_src
 
 * Acknowledgements
