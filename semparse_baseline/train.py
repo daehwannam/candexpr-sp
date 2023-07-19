@@ -48,7 +48,7 @@ def train(args):
         train_loader = EpochRepeatingDataLoader(train_loader, num_epoch_repeats=num_epoch_repeats)
         train_loader.dataset = old_train_loader.dataset
         del old_train_loader
-    val_loader = DataLoader(vocab_json, val_pt, 64)
+    val_loader = DataLoader(vocab_json, val_pt, args.pred_batch_size)
 
     engine = KoPLEngine(json.load(open(os.path.join(args.input_dir, 'kb.json'))))
     logger.info("Create model.........")
@@ -160,6 +160,10 @@ def train(args):
             output_dir = os.path.join(args.output_dir, "checkpoint-best")
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
+            cmd_args_file_path = os.path.join(output_dir, 'cmd_args.json')
+            if not os.path.isfile(cmd_args_file_path):
+                with open(cmd_args_file_path, 'w') as f:
+                    json.dump(vars(args), f, indent=4)
             with open(os.path.join(output_dir, 'check_point_info.json'), 'w') as f:
                 check_point_info = dict(epoch=epoch_num,
                                         global_step=global_step,
@@ -218,6 +222,7 @@ def main():
     parser.add_argument('--use-shuffled-train', dest='using_shuffled_train', action='store_true')
     parser.add_argument('--save-optimizer', dest='saving_optimizer', action='store_true')
     parser.add_argument('--disable-progress-bar', dest='using_progress_bar', action='store_false')
+    parser.add_argument('--pred_batch_size', default=None, type=int)
     
     
     # validating parameters
@@ -227,6 +232,9 @@ def main():
     parser.add_argument('--dim_hidden', default=1024, type=int)
     parser.add_argument('--alpha', default=1e-4, type=float)
     args = parser.parse_args()
+
+    if args.pred_batch_size is None:
+        args.pred_batch_size = args.batch_size * 4
 
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
