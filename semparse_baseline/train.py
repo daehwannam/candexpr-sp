@@ -215,6 +215,9 @@ def main():
                         help="Number of updates steps to accumulate before performing a backward/update pass.", )
     parser.add_argument("--max_grad_norm", default=1.0, type=float,
                         help="Max gradient norm.")
+    # Note:
+    # Small 'max_grad_norm' is inevitable when 'batch_size' is large
+    # e.g. batch_size=128, max_grad_norm=0.1
     parser.add_argument('--postprocessing-answer', dest='postprocessing_answer', action='store_true',
                         help='post-processing answers')
     parser.add_argument('--train-set-percent', dest='train_set_percent', default=100, type=float,
