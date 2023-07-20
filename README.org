@@ -79,6 +79,10 @@ python -m domain.kqapro.run --config config.train_for_multiple_decoding_strategi
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 # e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
 python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
+
+# You can also directly pass the path to the checkpoint
+#
+# python -m domain.kqapro.run --config config.test_on_val_set --model-checkpoint-dir $MODEL_LEARNING_DIR_PATH/best --test-dir-name  $(basename $MODEL_LEARNING_DIR_PATH)
 #+end_src
 
 ** Test on the test set
@@ -88,6 +92,16 @@ This makes a prediction file without evaluation.
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 # e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
 python -m domain.kqapro.run --config config.test_on_test_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
+#+end_src
+*** Test on the test set with specifying checkpoint path
+#+begin_src sh
+CHECKPOINT_PATH='path/to/checkpoint'
+# e.g. CHECKPOINT_PATH='model-instance/2023-07-19_01:17:04_094104/full-constraints:best'
+
+TEST_DIR_NAME='test-dir-name'
+# e.g. TEST_DIR_NAME=2023-07-19_01:17:04_094104_full-constraints:best
+
+python -m domain.kqapro.run --config config.test_on_test_set --model-checkpoint-dir $MODEL_LEARNING_DIR_PATH/best --test-dir-name  $(basename $MODEL_LEARNING_DIR_PATH)
 #+end_src
 
 ** Evaluation with the official code

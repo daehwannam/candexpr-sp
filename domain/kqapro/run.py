@@ -409,7 +409,8 @@ def run_train_for_multiple_decoding_strategies(
 @config
 def run_test(
         *,
-        model_learning_dir_path=config.ph,
+        model_learning_dir_path=config.ph(None),
+        model_checkpoint_dir_path=config.ph(None),
         test_dir_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
@@ -424,8 +425,11 @@ def run_test(
         generation_max_length=config.ph,
         evaluating,
 ):
+    if model_checkpoint_dir_path is None:
+        assert model_learning_dir_path is not None
+        model_checkpoint_dir_path = learning.get_best_dir_path(model_learning_dir_path)
     model = learning.load_model(
-        learning.get_best_dir_path(model_learning_dir_path),
+        model_checkpoint_dir_path,
         num_tokens=len(grammar.lf_tokenizer))
     model.to(device)
 
