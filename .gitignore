@@ -12,23 +12,26 @@ _tmp_*
 # python temporary file
 *.pyc
 
-# symbolic link
-/dataset
-
-# directories
-/processed
-/output
-/log
-/pretrained
-
 # slurm output files
 /*.out
 
-# for baseline code
+# symbolic link
+/dataset
+
+# directories for baseline code
+/output
+/output-keep
+/log
+/pretrained
 /baseline-processed
+
+# pre-processed data
+/processed
 
 # model-instance
 /model-instance
+/model-instance-keep
 
 # model-test
 /model-test
+/model-test-keep
