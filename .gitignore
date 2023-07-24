@@ -21,6 +21,8 @@ _tmp_*
 # directories for baseline code
 /output
 /output-keep
+/output-test
+/output-test-keep
 /log
 /pretrained
 /baseline-processed
