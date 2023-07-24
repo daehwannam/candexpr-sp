@@ -69,7 +69,6 @@ def predict(args, model, data, device, tokenizer, executor, postprocessing_answe
         all_outputs = []
         for batch in tqdm(data, total=len(data)):
             source_ids = batch[0].to(device)
-            breakpoint()
             outputs = model.generate(
                 input_ids=source_ids,
                 max_length = 500,
