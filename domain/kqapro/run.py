@@ -47,7 +47,7 @@ def run_train(
         context=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
-        saving_scheduler=config.ph,
+        saving_optimizer=config.ph,
 ):
     if restarting:
         assert learning.is_finetuned(pretrained_model_name_or_path)
@@ -196,9 +196,9 @@ def run_train(
             # save
             learning.save_status(status, temp_last_dir_path)
             learning.save_performance(performance, temp_last_dir_path)
-            learning.save_optimizer(optimizer, temp_last_dir_path)
-            if saving_scheduler:
-                learning.save_scheduler(scheduler, temp_last_dir_path)
+            if saving_optimizer:
+                learning.save_optimizer(optimizer, temp_last_dir_path)
+            learning.save_scheduler(scheduler, temp_last_dir_path)
             learning.save_model(model, temp_last_dir_path)
             learning.save_analysis(validation['analysis'], temp_last_dir_path)
 
@@ -233,7 +233,7 @@ def run_train_for_multiple_decoding_strategies(
         context=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
-        saving_scheduler=config.ph,
+        saving_optimizer=config.ph,
         decoding_strategy_configs=config.ph,
         num_epoch_repeats=config.ph(1),
 ):
@@ -387,9 +387,9 @@ def run_train_for_multiple_decoding_strategies(
                 if not last_model_saved:
                     # save a model
                     with filesys.replace_dir(last_common_dir) as temp_last_dir_path:
-                        learning.save_optimizer(optimizer, temp_last_dir_path)
-                        if saving_scheduler:
-                            learning.save_scheduler(scheduler, temp_last_dir_path)
+                        if saving_optimizer:
+                            learning.save_optimizer(optimizer, temp_last_dir_path)
+                        learning.save_scheduler(scheduler, temp_last_dir_path)
                         learning.save_model(model, temp_last_dir_path)
                         last_model_saved = True
 

@@ -15,23 +15,37 @@ _test_dir_root_path = './model-test'
 
 
 def get_test_dir_path():
+    def test_dir_name_to_path(test_dir_name):
+        dir_name_sep = '#'
+        common_test_dir_path = os.path.join(_test_dir_root_path, test_dir_name + dir_name_sep)
+        new_test_dir_path = get_new_path_with_number(common_test_dir_path)
+        return new_test_dir_path
+
     if 'model_learning_dir_path' in configuration.config:
         test_dir_name = os.path.basename(configuration.config.model_learning_dir_path)
+        test_dir_path = test_dir_name_to_path(test_dir_name)
     else:
         assert 'model_checkpoint_dir_path' in configuration.config
         parser = argparse.ArgumentParser(description='Testing a semantic parser')
         parser.add_argument('--test-dir-name', dest='test_dir_name', help='a name of the directory for test output')
+        parser.add_argument('--test-dir', dest='test_dir_path', help='a path to the directory for test output')
         args, unknown = parser.parse_known_args()
-        test_dir_name = args.test_dir_name
-        assert test_dir_name is not None
 
-    dir_name_sep = '#'
-    common_test_dir_path = os.path.join(_test_dir_root_path, test_dir_name + dir_name_sep)
+        if args.test_dir_path is not None:
+            assert args.test_dir_name is None
+            test_dir_path = args.test_dir_path
+        else:
+            assert args.test_dir_name is not None
+            test_dir_name = args.test_dir_name
+            test_dir_path = test_dir_name_to_path(test_dir_name)
 
-    new_test_dir_path = get_new_path_with_number(common_test_dir_path)
-    os.makedirs(new_test_dir_path)
+    if os.path.exists(test_dir_path):
+        assert os.path.isdir(test_dir_path), 'The path is to a file rather than a directory'
+        assert len(os.listdir(test_dir_path)) == 0, 'A test directory should be empty'
 
-    return new_test_dir_path
+    os.makedirs(test_dir_path)
+
+    return test_dir_path
 
 
 config = Environment(

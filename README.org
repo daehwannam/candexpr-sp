@@ -81,17 +81,6 @@ MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src
 
-*** Test on the validation set with specifying checkpoint path
-#+begin_src sh
-CHECKPOINT_PATH='path/to/checkpoint'
-# e.g. CHECKPOINT_PATH='model-instance/2023-07-19_01:17:04_094104/full-constraints:best'
-
-TEST_DIR_NAME='test-dir-name'
-# e.g. TEST_DIR_NAME='2023-07-19_01:17:04_094104_full-constraints:best'
-
-python -m domain.kqapro.run --config config.test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir-name $TEST_DIR_NAME
-#+end_src
-
 ** Test on the test set
 This makes a prediction file without evaluation.
 
@@ -101,15 +90,35 @@ MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 python -m domain.kqapro.run --config config.test_on_test_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src
 
-*** Test on the test set with specifying checkpoint path
+** Test with specifying checkpoint path and test directory path
 #+begin_src sh
+TEST_CONFIG='test_on_test_set'  # or 'test_on_val_set'
 CHECKPOINT_PATH='path/to/checkpoint'
-# e.g. CHECKPOINT_PATH='model-instance/2023-07-19_01:17:04_094104/full-constraints:best'
+TEST_DIR_PATH='path/to/test-result'
+# e.g. TEST_DIR_PATH='./model-test/2023-07-19_01:17:04_094104_full-constraints:best'
 
-TEST_DIR_NAME='test-dir-name'
-# e.g. TEST_DIR_NAME=2023-07-19_01:17:04_094104_full-constraints:best
+python -m domain.kqapro.run --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH
+#+end_src
 
-python -m domain.kqapro.run --config config.test_on_test_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir-name $TEST_DIR_NAME
+** Test with a specific decoding strategy
+#+begin_src sh
+TEST_CONFIG='test_on_test_set'  # or 'test_on_val_set'
+CHECKPOINT_PATH='path/to/checkpoint'
+COMMON_TEST_CMD="python -m domain.kqapro.run --config config.$TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH"
+
+# full constraints
+TEST_DIR_PATH='path/to/test-result:full-constraints'
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH
+
+# without arg-candidate
+TEST_DIR_PATH='path/to/test-result:no-arg-candidate'
+ADDITIONAL_CONFIG='config.additional.using_arg_candidate=False'
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
+
+# without constrained-decoding
+TEST_DIR_PATH='path/to/test-result:no-constrained-decoding'
+ADDITIONAL_CONFIG='config.additional.constrained_decoding=False'
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 #+end_src
 
 ** Evaluation with the official code
