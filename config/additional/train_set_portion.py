@@ -32,7 +32,7 @@ def _extract_dataset_portion(dataset, percent, expected_dataset_size=None):
     return dataset[:num_examples]
 
 
-def make_config(percent):
+def make_config(percent, shuffled_encoded_train_set_name):
     assert 0 < percent <= 100
 
     num_epoch_repeats = 100 / percent
@@ -40,10 +40,10 @@ def make_config(percent):
     num_used_train_examples = round(KQAPRO_TRAN_SET_SIZE * percent / 100)
 
     if percent == 100:
-        encoded_train_set = LazyEval(lambda: configuration.config.shuffled_encoded_train_set)
+        encoded_train_set = LazyEval(lambda: configuration.config.__getattr__(shuffled_encoded_train_set_name))
     else:
         encoded_train_set = LazyEval(lambda: _extract_dataset_portion(
-            configuration.config.shuffled_encoded_train_set,
+            configuration.config.__getattr__(shuffled_encoded_train_set_name),
             percent=percent,
             expected_dataset_size=num_used_train_examples))
 
@@ -54,9 +54,9 @@ def make_config(percent):
     )
 
 
-def make_config_from_cmd():
+def make_config_from_cmd(shuffled_encoded_train_set_name='shuffled_encoded_train_set'):
     percent = _get_train_set_percent()
-    return make_config(percent)
+    return make_config(percent, shuffled_encoded_train_set_name)
 
 
 config = make_config_from_cmd()

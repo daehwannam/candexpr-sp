@@ -3,6 +3,7 @@
 
 import re
 from itertools import chain
+from collections import deque
 
 from configuration import config
 from utility.trie import TokenTrie
@@ -17,12 +18,20 @@ from . import kopl_read
 from . import kb_analysis
 
 
-def iter_nl_token_actions(meta_name_to_meta_action, lf_tokenizer):
+def iter_nl_token_actions(meta_name_to_meta_action, lf_tokenizer, use_distinctive_union_types):
     nl_token_meta_action = meta_name_to_meta_action(nl_token_meta_name)
+
+    if use_distinctive_union_types:
+        _get_token_act_type = get_token_act_type
+    else:
+        nl_token_type = tuple(chain(default_nl_token_union_type, ['vp-quantity', 'vp-date', 'vp-year']))
+
+        def _get_token_act_type(token_value):
+            return nl_token_type
 
     def iter_token_value_act_type_pairs():
         all_non_special_token_values = tuple(iter_default_non_special_tokens(lf_tokenizer))
-        all_act_types = map(get_token_act_type, all_non_special_token_values)
+        all_act_types = map(_get_token_act_type, all_non_special_token_values)
 
         return zip(all_non_special_token_values, all_act_types)
 
@@ -56,17 +65,19 @@ with block:
         # Actually 'Ġ+' is not used to represent year in kqapro dataset
         return token_value in {'Ġ-', 'Ġ+'}
 
+    default_nl_token_union_type = (
+        'kp-concept', 'kp-entity', 'kp-relation',
+        'kp-attr-string', 'kp-attr-number', 'kp-attr-time',
+        'kp-q-string', 'kp-q-number', 'kp-q-time',
+        'vp-string', 'vp-unit')
+
     def get_token_act_type(token_value):
         is_digit_seq = is_digit_seq_token(token_value)
         is_special_quantity = is_special_quantity_token(token_value)
         is_special_year = is_special_year_token(token_value)
         is_special_date = is_special_date_token(token_value)
 
-        union_type = [
-            'kp-concept', 'kp-entity', 'kp-relation',
-            'kp-attr-string', 'kp-attr-number', 'kp-attr-time',
-            'kp-q-string', 'kp-q-number', 'kp-q-time',
-            'vp-string', 'vp-unit']
+        union_type = list(default_nl_token_union_type)
 
         if is_digit_seq or is_special_quantity:
             union_type.append('vp-quantity')
@@ -301,3 +312,85 @@ with block:
 
     def _act_type_to_actions(grammar, act_type):
         return _get_act_type_to_actions_dict(grammar)[act_type]
+
+
+with block:
+    def iter_super_to_sub_actions(super_types_dict, is_non_conceptual_type):
+        from logic.formalism import Action
+
+        super_sub_pair_set = set()
+
+        def find_super_to_sub_actions(sub_type, super_types):
+            for super_type in super_types:
+                if is_non_conceptual_type(super_type):
+                    super_sub_pair_set.add((super_type, sub_type))
+                    find_super_to_sub_actions(super_type, super_types_dict.get(super_type, []))
+                else:
+                    find_super_to_sub_actions(sub_type, super_types_dict.get(super_type, []))
+
+        for sub_type, super_types in super_types_dict.items():
+            if is_non_conceptual_type(sub_type):
+                find_super_to_sub_actions(sub_type, super_types)
+
+        super_sub_pairs = sorted(super_sub_pair_set)
+        for super_type, sub_type in super_sub_pairs:
+            yield Action(name=f'{super_type}-to-{sub_type}',
+                         act_type=super_type,
+                         param_types=[sub_type],
+                         expr_dict=dict(default='{0}'))
+
+    def get_strictly_typed_action_seq(grammar, action_name_seq):
+        assert grammar.inferencing_subtypes is False
+
+        input_action_seq = tuple(map(grammar.name_to_action, action_name_seq))
+        num_processed_actions = 0
+        output_action_seq = []
+
+        def find_super_to_sub_type_seq(super_type, sub_type):
+            type_seq_q = deque([typ] for typ in grammar.super_types_dict[sub_type])
+            while type_seq_q:
+                type_seq = type_seq_q.popleft()
+                last_type = type_seq[-1]
+                if super_type == last_type:
+                    _type_seq = list(reversed([sub_type] + type_seq))
+                    assert grammar.is_non_conceptual_type(_type_seq[0])
+                    assert grammar.is_non_conceptual_type(_type_seq[-1])
+                    type_seq = tuple(chain(
+                        [_type_seq[0]],
+                        filter(grammar.is_non_conceptual_type, _type_seq[1: -1]),
+                        [_type_seq[-1]]))
+                    return type_seq
+                else:
+                    type_seq_q.extend(type_seq + [typ] for typ in grammar.super_types_dict[last_type])
+            else:
+                raise Exception('Cannot find the type sequence')
+
+        state = grammar.search_state_cls.create()
+        while not state.tree.is_closed_root():
+            expected_action = input_action_seq[num_processed_actions]
+            num_processed_actions += 1
+            candidate_action_ids = state.get_candidate_action_ids()
+            if expected_action.id in candidate_action_ids:
+                output_action_seq.append(expected_action)
+                state = state.get_next_state(expected_action)
+            else:
+                opened_tree, children = state.tree.get_opened_tree_children()
+                opened_action = opened_tree.value
+                param_type = opened_action.param_types[grammar.formalism._get_next_param_idx(opened_action, len(children))]
+                type_seq = find_super_to_sub_type_seq(param_type, expected_action.act_type)
+
+                for idx in range(len(type_seq) - 1):
+                    lhs_type = type_seq[idx]
+                    rhs_type = type_seq[idx + 1]
+                    action_name = f'{lhs_type}-to-{rhs_type}'
+                    intermediate_action = grammar.name_to_action(action_name)
+                    # try:
+                    #     intermediate_action = grammar.name_to_action(action_name)
+                    # except Exception:
+                    #     breakpoint()
+                    state = state.get_next_state(intermediate_action)
+                    output_action_seq.append(intermediate_action)
+                output_action_seq.append(expected_action)
+                state = state.get_next_state(expected_action)
+
+        return output_action_seq

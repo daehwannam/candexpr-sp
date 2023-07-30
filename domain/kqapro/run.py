@@ -256,6 +256,12 @@ def run_train_for_multiple_decoding_strategies(
         filesys.mkloc_unless_exist(best_dir_path)
         return best_dir_path
 
+    def get_best_result_dir_path(decoding_strategy_name):
+        best_result_dir_path = learning.get_best_dir_path(
+            model_learning_dir_path, f'{decoding_strategy_name}:best-result')
+        filesys.mkloc_unless_exist(best_result_dir_path)
+        return best_result_dir_path
+
     model = learning.load_model(
         pretrained_model_name_or_path,
         num_tokens=len(grammar.lf_tokenizer))
@@ -402,6 +408,8 @@ def run_train_for_multiple_decoding_strategies(
                 if updating_best:
                     strategy_best_dir = get_best_dir_path(config.decoding_strategy_name)
                     filesys.copy_dir(last_common_dir, strategy_best_dir, replacing=True)
+                    strategy_best_result_dir = get_best_result_dir_path(config.decoding_strategy_name)
+                    filesys.copy_matched(os.path.join(strategy_last_dir, '*'), strategy_best_result_dir)
 
                 logger.info(f'Results are saved in "{model_learning_dir_path}"')
 

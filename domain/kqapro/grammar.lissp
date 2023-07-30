@@ -1,33 +1,13 @@
 ;;; -*- mode: lisp -*-
 
-;; Examples
-;;
-;; (define-action
-;;   :name 'and
-;;   :act-type 'bool
-;;   :param-types '(bool bool bool)
-;;   :expr-dict (mapkv :default $(and-func {0} {1} {2})
-;;                    :visual $(and {0} {1} {2}))
-;;   :optional-idx None
-;;   :rest-idx 2)
-;;
-;; (define-action
-;;   :name 'or
-;;   :act-type 'bool
-;;   :param-types '(bool bool bool)
-;;   :expr-dict (mapkv :default $(or-func {0} {1} {2})
-;;                    :visual $(or {0} {1} {2}))
-;;   :optional-idx None
-;;   :rest-idx 2)
-
 (define-types
-  '(:type                             ; abstract
+  '(:type                               ; conceptual
     (:obj-entity
      (:obj-entity-with-fact
       obj-entity-with-attr
       obj-entity-with-rel))
 
-    (:keyword                           ; abstract
+    (:keyword                           ; conceptual
      kw-concept
      kw-entity
      kw-relation
@@ -35,19 +15,13 @@
       kw-attr-string
       (:kw-attr-comparable
        kw-attr-number
-       (:kw-attr-time
-        kw-attr-date                     ; NOT USED
-        kw-attr-year                     ; NOT USED
-        )))
+       kw-attr-time))
      (:kw-qualifier
       kw-q-string
       kw-q-number
-      (:kw-q-time
-       kw-q-date                        ; NOT USED
-       kw-q-year                        ; NOT USED
-       )))
+      kw-q-time))
 
-    (:operator                          ; abstract
+    (:operator                          ; conceptual
      op-direction
      op-comparison
      op-st-or-bt
@@ -58,36 +32,30 @@
      v-number
      v-quantity
      v-unit
-     (:v-time                           ; abstract
+     (:v-time                           ; conceptual
       v-date
       v-year))))
 
 (define-types
-  '(:part
-    (:keyword-part                      ; abstract
+  '(:part                               ; conceptual
+    (:keyword-part                      ; conceptual
      kp-concept
      kp-entity
      kp-relation
-     (:kp-attribute                     ; abstract
+     (:kp-attribute                     ; conceptual
       kp-attr-string
       kp-attr-number
-      (:kp-attr-time
-       kp-attr-date                     ; NOT USED
-       kp-attr-year                     ; NOT USED
-       ))
-     (:kp-qualifier                     ; abstract
+      kp-attr-time)
+     (:kp-qualifier                     ; conceptual
       kp-q-string
       kp-q-number
-      (:kp-q-time
-       kp-q-date                        ; NOT USED
-       kp-q-year                        ; NOT USED
-       )))
+      kp-q-time))
 
-    (:value-part
+    (:value-part                        ; conceptual
      vp-string
      vp-quantity
      vp-unit
-     (:vp-time                          ; abstract
+     (:vp-time                          ; conceptual
       vp-date
       vp-year))))
 
@@ -101,18 +69,21 @@
     result-rel-q-value
     result-boolean))
 
-(declare-abstract-types
+(declare-conceptual-types
   '(type
     keyword
     operator
     v-time
+    part
     keyword-part
     kp-attribute
     kp-qualifier
+    value-part
     vp-time))
 
 
 ;; Result functions
+;;
 ;; 'Count',
 ;; 'QueryAttr',
 ;; 'QueryAttrQualifier',
@@ -124,7 +95,7 @@
 ;; 'VerifyNum',
 ;; 'VerifyStr',
 ;; 'VerifyYear',
-;; QueryName ('What')
+;; 'QueryName' ('What')
 
 
 (define-action
@@ -421,13 +392,14 @@
 (let ((concat-tokens (retrieve '(function concat-tokens)))
       (concat-parts (retrieve '(function concat-parts)))
       (concat-quantity-unit (retrieve '(function concat-quantity-unit))))
+
   ;; keyword-*
+
   (starloop
    (lambda (name act-type param-type)
      (define-action
        :name name
        :act-type act-type
-       ;; :param-types (entuple param-type '&rest param-type)
        :param-types `(,param-type &rest ,param-type)
        :arg-candidate (if-else (= name 'keyword-entity) None (retrieve `(candidate ,act-type)))
        :expr-dict (mapkv :default concat-parts)))
@@ -439,20 +411,15 @@
      (keyword-attribute-time    kw-attr-time    kp-attr-time  )
      (keyword-qualifier-string  kw-q-string     kp-q-string   )
      (keyword-qualifier-number  kw-q-number     kp-q-number   )
-     (keyword-qualifier-time    kw-q-time       kp-q-time     )
-     ;; (keyword-attribute-date   kw-attr-date   kp-attr-date)
-     ;; (keyword-attribute-year   kw-attr-year   kp-attr-year)
-     ;; (keyword-qualifier-date   kw-q-date   kp-q-date)
-     ;; (keyword-qualifier-year   kw-q-year   kp-q-year)
-     ))
+     (keyword-qualifier-time    kw-q-time       kp-q-time     )))
 
   ;; constant-*
+
   (starloop
    (lambda (name act-type param-type)
      (define-action
        :name name
        :act-type act-type
-       ;; :param-types (entuple vp-string '&rest vp-string)
        :param-types `(,param-type &rest ,param-type)
        :arg-filter (if-else (= act-type 'v-string)
                             None
@@ -486,43 +453,3 @@
   :expr-dict-fn (lambda (token)
                   (mapkv :default token))
   :param-types '())
-
-;; (define-meta-action
-;;   :meta-name 'token-string
-;;   :name-fn (lambda (token) token)
-;;   :expr-dict-fn (lambda (token)
-;;                   (mapkv :default (.format #"\"{}\"" token)))
-;;   :act-type 'vp-string
-;;   :param-types '())
-
-;; (define-meta-action
-;;   :meta-name 'token-quantity
-;;   :name-fn (lambda (token) token)
-;;   :expr-dict-fn (lambda (token)
-;;                   (mapkv :default (.format #"\"{}\"" token)))
-;;   :act-type 'vp-quantity
-;;   :param-types '())
-
-;; (define-meta-action
-;;   :meta-name 'token-unit
-;;   :name-fn (lambda (token) token)
-;;   :expr-dict-fn (lambda (token)
-;;                   (mapkv :default (.format #"\"{}\"" token)))
-;;   :act-type 'vp-unit
-;;   :param-types '())
-
-;; (define-meta-action
-;;   :meta-name 'token-date
-;;   :name-fn (lambda (token) token)
-;;   :expr-dict-fn (lambda (token)
-;;                   (mapkv :default (.format #"\"{}\"" token)))
-;;   :act-type 'vp-date
-;;   :param-types '())
-
-;; (define-meta-action
-;;   :meta-name 'token-year
-;;   :name-fn (lambda (token) token)
-;;   :expr-dict-fn (lambda (token)
-;;                   (mapkv :default (.format #"\"{}\"" token)))
-;;   :act-type 'vp-year
-;;   :param-types '())

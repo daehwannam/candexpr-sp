@@ -267,32 +267,34 @@ class Formalism:
         return action
 
     @staticmethod
-    def make_type_to_actions_dict(actions, super_types_dict, constructor=dict, to_id=False):
+    def make_type_to_actions_dict(actions, super_types_dict, constructor=dict, to_id=False, inferencing_subtypes=True):
         dic = {}
-        Formalism.update_type_to_actions_dict(dic, actions, super_types_dict, to_id=to_id)
+        Formalism.update_type_to_actions_dict(dic, actions, super_types_dict, to_id=to_id, inferencing_subtypes=inferencing_subtypes)
         if isinstance(dic, constructor):
             return dic
         else:
             return constructor(dic.items())
 
     @staticmethod
-    def update_type_to_actions_dict(type_to_actions_dict, actions, super_types_dict, to_id=False):
+    def update_type_to_actions_dict(type_to_actions_dict, actions, super_types_dict, to_id=False, inferencing_subtypes=True):
         for action in actions:
             type_q = deque(action.act_type if action.is_union_act_type() else
                            [action.act_type])
             while type_q:
                 typ = type_q.popleft()
                 type_to_actions_dict.setdefault(typ, set()).add(action.id if to_id else action)
-                if typ in super_types_dict:
+                if inferencing_subtypes and typ in super_types_dict:
                     type_q.extend(super_types_dict[typ])
 
     @staticmethod
-    def make_type_to_action_ids_dict(actions, super_types_dict, constructor=dict):
-        return Formalism.make_type_to_actions_dict(actions, super_types_dict, constructor, to_id=True)
+    def make_type_to_action_ids_dict(actions, super_types_dict, constructor=dict, inferencing_subtypes=True):
+        return Formalism.make_type_to_actions_dict(
+            actions, super_types_dict, constructor, to_id=True, inferencing_subtypes=inferencing_subtypes)
 
     @staticmethod
-    def update_type_to_action_ids_dict(type_to_action_ids_dict, actions, super_types_dict):
-        return Formalism.update_type_to_actions_dict(type_to_action_ids_dict, actions, super_types_dict, to_id=True)
+    def update_type_to_action_ids_dict(type_to_action_ids_dict, actions, super_types_dict, inferencing_subtypes=True):
+        return Formalism.update_type_to_actions_dict(
+            type_to_action_ids_dict, actions, super_types_dict, to_id=True, inferencing_subtypes=inferencing_subtypes)
 
     @staticmethod
     def make_id_to_action_dict(actions, constructor=dict):
@@ -321,7 +323,6 @@ class Formalism:
         # except NotFoundError as e:
         #     breakpoint()
         #     print(e)
-
 
     @staticmethod
     def sub_and_super(super_types_dict, sub_type, super_type):

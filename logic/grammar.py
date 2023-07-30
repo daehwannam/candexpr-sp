@@ -33,23 +33,28 @@ grammar_read_form = '(progn {})'
 class Grammar:
     """Formal grammar"""
 
-    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register, use_reduce=True):
+    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register,
+                 is_non_conceptual_type=None, use_reduce=True, inferencing_subtypes=True):
         self.formalism = formalism
         self.super_types_dict = super_types_dict
         self.start_action = start_action
+        self.inferencing_subtypes = inferencing_subtypes
         self.base_actions = formalism.extend_actions(actions, use_reduce=use_reduce)
         self.meta_actions = meta_actions
         self.register = register
+        self.is_non_conceptual_type = is_non_conceptual_type
         self.added_actions = []
 
         # base actions
         self._name_to_base_action_dict = formalism.make_name_to_action_dict(self.base_actions)
         self._meta_name_to_meta_action_dict = formalism.make_name_to_action_dict(meta_actions, meta=True)
-        self._type_to_base_actions_dict = formalism.make_type_to_actions_dict(self.base_actions, super_types_dict)
+        self._type_to_base_actions_dict = formalism.make_type_to_actions_dict(
+            self.base_actions, super_types_dict, inferencing_subtypes=inferencing_subtypes)
         self.start_action.id = self._start_action_id
         self._set_action_ids(self.base_actions)
         self._id_to_base_action_dict = formalism.make_id_to_action_dict(self.base_actions)
-        self._type_to_base_action_ids_dict = formalism.make_type_to_action_ids_dict(self.base_actions, super_types_dict)
+        self._type_to_base_action_ids_dict = formalism.make_type_to_action_ids_dict(
+            self.base_actions, super_types_dict, inferencing_subtypes=inferencing_subtypes)
 
         # added actions
         self._name_to_added_action_dict = dict()
@@ -110,8 +115,10 @@ class Grammar:
 
         self._set_action_ids(self.added_actions)
 
-        self.formalism.update_type_to_actions_dict(self._type_to_added_actions_dict, actions, self.super_types_dict)
-        self.formalism.update_type_to_action_ids_dict(self._type_to_added_action_ids_dict, actions, self.super_types_dict)
+        self.formalism.update_type_to_actions_dict(
+            self._type_to_added_actions_dict, actions, self.super_types_dict, inferencing_subtypes=self.inferencing_subtypes)
+        self.formalism.update_type_to_action_ids_dict(
+            self._type_to_added_action_ids_dict, actions, self.super_types_dict, inferencing_subtypes=self.inferencing_subtypes)
         self.formalism.update_id_to_action_dict(self._id_to_added_action_dict, actions)
 
     def sub_and_super(self, sub_type, super_type):
@@ -211,23 +218,23 @@ def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
 
         return define_types
 
-    def make_declare_abstract_types(abstract_types):
-        def declare_abstract_types(types):
+    def make_declare_conceptual_types(conceptual_types):
+        def declare_conceptual_types(types):
             for typ in map(demunge, types):
-                if typ in abstract_types:
+                if typ in conceptual_types:
                     raise Exception(f'"{typ}" is declared more than once.')
                 else:
-                    abstract_types.add(typ)
+                    conceptual_types.add(typ)
 
-        return declare_abstract_types
+        return declare_conceptual_types
 
-    def make_define_action(actions, start_actions, is_concrete_type):
+    def make_define_action(actions, start_actions, is_non_conceptual_type):
         def define_action(name, act_type, param_types, expr_dict, **kwargs):
             parsed_param_types, optional_idx, rest_idx = parse_params(param_types)
             act_type = parse_act_type(act_type)
 
-            assert all(map(is_concrete_type, parsed_param_types))
-            assert is_concrete_type(act_type)
+            assert all(map(is_non_conceptual_type, parsed_param_types))
+            assert is_non_conceptual_type(act_type)
 
             action = Action(
                 name=demunge(name),
@@ -246,7 +253,7 @@ def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
                 actions.append(action)
         return define_action
 
-    def make_define_meta_action(meta_actions, is_concrete_type):
+    def make_define_meta_action(meta_actions, is_non_conceptual_type):
         def define_meta_action(meta_name, *, meta_params, act_type=None, param_types=None, **kwargs):
             parsed_act_type = parse_act_type(act_type) if act_type is not None else None
             if param_types is None:
@@ -254,8 +261,8 @@ def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
             else:
                 parsed_param_types, optional_idx, rest_idx = parse_params(param_types)
 
-            assert parsed_param_types is None or all(map(is_concrete_type, parsed_param_types))
-            assert parsed_act_type is None or is_concrete_type(parsed_act_type)
+            assert parsed_param_types is None or all(map(is_non_conceptual_type, parsed_param_types))
+            assert parsed_act_type is None or is_non_conceptual_type(parsed_act_type)
 
             meta_action = MetaAction(
                 meta_name=demunge(meta_name),
@@ -269,18 +276,18 @@ def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
             meta_actions.append(meta_action)
         return define_meta_action
 
-    def make_is_concrete_type(types, abstract_types):
-        def is_concrete_non_union_type(typ):
+    def make_is_non_conceptual_type(types, conceptual_types):
+        def is_non_conceptual_non_union_type(typ):
             assert isinstance(typ, str)
-            return (typ in types) and (typ not in abstract_types)
+            return (typ in types) and (typ not in conceptual_types)
 
-        def is_concrete_type(typ):
+        def is_non_conceptual_type(typ):
             if isinstance(typ, tuple):
-                return all(map(is_concrete_non_union_type, typ))
+                return all(map(is_non_conceptual_non_union_type, typ))
             else:
-                return is_concrete_non_union_type(typ)
+                return is_non_conceptual_non_union_type(typ)
 
-        return is_concrete_type
+        return is_non_conceptual_type
 
     def make_dict(*symbols):
         args, kwargs = parse_hy_args(symbols)
@@ -317,19 +324,19 @@ def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
 
         super_types_dicts = []
         types = set()
-        abstract_types = set()
+        conceptual_types = set()
         actions = []
         start_actions = []
         meta_actions = []
         register = Register(strategy='conditional')
 
-        is_concrete_type = make_is_concrete_type(types, abstract_types)
+        is_non_conceptual_type = make_is_non_conceptual_type(types, conceptual_types)
 
         bindings = [['mapkv', make_dict],
                     ['define-types', make_define_types(super_types_dicts, types)],
-                    ['declare-abstract-types', make_declare_abstract_types(abstract_types)],
-                    ['define-action', hy_function(make_define_action(actions, start_actions, is_concrete_type))],
-                    ['define-meta-action', hy_function(make_define_meta_action(meta_actions, is_concrete_type))],
+                    ['declare-conceptual-types', make_declare_conceptual_types(conceptual_types)],
+                    ['define-action', hy_function(make_define_action(actions, start_actions, is_non_conceptual_type))],
+                    ['define-meta-action', hy_function(make_define_meta_action(meta_actions, is_non_conceptual_type))],
                     ['retrieve', make_retrieve(register)]]
 
         eval_result = eval_lissp(text, extra_ns=get_extra_ns(bindings))
@@ -342,7 +349,9 @@ def read_grammar(file_path, *, formalism=None, grammar_cls=Grammar):
             actions=actions,
             start_action=start_actions[0],
             meta_actions=meta_actions,
-            register=register)
+            register=register,
+            is_non_conceptual_type=is_non_conceptual_type,
+        )
 
         return grammar
 

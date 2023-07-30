@@ -5,7 +5,7 @@ from tqdm import tqdm
 import torch
 import random
 
-from configuration import config
+from configuration import config, _make_grammar
 
 from dhnamlib.pylib.filesys import jsonl_save, pickle_save, mkpdirs_unless_exist
 from dhnamlib.pylib.time import TimeMeasure
@@ -228,6 +228,47 @@ def preprocess_for_shuffled_dataset(
     print(f'The shuffled dataset was saved as {shuffled_dataset_file_path}')
 
 
+@construct(list)
+def augment_dataset_with_strict_grammar(augmented_dataset, grammar):
+    assert grammar.inferencing_subtypes is False
+    for example in tqdm(augmented_dataset):
+        new_example = dict(example)
+        action_seq = kopl_transfer.get_strictly_typed_action_seq(grammar, example['action_name_seq'])
+        action_name_seq = [action.name for action in action_seq]
+        new_example['action_name_seq'] = action_name_seq  # update 'action_name_seq'
+        yield new_example
+
+
+def preprocess_for_augmented_strict_dataset(
+        *,
+        augmented_dataset,
+        augmented_strict_dataset_file_path):
+    with config.let(inferencing_subtypes=False):
+        grammar = _make_grammar()
+        assert grammar.inferencing_subtypes is False
+
+    augmented_strict_dataset = augment_dataset_with_strict_grammar(augmented_dataset, grammar)
+    jsonl_save(augmented_strict_dataset, augmented_strict_dataset_file_path)
+    print(f'The augmented dataset with strict grammar was saved as {augmented_strict_dataset_file_path}')
+
+
+def process_for_encoded_strict_dataset(
+        *,
+        augmented_dataset,
+        encoded_dataset_file_path,
+        example_idx_as_id=False
+):
+    with config.let(inferencing_subtypes=False):
+        grammar = _make_grammar()
+        assert grammar.inferencing_subtypes is False
+
+    preprocess_for_encoded_dataset(
+        grammar=grammar,
+        augmented_dataset=augmented_dataset,
+        encoded_dataset_file_path=encoded_dataset_file_path,
+        example_idx_as_id=example_idx_as_id)
+
+
 def _main():
     parser = ArgumentParser(description='Preprocess KoPL dataset',)
     parser.add_argument(
@@ -241,6 +282,12 @@ def _main():
             # 'encoded_train_mask',
             'shuffled_augmented_train_set',
             'shuffled_encoded_train_set',
+            'augmented_strict_train_set',
+            'augmented_strict_val_set',
+            'encoded_strict_train_set',
+            'encoded_strict_val_set',
+            'shuffled_augmented_strict_train_set',
+            'shuffled_encoded_strict_train_set',
         ])
 
     args = parser.parse_args(config.remaining_cmd_args)
@@ -283,6 +330,30 @@ def _main():
         preprocess_for_shuffled_dataset(
             dataset=config.encoded_train_set,
             shuffled_dataset_file_path=config.shuffled_encoded_train_set_file_path)
+    elif args.goal == 'augmented_strict_train_set':
+        preprocess_for_augmented_strict_dataset(
+            augmented_dataset=config.augmented_train_set,
+            augmented_strict_dataset_file_path=config.augmented_strict_train_set_file_path)
+    elif args.goal == 'augmented_strict_val_set':
+        preprocess_for_augmented_strict_dataset(
+            augmented_dataset=config.augmented_val_set,
+            augmented_strict_dataset_file_path=config.augmented_strict_val_set_file_path)
+    elif args.goal == 'encoded_strict_train_set':
+        process_for_encoded_strict_dataset(
+            augmented_dataset=config.augmented_strict_train_set,
+            encoded_dataset_file_path=config.encoded_strict_train_set_file_path)
+    elif args.goal == 'encoded_strict_val_set':
+        process_for_encoded_strict_dataset(
+            augmented_dataset=config.augmented_strict_val_set,
+            encoded_dataset_file_path=config.encoded_strict_val_set_file_path)
+    elif args.goal == 'shuffled_augmented_strict_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.augmented_strict_train_set,
+            shuffled_dataset_file_path=config.shuffled_augmented_strict_train_set_file_path)
+    elif args.goal == 'shuffled_encoded_strict_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.encoded_strict_train_set,
+            shuffled_dataset_file_path=config.shuffled_encoded_strict_train_set_file_path)
     else:
         raise Exception('Unexpected goal')
 

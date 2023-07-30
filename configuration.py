@@ -34,6 +34,13 @@ _encoded_test_set_file_path = './processed/kqapro/encoded_test.jsonl'
 _shuffled_augmented_train_set_file_path = './processed/kqapro/shuffled_augmented_train.jsonl'
 _shuffled_encoded_train_set_file_path = './processed/kqapro/shuffled_encoded_train.jsonl'
 # _encoded_train_mask_dataset_file_path = './processed/kqapro/encoded_train_mask.jsonl'
+_augmented_strict_train_set_file_path = './processed/kqapro/augmented_strict_train.jsonl'
+_augmented_strict_val_set_file_path = './processed/kqapro/augmented_strict_val.jsonl'
+_encoded_strict_train_set_file_path = './processed/kqapro/encoded_strict_train.jsonl'
+_encoded_strict_val_set_file_path = './processed/kqapro/encoded_strict_val.jsonl'
+_shuffled_augmented_strict_train_set_file_path = './processed/kqapro/shuffled_augmented_strict_train.jsonl'
+_shuffled_encoded_strict_train_set_file_path = './processed/kqapro/shuffled_encoded_strict_train.jsonl'
+
 
 _grammar_file_path = './domain/kqapro/grammar.lissp'
 # _pretrained_model_name_or_path = './pretrained/bart-base'
@@ -115,6 +122,12 @@ _default_config = Environment(
     # encoded_train_mask_dataset=LazyEval(lambda: pickle_load(_encoded_train_mask_dataset_file_path)),
     shuffled_augmented_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_train_set_file_path)),
     shuffled_encoded_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_train_set_file_path)),
+    augmented_strict_train_set=LazyEval(lambda: jsonl_load(_augmented_strict_train_set_file_path)),
+    augmented_strict_val_set=LazyEval(lambda: jsonl_load(_augmented_strict_val_set_file_path)),
+    encoded_strict_train_set=LazyEval(lambda: jsonl_load(_encoded_strict_train_set_file_path)),
+    encoded_strict_val_set=LazyEval(lambda: jsonl_load(_encoded_strict_val_set_file_path)),
+    shuffled_augmented_strict_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_strict_train_set_file_path)),
+    shuffled_encoded_strict_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_strict_train_set_file_path)),
 
     grammar=LazyEval(_make_grammar),
     compiler=LazyEval(lambda: config.grammar.compiler_cls()),
@@ -131,6 +144,12 @@ _default_config = Environment(
     # encoded_train_mask_dataset_file_path=_encoded_train_mask_dataset_file_path,
     shuffled_augmented_train_set_file_path=_shuffled_augmented_train_set_file_path,
     shuffled_encoded_train_set_file_path=_shuffled_encoded_train_set_file_path,
+    augmented_strict_train_set_file_path=_augmented_strict_train_set_file_path,
+    augmented_strict_val_set_file_path=_augmented_strict_val_set_file_path,
+    encoded_strict_train_set_file_path=_encoded_strict_train_set_file_path,
+    encoded_strict_val_set_file_path=_encoded_strict_val_set_file_path,
+    shuffled_augmented_strict_train_set_file_path=_shuffled_augmented_strict_train_set_file_path,
+    shuffled_encoded_strict_train_set_file_path=_shuffled_encoded_strict_train_set_file_path,
 
     device=LazyEval(_get_device),
     logger=LazyEval(_make_logger),
@@ -153,7 +172,7 @@ _default_config = Environment(
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
-    parser.add_argument('--additional-config', dest='additional_config_module', help='an additional config module which can overwrite other configurations')
+    parser.add_argument('--additional-config', dest='additional_config_modules', help='an additional config module(s) which can overwrite other configurations. When more than one module is passed, the modules are separated by commas.')
     parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of a model')
     parser.add_argument('--model-checkpoint-dir', dest='model_checkpoint_dir_path', help='a path to the directory of a checkpoint')
     # parser.add_argument('--run_mode', dest='run_mode', help='an execution run_mode', choices=['train', 'test'])
@@ -176,13 +195,14 @@ def _get_specific_config_module():
 
 
 @lru_cache
-def _get_additional_config_module():
+def _get_additional_config_modules():
     cmd_arg_dict = _parse_cmd_args()
-    if cmd_arg_dict.get('additional_config_module') is not None:
-        _additional_config_module = import_module(cmd_arg_dict['additional_config_module'])
+    if cmd_arg_dict.get('additional_config_modules') is not None:
+        module_names = [name.strip() for name in cmd_arg_dict['additional_config_modules'].split(',')]
+        _additional_config_modules = tuple(map(import_module, module_names))
     else:
-        _additional_config_module = None
-    return _additional_config_module
+        _additional_config_modules = None
+    return _additional_config_modules
 
 
 @variable
@@ -191,18 +211,17 @@ def config():
     specific_config_module = _get_specific_config_module()
     specific_config = (dict() if specific_config_module is None else
                        specific_config_module.config)
-    additional_config_module = _get_additional_config_module()
-    additional_config = (dict() if additional_config_module is None else
-                         additional_config_module.config)
- 
+    additional_config_modules = _get_additional_config_modules()
+    additional_configs = ([] if additional_config_modules is None else
+                          [module.config for module in additional_config_modules])
+
     config = Environment(
         chain(
             distinct_pairs(chain(
                 _default_config.items(),
                 specific_config.items(),
-                cmd_arg_dict.items()
-            )),
-            additional_config.items()
+                cmd_arg_dict.items())),
+            *(config.items() for config in additional_configs)
         ))
     return config
 
@@ -212,13 +231,13 @@ def config_path_dict():
     specific_config_module = _get_specific_config_module()
     specific_config_module_file_path = (None if specific_config_module is None else
                                         specific_config_module.__file__)
-    additional_config_module = _get_additional_config_module()
-    additional_config_module_file_path = (None if additional_config_module is None else
-                                          additional_config_module.__file__)
+    additional_config_modules = _get_additional_config_modules()
+    additional_config_module_file_paths = ([] if additional_config_modules is None else
+                                           [module.__file__ for module in additional_config_modules])
     return dict(
         general=__file__,
         specific=specific_config_module_file_path,
-        additional=additional_config_module_file_path
+        additional=additional_config_module_file_paths
     )
 
 

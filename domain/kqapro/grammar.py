@@ -26,20 +26,26 @@ class KoPLGrammar(Grammar):
     interface = Interface(Grammar)
 
     @config
-    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register=config.ph, use_reduce=True,
-                 pretrained_model_name_or_path=config.ph):
+    def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register=config.ph,
+                 is_non_conceptual_type=None, use_reduce=True,
+                 inferencing_subtypes=config.ph(True), use_distinctive_union_types=config.ph(True), pretrained_model_name_or_path=config.ph):
 
         self.pretrained_model_name_or_path = pretrained_model_name_or_path
 
+        if not inferencing_subtypes:
+            super_to_sub_actions = kopl_transfer.iter_super_to_sub_actions(super_types_dict, is_non_conceptual_type)
+            actions = tuple(chain(actions, super_to_sub_actions))
+
         super().__init__(formalism=formalism, super_types_dict=super_types_dict, actions=actions, start_action=start_action,
-                         meta_actions=meta_actions, register=register, use_reduce=use_reduce)
+                         meta_actions=meta_actions, register=register, is_non_conceptual_type=is_non_conceptual_type,
+                         use_reduce=use_reduce, inferencing_subtypes=inferencing_subtypes)
 
         self.model_config = learning.load_model_config(pretrained_model_name_or_path)
         self.initialize_from_base_actions()
         self.dynamic_scope = Environment()
         register_all(register, self, self.lf_tokenizer, self.dynamic_scope)
         self.add_actions(kopl_transfer.iter_nl_token_actions(
-            self.meta_name_to_meta_action, self.lf_tokenizer))
+            self.meta_name_to_meta_action, self.lf_tokenizer, use_distinctive_union_types=use_distinctive_union_types))
 
     @lru_cache
     def initialize_from_base_actions(self):
