@@ -317,15 +317,14 @@ def run_train_for_multiple_decoding_strategies(
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
-        # if config.debug:
-        #     batch_cnt = -1
+        # debug_batch_cnt = -1
 
         loss = torch.tensor(0.)
         for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
-            # if config.debug:
-            #     batch_cnt += 1
-            #     if batch_cnt > 100:
-            #         break
+            # debug_batch_cnt += 1
+            # if debug_batch_cnt > 100:
+            #     break
+
             batched_input = dict(
                 input_ids=batch['utterance_token_ids'].to(device),
                 attention_mask=batch['attention_mask'].to(device),
@@ -523,7 +522,7 @@ def validate(
 
         xtqdm_kwargs = dict(
             desc='accuracy: none',
-            desc_fn=lambda: 'accuracy: {:4.1f}'.format(update_realtime_accuracy() * 100))
+            desc_fn=lambda: 'accuracy: {:5.2f}'.format(update_realtime_accuracy() * 100))
     else:
         xtqdm_kwargs = dict()
 
@@ -599,7 +598,8 @@ def validate(
                 answer_last_states = learning.token_id_seqs_to_last_states(
                     grammar, batch['labels'].tolist(),
                     ignoring_parsing_errors=not (constrained_decoding and config.using_arg_candidate),
-                    verifying=False,  # config.debug,
+                    # verifying=False,  # config.debug,
+                    verifying=True,  # config.debug,
                     utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None))
                 all_answer_last_states.extend(answer_last_states)
 

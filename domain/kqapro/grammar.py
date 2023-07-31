@@ -238,7 +238,7 @@ def register_all(register, grammar, lf_tokenizer, dynamic_scope):
                 opened_tree, children = tree.get_opened_tree_children()
                 id_seq_prefix = tuple(grammar.token_to_id(child.value.get_meta_arg('token'))
                                       for child in children)
-                # breakpoint()
+                # return tuple(static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True))
                 return tuple(chain(dynamic_scope.dynamic_trie.candidate_ids(id_seq_prefix),
                                    static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True)))
             return arg_candidate
