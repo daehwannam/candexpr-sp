@@ -102,14 +102,14 @@ with block:
         year='kw-q-time')
 
     @config
-    def iter_act_type_trie_pairs(*, kb=config.ph, lf_tokenizer, end_of_seq):
+    def iter_act_type_trie_pairs(*, kb=config.ph, lf_tokenizer, end_of_seq, context=config.ph):
         kb_info = kb_analysis.extract_kb_info(kb)
         # data_types = set(['string', 'quantity', 'time', 'date', 'year'])
         # time_types = set(['time', 'date', 'year'])
 
         key_to_act_type = dict(
             concepts='kw-concept',
-            entities='kw-entity',
+            # entities='kw-entity',
             relations='kw-relation',
             units='v-unit'
         )
@@ -121,9 +121,19 @@ with block:
         for key, value in trie_dict.items():
             if isinstance(value, dict):
                 pass
+            elif key == 'entities':
+                pass
             else:
                 trie = value
                 yield key_to_act_type[key], trie
+
+        # Processing the trie for kw-entity
+        entity_names = set()
+        for entity_name, entities in context.kb.name_to_id.items():
+            if len(entities) > 0:
+                entity_names.add(entity_name)
+        entity_trie = kb_analysis.make_trie(entity_names, lf_tokenizer, end_of_seq)
+        yield 'kw-entity', entity_trie
 
         assert sum(1 for value in trie_dict.values() if isinstance(value, dict)) == 2
 

@@ -74,19 +74,24 @@ def extract_kb_info(kb):
                 type_to_qualifiers=make_type_to_keys(qualifier_to_types),
                 units=units)
 
+
+def make_trie(kw_set, lf_tokenizer, end_of_seq):
+    trie = TokenTrie(tokenizer=lf_tokenizer, end_of_seq=end_of_seq)
+    for kw in kw_set:
+        trie.add_text(kw)
+    return trie
+
+
 @construct(compose(dict, distinct_pairs))
 def make_trie_dict(kb_info, lf_tokenizer, end_of_seq):
-    def make_trie(kw_set):
-        trie = TokenTrie(tokenizer=lf_tokenizer, end_of_seq=end_of_seq)
-        for kw in kw_set:
-            trie.add_text(kw)
-        return trie
+    def _make_trie(kw_set):
+        return make_trie(kw_set, lf_tokenizer, end_of_seq)
 
     for key, coll in kb_info.items():
         if isinstance(coll, dict):
-            new_coll = dict([typ, make_trie(typed_coll)] for typ, typed_coll in coll.items())
+            new_coll = dict([typ, _make_trie(typed_coll)] for typ, typed_coll in coll.items())
         else:
-            new_coll = make_trie(coll)
+            new_coll = _make_trie(coll)
         yield key, new_coll
 
 

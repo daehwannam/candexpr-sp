@@ -52,6 +52,10 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
                     dynamic_trie = learning._utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
                     with grammar.let_dynamic_trie(dynamic_trie):
                         last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+                        # try:
+                        #     last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+                        # except Exception:
+                        #     breakpoint()
                 else:
                     last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
             get_last_state_cumtime += tm.interval
