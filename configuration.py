@@ -46,8 +46,8 @@ _grammar_file_path = './domain/kqapro/grammar.lissp'
 # _pretrained_model_name_or_path = './pretrained/bart-base'
 _pretrained_model_name_or_path = 'facebook/bart-base'
 
-# _DEBUG = False
-_DEBUG = True
+_DEBUG = False
+# _DEBUG = True
 if _DEBUG:
     _context_cls = KoPLContext
     _default_config_module_name = None
