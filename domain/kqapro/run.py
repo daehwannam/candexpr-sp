@@ -565,7 +565,8 @@ def validate(
         )
         last_states = learning.token_id_seqs_to_last_states(
             grammar, token_id_seqs,
-            ignoring_parsing_errors=not (constrained_decoding and config.using_arg_candidate),
+            ignoring_parsing_errors=not (
+                constrained_decoding and config.using_arg_candidate and config.using_distinctive_union_types),
             verifying=config.debug,
             utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None)
         )
@@ -598,7 +599,8 @@ def validate(
                 assert 'labels' in batch
                 answer_last_states = learning.token_id_seqs_to_last_states(
                     grammar, batch['labels'].tolist(),
-                    ignoring_parsing_errors=not (constrained_decoding and config.using_arg_candidate),
+                    ignoring_parsing_errors=not (
+                        constrained_decoding and config.using_arg_candidate and config.using_distinctive_union_types),
                     verifying=False,  # config.debug,
                     utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None))
                 all_answer_last_states.extend(answer_last_states)

@@ -28,7 +28,8 @@ class KoPLGrammar(Grammar):
     @config
     def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register=config.ph,
                  is_non_conceptual_type=None, use_reduce=True,
-                 inferencing_subtypes=config.ph(True), use_distinctive_union_types=config.ph(True), pretrained_model_name_or_path=config.ph):
+                 inferencing_subtypes=config.ph(True), using_distinctive_union_types=config.ph(True),
+                 pretrained_model_name_or_path=config.ph):
 
         self.pretrained_model_name_or_path = pretrained_model_name_or_path
 
@@ -45,7 +46,7 @@ class KoPLGrammar(Grammar):
         self.dynamic_scope = Environment()
         register_all(register, self, self.lf_tokenizer, self.dynamic_scope)
         self.add_actions(kopl_transfer.iter_nl_token_actions(
-            self.meta_name_to_meta_action, self.lf_tokenizer, use_distinctive_union_types=use_distinctive_union_types))
+            self.meta_name_to_meta_action, self.lf_tokenizer, using_distinctive_union_types=using_distinctive_union_types))
 
     @lru_cache
     def initialize_from_base_actions(self):

@@ -161,6 +161,8 @@ _default_config = Environment(
     # num_prediction_beams=4,
     softmax_masking=False,
     constrained_decoding=True,
+    inferencing_subtypes=True,
+    using_distinctive_union_types=True,
 
     git_hash=_get_git_hash(),
     debug=_DEBUG,

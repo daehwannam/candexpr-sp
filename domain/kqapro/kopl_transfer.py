@@ -18,10 +18,10 @@ from . import kopl_read
 from . import kb_analysis
 
 
-def iter_nl_token_actions(meta_name_to_meta_action, lf_tokenizer, use_distinctive_union_types):
+def iter_nl_token_actions(meta_name_to_meta_action, lf_tokenizer, using_distinctive_union_types):
     nl_token_meta_action = meta_name_to_meta_action(nl_token_meta_name)
 
-    if use_distinctive_union_types:
+    if using_distinctive_union_types:
         _get_token_act_type = get_token_act_type
     else:
         nl_token_type = tuple(chain(default_nl_token_union_type, ['vp-quantity', 'vp-date', 'vp-year']))
