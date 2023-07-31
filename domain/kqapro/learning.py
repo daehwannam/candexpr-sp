@@ -127,10 +127,20 @@ def _token_id_seq_to_action_seq(grammar, token_id_seq):
     return action_seq
 
 
-def token_id_seq_to_last_state(grammar, token_id_seq, ignoring_parsing_errors=False):
+def token_id_seq_to_last_state(grammar, token_id_seq, ignoring_parsing_errors=False,
+                               verifying=False, utterance_token_id_seq=None):
     try:
         action_seq = _token_id_seq_to_action_seq(grammar, token_id_seq)
-        last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=config.debug)
+
+        def get_last_state():
+            return grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+
+        if utterance_token_id_seq is None:
+            last_state = get_last_state()
+        else:
+            dynamic_trie = _utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
+            with grammar.let_dynamic_trie(dynamic_trie):
+                last_state = get_last_state()
 
         return last_state
     except NotFoundError:
@@ -331,10 +341,19 @@ def generate_token_id_seqs(
         yield token_id_seq_without_padding
 
 
-def token_id_seqs_to_last_states(grammar, token_id_seqs, ignoring_parsing_errors=False):
+def token_id_seqs_to_last_states(
+        grammar, token_id_seqs, ignoring_parsing_errors=False, verifying=False,
+        utterance_token_id_seqs=None):
+    if utterance_token_id_seqs is None:
+        _utterance_token_id_seqs = [None] * len(token_id_seqs)
+    else:
+        _utterance_token_id_seqs = utterance_token_id_seqs
+
     predicted_last_states = tuple(
-        token_id_seq_to_last_state(grammar, token_id_seq, ignoring_parsing_errors=ignoring_parsing_errors)
-        for token_id_seq in token_id_seqs)
+        token_id_seq_to_last_state(
+            grammar, token_id_seq, ignoring_parsing_errors=ignoring_parsing_errors,
+            verifying=verifying, utterance_token_id_seq=utterance_token_id_seq)
+        for token_id_seq, utterance_token_id_seq in zip(token_id_seqs, _utterance_token_id_seqs))
 
     return predicted_last_states
 
@@ -513,7 +532,8 @@ class SequencePrefixProcessor:
                 decoder_start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
                 assert decoder_start_token_id == self.DECODER_START_TOKEN_ID
                 assert bos_token_id == self.BOS_TOKEN_ID
-                curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
+                with self.grammar.let_dynamic_trie(self.dynamic_tries[batch_id]):
+                    curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
 
                 if self.grammar.is_invalid_state(curr_state):
                     return True, []

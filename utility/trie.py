@@ -45,10 +45,18 @@ class TokenTrie:
 
         return self._normalize_id_seq(id_seq) in self.trie
 
-    def candidate_ids(self, id_seq_prefix):
+    def candidate_ids(self, id_seq_prefix, ignoring_errors=False):
         # "id_seq_prefix" is a part of an entire sequence of a key
-        prefix_node, path = self.trie._get_node(id_seq_prefix)
-        return (token_id for token_id, node in prefix_node.children.iteritems())
+        try:
+            prefix_node, path = self.trie._get_node(id_seq_prefix)
+        except KeyError as error:
+            if ignoring_errors:
+                candidate_ids = ()
+            else:
+                raise error
+        else:
+            candidate_ids = (token_id for token_id, node in prefix_node.children.iteritems())
+        return candidate_ids
 
     def candidate_tokens(self, token_seq_prefix):
         # "id_seq_prefix" is a part of an entire sequence of a key
@@ -98,8 +106,10 @@ class SpanTrie:
             yield from self.id_seq
         else:
             token_id_iter = iter(id_seq_prefix)
-            index_set = self.id_to_index_set[next(token_id_iter)]
+            index_set = self.id_to_index_set.get(next(token_id_iter), set())
             for token_id in token_id_iter:
+                if len(index_set) == 0:
+                    break
                 next_index_set = set()
                 for index in index_set:
                     next_index = index + 1

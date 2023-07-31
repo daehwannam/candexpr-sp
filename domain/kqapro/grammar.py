@@ -94,7 +94,7 @@ class KoPLGrammar(Grammar):
     @property
     @lru_cache
     def reduce_token_id(self):
-        self.lf_tokenizer.convert_tokens_to_ids(self.reduce_token)
+        return self.lf_tokenizer.convert_tokens_to_ids(self.reduce_token)
 
     @lru_cache
     @interface.implement
@@ -233,19 +233,19 @@ def register_all(register, grammar, lf_tokenizer, dynamic_scope):
                 return tuple(trie.candidate_ids(id_seq_prefix))
             return arg_candidate
 
-        @dynamic_scope
-        def make_entity_arg_candidate(static_trie, dynamic_trie=dynamic_scope.ph):
+        def make_entity_arg_candidate(static_trie):
             def arg_candidate(tree):
                 opened_tree, children = tree.get_opened_tree_children()
                 id_seq_prefix = tuple(grammar.token_to_id(child.value.get_meta_arg('token'))
                                       for child in children)
-                return tuple(chain(dynamic_trie.candidate_ids(id_seq_prefix),
-                                   static_trie.candidate_ids(id_seq_prefix)))
+                # breakpoint()
+                return tuple(chain(dynamic_scope.dynamic_trie.candidate_ids(id_seq_prefix),
+                                   static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True)))
             return arg_candidate
 
         for act_type, trie in kopl_transfer.iter_act_type_trie_pairs(lf_tokenizer=lf_tokenizer, end_of_seq=reduce_token):
             if act_type == 'kw-entity':
-                arg_candidate = make_entity_arg_candidate(trie, dynamic_scope)
+                arg_candidate = make_entity_arg_candidate(trie)
             else:
                 arg_candidate = make_static_arg_candidate(trie)
             register(['candidate', act_type], arg_candidate)
