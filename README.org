@@ -86,12 +86,6 @@ PERCENT=5  # between 0 to 100
 python -m domain.kqapro.run --config config.train_for_multiple_decoding_strategies --additional-config config.additional.train_set_portion_no_inferencing_subtypes --train-set-percent $PERCENT
 #+end_src
 
-** Training for multiple decoding strategies with a portion of the train set where using_distinctive_union_types=False
-#+begin_src sh
-PERCENT=5  # between 0 to 100
-python -m domain.kqapro.run --config config.train_for_multiple_decoding_strategies --additional-config config.additional.train_set_portion_no_distinctive_union_types --train-set-percent $PERCENT
-#+end_src
-
 ** Training for multiple decoding strategies with batch_size=128
 #+begin_src sh
 python -m domain.kqapro.run --config config.train_for_multiple_decoding_strategies --additional-config config.batch.size=128
