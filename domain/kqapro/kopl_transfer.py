@@ -394,10 +394,6 @@ with block:
                     rhs_type = type_seq[idx + 1]
                     action_name = f'{lhs_type}-to-{rhs_type}'
                     intermediate_action = grammar.name_to_action(action_name)
-                    # try:
-                    #     intermediate_action = grammar.name_to_action(action_name)
-                    # except Exception:
-                    #     breakpoint()
                     state = state.get_next_state(intermediate_action)
                     output_action_seq.append(intermediate_action)
                 output_action_seq.append(expected_action)

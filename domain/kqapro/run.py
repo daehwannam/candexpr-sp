@@ -355,8 +355,13 @@ def run_train_for_multiple_decoding_strategies(
             with config.let(decoding_strategy_config.items()):
                 logger.info(f'Validation of "{config.decoding_strategy_name}" starts')
 
+                if 'grammar_lazy_obj' in decoding_strategy_config:
+                    _grammar = decoding_strategy_config.grammar_lazy_obj.get()
+                else:
+                    _grammar = grammar
+
                 validation = validate(
-                    grammar=grammar,
+                    grammar=_grammar,
                     compiler=compiler,
                     model=model,
                     context=context,
@@ -632,7 +637,13 @@ def validate(
                 return None
             else:
                 if last_state.tree.is_closed_root():
-                    return last_state.tree.get_expr_str(expr_key=expr_key)
+                    try:
+                        return last_state.tree.get_expr_str(expr_key=expr_key)
+                    except Exception as error:
+                        if constrained_decoding:
+                            raise error
+                        else:
+                            return None
                 else:
                     return None
 

@@ -8,7 +8,9 @@ import shutil
 from dhnamlib.pylib.context import Environment, LazyEval
 # from dhnamlib.pylib.decoration import Register
 from dhnamlib.pylib.decoration import lru_cache, variable
-from dhnamlib.pylib.filesys import json_load, json_save, jsonl_load, mkpdirs_unless_exist, mkloc_unless_exist, make_logger, get_new_path_with_number
+from dhnamlib.pylib.filesys import (
+    json_load, json_save, jsonl_load, json_skip_types,
+    mkpdirs_unless_exist, mkloc_unless_exist, make_logger, get_new_path_with_number)
 # from dhnamlib.pylib.filesys import pickle_load
 # from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.iteration import distinct_pairs, not_none_valued_pairs
@@ -187,6 +189,11 @@ def _parse_cmd_args():
     return cmd_arg_dict
 
 
+def has_model_learning_dir_path():
+    cmd_arg_dict = _parse_cmd_args()
+    return 'model_learning_dir_path' in cmd_arg_dict
+
+
 @lru_cache
 def _get_specific_config_module():
     cmd_arg_dict = _parse_cmd_args()
@@ -251,13 +258,13 @@ def _config_to_json_dict(config):
 
 
 def save_config_info(dir_path):
-    json_dict = _config_to_json_dict(config)
+    json_dict = dict(config.items())
     config_info_path = get_new_path_with_number(
         os.path.join(dir_path, f'config-info-{config.run_mode}'),
         starting_num=1, no_first_num=True
     )
     mkloc_unless_exist(config_info_path)
-    json_save(json_dict, os.path.join(config_info_path, 'config.json'))
+    json_save(json_dict, os.path.join(config_info_path, 'config.json'), cls=json_skip_types(LazyEval))
     json_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
     shutil.copytree('./config', os.path.join(config_info_path, 'config'))
     shutil.copyfile('./configuration.py', os.path.join(config_info_path, 'configuration.py'))
