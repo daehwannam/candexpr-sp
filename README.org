@@ -66,7 +66,7 @@ python -m domain.kqapro.preprocess --goal shuffled_encoded_strict_train_set
 
 ** Training
 #+begin_src sh
-python -m domain.kqapro.run --config config.train_strong_sup
+python -m domain.kqapro.run --config config.train_default
 #+end_src
 
 ** Training for multiple decoding strategies

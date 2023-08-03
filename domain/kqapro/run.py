@@ -701,7 +701,7 @@ def compute_accuracy(predictions, answers):
 
 
 if __name__ == '__main__':
-    if config.run_mode == 'train-strong-sup':
+    if config.run_mode == 'train-default':
         run_train()
         # from dhnamlib.pylib.cProfiling import run_context
         # run_context('run_train(model_learning_dir_path=config.model_learning_dir_path)', sort='cumtime')

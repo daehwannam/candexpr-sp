@@ -10,7 +10,7 @@ from .train_general import config as _config_general
 
 _config_specific = Environment(
     # specific config here
-    run_mode='train-strong-sup',
+    run_mode='train-default',
 )
 
 
