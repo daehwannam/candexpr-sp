@@ -113,18 +113,13 @@ def run_train(
     for epoch in range(status['last_epoch'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
         model.train()
-        # if config.debug:
-        #     if epoch > 3:
-        #         break
 
-        # if config.debug:
-        #     batch_idx = -1
+        # debug_batch_idx = -1
         loss = torch.tensor(0.)
         for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
-            # if config.debug:
-            #     batch_idx += 1
-            #     if batch_idx >= 100:
-            #         break
+            # debug_batch_idx += 1
+            # if debug_batch_idx >= 100:
+            #     break
 
             # TODO
             # - Use `model.config.decoder_start_token_id` as the first id of sequences.
