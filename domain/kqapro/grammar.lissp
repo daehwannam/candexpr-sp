@@ -104,8 +104,8 @@
   :param-types '(result)
   :expr-dict (mapkv :default $(lambda (context)
                                 (postprocess-denotation {0}))
-                    :visual-0 "{0}"
-                    :visual $(program {0}))
+                    :visual "{0}"
+                    :visual-1 $(program {0}))
   :starting True)
 
 (define-action
