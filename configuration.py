@@ -208,7 +208,9 @@ def _get_specific_config_module():
 def _get_additional_config_modules():
     cmd_arg_dict = _parse_cmd_args()
     if cmd_arg_dict.get('additional_config_modules') is not None:
-        module_names = [name.strip() for name in cmd_arg_dict['additional_config_modules'].split(',')]
+        # module_names = [name.strip() for name in cmd_arg_dict['additional_config_modules'].split(',')]
+        module_names = [name.strip() for name in cmd_arg_dict['additional_config_modules'].split('|')]
+        print('Module names:', module_names)
         _additional_config_modules = tuple(map(import_module, module_names))
     else:
         _additional_config_modules = None
