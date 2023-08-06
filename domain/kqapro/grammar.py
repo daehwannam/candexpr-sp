@@ -7,6 +7,7 @@ from logic.grammar import Grammar
 from logic.formalism import make_program_tree_cls, make_search_state_cls
 
 from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary, deprecated
+from dhnamlib.pylib.function import identity
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block, Environment
 from dhnamlib.pylib.iteration import distinct_values
@@ -43,7 +44,7 @@ class KoPLGrammar(Grammar):
 
         self.model_config = learning.load_model_config(pretrained_model_name_or_path)
         self.initialize_from_base_actions()
-        self.dynamic_scope = Environment()
+        self.dynamic_scope = Environment(allowing_duplicate_candidate_ids=True)
         register_all(register, self, self.lf_tokenizer, self.dynamic_scope)
         self.add_actions(kopl_transfer.iter_nl_token_actions(
             self.meta_name_to_meta_action, self.lf_tokenizer, using_distinctive_union_types=using_distinctive_union_types))
@@ -240,8 +241,21 @@ def register_all(register, grammar, lf_tokenizer, dynamic_scope):
                 id_seq_prefix = tuple(grammar.token_to_id(child.value.get_meta_arg('token'))
                                       for child in children)
                 # return tuple(static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True))
-                return tuple(chain(dynamic_scope.dynamic_trie.candidate_ids(id_seq_prefix),
-                                   static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True)))
+
+                # # duplicate id may exists, but it's faster a little
+                # return tuple(chain(dynamic_scope.dynamic_trie.candidate_ids(id_seq_prefix),
+                #                    static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True)))
+
+                if dynamic_scope.allowing_duplicate_candidate_ids:
+                    # it's faster
+                    preprocess = identity
+                else:
+                    preprocess = set
+
+                return tuple(preprocess(chain(
+                    dynamic_scope.dynamic_trie.candidate_ids(id_seq_prefix),
+                    static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True))))
+
             return arg_candidate
 
         for act_type, trie in kopl_transfer.iter_act_type_trie_pairs(lf_tokenizer=lf_tokenizer, end_of_seq=reduce_token):

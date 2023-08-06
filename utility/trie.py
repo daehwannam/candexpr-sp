@@ -2,7 +2,7 @@
 from itertools import chain
 
 from dhnamlib.pylib.iteration import all_same
-from dhnamlib.pylib.decoration import construct
+# from dhnamlib.pylib.decoration import construct
 
 import pygtrie
 
@@ -100,7 +100,16 @@ class SpanTrie:
             id_to_index_set.setdefault(token_id, set()).add(index)
         self.id_to_index_set = id_to_index_set
 
-    @construct(lambda x: sorted(set(x)))
+    # def candidate_ids(self, id_seq_prefix, allowing_duplicates=False, sorting=True):
+    #     candidates = self._candidate_ids(id_seq_prefix)
+    #     if not allowing_duplicates:
+    #         candidates = set(id_seq_prefix)
+    #     if sorting:
+    #         candidates = sorted(candidates)
+    #     return id_seq_prefix
+
+    # @construct(lambda x: sorted(set(x)))
+    # @construct(set)
     def candidate_ids(self, id_seq_prefix):
         if len(id_seq_prefix) == 0:
             yield from self.id_seq
