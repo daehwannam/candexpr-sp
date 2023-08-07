@@ -4,6 +4,8 @@ from itertools import chain
 from typing import List, Tuple, Callable
 import math
 import warnings
+import json
+from fractions import Fraction
 
 import torch
 import torch.nn.functional as F
@@ -429,8 +431,21 @@ def load_status(dir_path, file_name=STATUS_FILE_NAME):
     return filesys.json_load(os.path.join(dir_path, file_name))
 
 
+class PerformanceJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Fraction):
+            # return {'Fraction': (obj.numerator, obj.denominator)}
+            # return repr(obj)
+            return f'{obj.numerator}/{obj.denominator}'
+        else:
+            return super().default(obj)
+
+
 def save_performance(performance, dir_path, file_name='performance.json'):
-    filesys.json_pretty_save(performance, os.path.join(dir_path, file_name))
+    updated_performance = dict(performance)
+    updated_performance.update(accuracy_percent='{:5.2f}'.format(performance['accuracy'] * 100))
+    filesys.json_pretty_save(updated_performance, os.path.join(dir_path, file_name),
+                             cls=PerformanceJSONEncoder)
 
 
 def save_analysis(analysis, dir_path, file_name='analysis.json'):

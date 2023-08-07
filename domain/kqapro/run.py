@@ -1,5 +1,7 @@
 
 import os
+from fractions import Fraction
+
 import torch
 # from tqdm import tqdm
 import transformers
@@ -101,14 +103,14 @@ def run_train(
 
         status = AttrDict(learning.load_status(pretrained_model_name_or_path))
     else:
-        _last_performance = get_performance(accuracy=float('-inf'))
+        _last_performance = get_performance(accuracy=float('-inf'), accuracy_fraction=0)
         status = AttrDict(
             last_epoch=0,
             best_epoch=0,
             last_performance=_last_performance,
             best_performance=_last_performance,
             history=[])
-    measures = [get_measure('accuracy', True)]
+    measures = [get_measure('accuracy', True), get_measure('accuracy_fraction', True)]
 
     for epoch in range(status['last_epoch'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
@@ -291,7 +293,7 @@ def run_train_for_multiple_decoding_strategies(
     assert not restarting
 
     def make_initial_status_measures_pair():
-        _last_performance = get_performance(accuracy=float('-inf'))
+        _last_performance = get_performance(accuracy=float('-inf'), accuracy_fraction=0)
         status = AttrDict(
             last_epoch=0,
             best_epoch=0,
@@ -526,24 +528,11 @@ def validate(
     else:
         xtqdm_kwargs = dict()
 
-    # if config.debug:
-    #     batch_idx = -1
-
+    # debug_batch_idx = -1
     for batch in config.xtqdm(data_loader, **xtqdm_kwargs):
-        # if config.debug:
-        #     batch_idx += 1
-        #     if batch_idx >= 3:
-        #         break
-        #     # if batch_idx < 1000:
-        #     if batch_idx < 500:
-        #         def update_realtime_accuracy():
-        #             return 0
-        #         continue
-        #     utterances = grammar.utterance_tokenizer.batch_decode(batch['utterance_token_ids'], skip_special_tokens=True)
-        #     # assert len(utterances) == 1
-        #     test_utterance = "How many contemporary folk music groups are related to famous Taj Mahal (the one whose ISNI is 0000 0001 1598 8398 or KT Tunstall?"
-        #     if test_utterance in utterances:
-        #         breakpoint()
+        # debug_batch_idx += 1
+        # if debug_batch_idx > 3:
+        #     break
 
         assert constrained_decoding or not softmax_masking
         if constrained_decoding:
@@ -571,10 +560,6 @@ def validate(
         )
         programs = learning.last_states_to_programs(
             grammar, compiler, last_states, tolerant=True, ignoring_compilation_errors=not constrained_decoding)
-
-        # if config.debug:
-        #     if batch_idx == 1:
-        #         breakpoint()
 
         predictions = learning.programs_to_predictions(context, programs)
         all_predictions.extend(predictions)
@@ -606,8 +591,10 @@ def validate(
 
     if evaluating:
         assert len(all_predictions) == len(all_answers) == len(all_answer_last_states)
-        accuracy = compute_accuracy(all_predictions, all_answers)
-        performance = get_performance(accuracy=accuracy)
+        num_correct = compute_num_correct(all_predictions, all_answers)
+        accuracy = compute_accuracy(all_predictions, all_answers, num_correct=num_correct)
+        accuracy_fraction = compute_accuracy_fraction(all_predictions, all_answers, num_correct=num_correct)
+        performance = get_performance(accuracy=accuracy, accuracy_fraction=accuracy_fraction)
     else:
         performance = None
 
@@ -687,12 +674,26 @@ def compute_num_correct(predictions, answers):
     return num_correct
 
 
-def compute_accuracy(predictions, answers):
+def compute_accuracy(predictions, answers, num_correct=None):
     assert len(predictions) == len(answers)
     num_examples = len(predictions)
 
-    accuracy = compute_num_correct(predictions, answers) / num_examples
+    if num_correct is None:
+        num_correct = compute_num_correct(predictions, answers)
+
+    accuracy = num_correct / num_examples
     return accuracy
+
+
+def compute_accuracy_fraction(predictions, answers, num_correct=None):
+    assert len(predictions) == len(answers)
+    num_examples = len(predictions)
+
+    if num_correct is None:
+        num_correct = compute_num_correct(predictions, answers)
+
+    accuracy_fraction = Fraction(num_correct, num_examples)
+    return accuracy_fraction
 
 
 if __name__ == '__main__':

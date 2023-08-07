@@ -138,6 +138,17 @@ ADDITIONAL_CONFIG='config.additional.constrained_decoding=False'
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 #+end_src
 
+** Test with disabling arg-candidate for an action
+#+begin_src sh
+TEST_CONFIG='config.test_on_val_set'  # or 'config.test_on_test_set'
+CHECKPOINT_PATH='path/to/checkpoint'
+TEST_DIR_PATH='path/to/test-result'
+# e.g. TEST_DIR_PATH='./model-test/2023-07-19_01:17:04_094104_full-constraints:best'
+ACTION_NAME=keyword-concept     # or keyword-entity, keyword-relation, ...
+
+python -m domain.kqapro.run --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_candidate --no-arg-candidate-for $ACTION_NAME
+#+end_src
+
 ** Evaluation with the official code
 The evaluation code is slightly modified from [[https://github.com/shijx12/KQAPro_Baselines/blob/7cea2738fd095a2c17594d492923ee80a212ac0f/evaluate.py][KQAPro_Baselines/evaluate.py]].
 The evaluation code requires a prediction file, which is the output from the previous steps.
