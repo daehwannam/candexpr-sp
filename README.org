@@ -146,7 +146,7 @@ TEST_DIR_PATH='path/to/test-result'
 # e.g. TEST_DIR_PATH='./model-test/2023-07-19_01:17:04_094104_full-constraints:best'
 ACTION_NAME=keyword-concept     # or keyword-entity, keyword-relation, ...
 
-python -m domain.kqapro.run --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_candidate --no-arg-candidate-for $ACTION_NAME
+python -m domain.kqapro.run --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
 #+end_src
 
 ** Evaluation with the official code

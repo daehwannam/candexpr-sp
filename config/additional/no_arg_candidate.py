@@ -9,17 +9,23 @@ from dhnamlib.pylib.context import LazyEval
 def _make_grammar():
     grammar = configuration._make_grammar()
     action_name = _get_action_name()
-    action = grammar.name_to_action(action_name)
-    action.arg_candidate = None
-    return grammar
+    if action_name is None:
+        return grammar
+    else:
+        action = grammar.name_to_action(action_name)
+        action.arg_candidate = None
+        return grammar
 
 
 def _get_action_name():
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-arg-candidate-for', dest='action_name_without_arg_candidate', help='arg-candidate is disabled for the specified action')
     args, unknown = parser.parse_known_args()
-    assert is_action_with_arg_candidate(args.action_name_without_arg_candidate)
-    return args.action_name_without_arg_candidate
+    if args.action_name_without_arg_candidate == 'nothing':
+        return None
+    else:
+        assert is_action_with_arg_candidate(args.action_name_without_arg_candidate)
+        return args.action_name_without_arg_candidate
 
 
 def is_action_with_arg_candidate(action_name):
