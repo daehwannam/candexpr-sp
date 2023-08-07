@@ -11,4 +11,4 @@ ACTION_NAME=$2
 TEST_DIR_PATH="./model-test-keep/test-on-val:no-arg-candidate:${ACTION_NAME}"
 
 
-python -m domain.kqapro.run --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
+python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
