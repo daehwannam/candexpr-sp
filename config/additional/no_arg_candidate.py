@@ -47,5 +47,6 @@ _action_names = set([
 
 
 config = Environment(
-    grammar=LazyEval(_make_grammar)
+    grammar=LazyEval(_make_grammar),
+    ignoring_parsing_errors=True
 )
