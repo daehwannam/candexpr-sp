@@ -17,7 +17,7 @@ def get_model_learning_dir_path():
     if has_model_learning_dir_path():
         return None
     else:
-        os.path.join(_model_learning_dir_root_path, initial_date_str)
+        return os.path.join(_model_learning_dir_root_path, initial_date_str)
 
 
 config = Environment(not_none_valued_pairs(dict(
