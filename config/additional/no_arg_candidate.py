@@ -1,4 +1,5 @@
 import argparse
+from functools import lru_cache
 
 import configuration
 
@@ -9,7 +10,7 @@ from dhnamlib.pylib.context import LazyEval
 def _make_grammar():
     grammar = configuration._make_grammar()
     action_name = _get_action_name()
-    if action_name is None:
+    if action_name in ['nothing', 'all']:
         return grammar
     else:
         action = grammar.name_to_action(action_name)
@@ -17,15 +18,37 @@ def _make_grammar():
         return grammar
 
 
-def _get_action_name():
+using_arg_candidate = True
+
+
+@lru_cache(maxsize=None)
+def _get_cmd_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-arg-candidate-for', dest='action_name_without_arg_candidate', help='arg-candidate is disabled for the specified action')
     args, unknown = parser.parse_known_args()
+
+    return args
+
+
+def _get_action_name():
+    args = _get_cmd_args()
     if args.action_name_without_arg_candidate == 'nothing':
-        return None
+        return 'nothing'
+    elif args.action_name_without_arg_candidate == 'all':
+        # global using_arg_candidate
+        # using_arg_candidate = False
+        return 'all'
     else:
         assert is_action_with_arg_candidate(args.action_name_without_arg_candidate)
         return args.action_name_without_arg_candidate
+
+
+def _get_using_arg_candidate():
+    args = _get_cmd_args()
+    if args.action_name_without_arg_candidate == 'all':
+        return False
+    else:
+        return True
 
 
 def is_action_with_arg_candidate(action_name):
@@ -48,5 +71,6 @@ _action_names = set([
 
 config = Environment(
     grammar=LazyEval(_make_grammar),
-    ignoring_parsing_errors=True
+    ignoring_parsing_errors=True,
+    using_arg_candidate=LazyEval(_get_using_arg_candidate),
 )
