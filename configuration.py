@@ -175,7 +175,7 @@ _default_config = Environment(
 )
 
 
-@lru_cache
+@lru_cache(maxsize=None)
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
@@ -196,7 +196,7 @@ def has_model_learning_dir_path():
     return 'model_learning_dir_path' in cmd_arg_dict
 
 
-@lru_cache
+@lru_cache(maxsize=None)
 def _get_specific_config_module():
     cmd_arg_dict = _parse_cmd_args()
     if cmd_arg_dict.get('config_module') is not None:
@@ -206,7 +206,7 @@ def _get_specific_config_module():
     return specific_config_module
 
 
-@lru_cache
+@lru_cache(maxsize=None)
 def _get_additional_config_modules():
     cmd_arg_dict = _parse_cmd_args()
     if cmd_arg_dict.get('additional_config_modules') is not None:

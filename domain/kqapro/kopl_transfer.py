@@ -245,7 +245,7 @@ with block:
             kopl_function = 'QueryName'
         return _get_kopl_function_to_action_dict(grammar)[kopl_function]
 
-    @lru_cache
+    @lru_cache(maxsize=None)
     @construct(compose(dict, distinct_pairs))
     def _get_kopl_function_to_action_dict(grammar):
         # kopl_function_to_action_dict = {}
@@ -316,7 +316,7 @@ with block:
 
         return action_seq
 
-    @lru_cache
+    @lru_cache(maxsize=None)
     def _get_act_type_to_actions_dict(grammar):
         return merge_pairs([action.act_type, action] for action in grammar.base_actions)
 

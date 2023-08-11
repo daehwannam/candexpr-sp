@@ -551,15 +551,16 @@ def validate(
             logits_processor=logits_processor,
             # **generation_kwargs
         )
+        ignoring_errors = config.ignoring_parsing_errors or not (
+            constrained_decoding and config.using_arg_candidate and config.using_distinctive_union_types)
         last_states = learning.token_id_seqs_to_last_states(
             grammar, token_id_seqs,
-            ignoring_parsing_errors=config.ignoring_parsing_errors or not (
-                constrained_decoding and config.using_arg_candidate and config.using_distinctive_union_types),
+            ignoring_parsing_errors=ignoring_errors,
             verifying=config.debug,
             utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None)
         )
         programs = learning.last_states_to_programs(
-            grammar, compiler, last_states, tolerant=True, ignoring_compilation_errors=not constrained_decoding)
+            grammar, compiler, last_states, tolerant=True, ignoring_compilation_errors=ignoring_errors)
 
         predictions = learning.programs_to_predictions(context, programs)
         all_predictions.extend(predictions)
@@ -583,8 +584,7 @@ def validate(
                 assert 'labels' in batch
                 answer_last_states = learning.token_id_seqs_to_last_states(
                     grammar, batch['labels'].tolist(),
-                    ignoring_parsing_errors=config.ignoring_parsing_errors or not (
-                        constrained_decoding and config.using_arg_candidate and config.using_distinctive_union_types),
+                    ignoring_parsing_errors=ignoring_errors,
                     verifying=True,  # config.debug,
                     utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None))
                 all_answer_last_states.extend(answer_last_states)

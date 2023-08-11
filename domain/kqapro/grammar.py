@@ -49,7 +49,7 @@ class KoPLGrammar(Grammar):
         self.add_actions(kopl_transfer.iter_nl_token_actions(
             self.meta_name_to_meta_action, self.lf_tokenizer, using_distinctive_union_types=using_distinctive_union_types))
 
-    @lru_cache
+    @lru_cache(maxsize=None)
     def initialize_from_base_actions(self):
         self.non_nl_tokens = set(distinct_values(
             kopl_transfer.action_name_to_special_token(action.name)
@@ -66,7 +66,7 @@ class KoPLGrammar(Grammar):
             self.utterance_tokenizer = copy.copy(self.lf_tokenizer)
             self.utterance_tokenizer.add_prefix_space = False
 
-    @lru_cache
+    @lru_cache(maxsize=None)
     @interface.implement
     def get_name_to_id_dicts(self):
         self.initialize_from_base_actions()
@@ -80,7 +80,7 @@ class KoPLGrammar(Grammar):
 
         return [name_to_id_dict]
 
-    @lru_cache
+    @lru_cache(maxsize=None)
     def _get_token_to_id_dict(self):
         self.initialize_from_base_actions()
         return dict(map(reversed, iter_id_token_pairs(self.lf_tokenizer)))
@@ -89,22 +89,22 @@ class KoPLGrammar(Grammar):
         return self._get_token_to_id_dict()[token]
 
     @property
-    @lru_cache
+    @lru_cache(maxsize=None)
     def reduce_token(self):
         return kopl_transfer.action_name_to_special_token(self.reduce_action.name)
 
     @property
-    @lru_cache
+    @lru_cache(maxsize=None)
     def reduce_token_id(self):
         return self.lf_tokenizer.convert_tokens_to_ids(self.reduce_token)
 
-    @lru_cache
+    @lru_cache(maxsize=None)
     @interface.implement
     def get_program_tree_cls(self):
         return make_program_tree_cls(self.formalism, name='KoPLProgramTree')
 
     @config
-    @lru_cache
+    @lru_cache(maxsize=None)
     @interface.implement
     def get_search_state_cls(self, using_arg_candidate=config.ph, using_arg_filter=config.ph):
         @deprecated

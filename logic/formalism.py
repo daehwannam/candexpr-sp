@@ -866,7 +866,7 @@ def make_search_state_cls(grammar, name=None, using_arg_candidate=True, using_ar
 
         @interface.implement
         @classmethod
-        @lru_cache
+        @lru_cache(maxsize=None)
         def get_all_token_id_set(cls):
             all_token_id_set = set(grammar.iter_all_token_ids())
             return all_token_id_set
