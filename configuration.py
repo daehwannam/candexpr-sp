@@ -166,7 +166,8 @@ _default_config = Environment(
     inferencing_subtypes=True,
     using_distinctive_union_types=True,
 
-    ignoring_parsing_errors=False,
+    # ignoring_parsing_errors=False,
+    ignoring_parsing_errors=True,
 
     git_hash=_get_git_hash(),
     debug=_DEBUG,

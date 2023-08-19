@@ -30,6 +30,7 @@ class KoPLGrammar(Grammar):
     def __init__(self, *, formalism, super_types_dict, actions, start_action, meta_actions, register=config.ph,
                  is_non_conceptual_type=None, use_reduce=True,
                  inferencing_subtypes=config.ph(True), using_distinctive_union_types=config.ph(True),
+                 using_spans_as_entities=config.ph(False),
                  pretrained_model_name_or_path=config.ph):
 
         self.pretrained_model_name_or_path = pretrained_model_name_or_path
@@ -44,6 +45,7 @@ class KoPLGrammar(Grammar):
 
         self.model_config = learning.load_model_config(pretrained_model_name_or_path)
         self.initialize_from_base_actions()
+        self.using_spans_as_entities = using_spans_as_entities
         self.dynamic_scope = Environment(allowing_duplicate_candidate_ids=True)
         register_all(register, self, self.lf_tokenizer, self.dynamic_scope)
         self.add_actions(kopl_transfer.iter_nl_token_actions(
@@ -136,8 +138,11 @@ class KoPLGrammar(Grammar):
     def get_invalid_state(cls):
         return cls._INVALID_STATE
 
-    def let_dynamic_trie(self, dynamic_trie):
-        return self.dynamic_scope.let(dynamic_trie=dynamic_trie)
+    def let_dynamic_trie(self, dynamic_trie, using_spans_as_entities=None):
+        if using_spans_as_entities is None:
+            using_spans_as_entities = self.using_spans_as_entities
+        return self.dynamic_scope.let(dynamic_trie=dynamic_trie,
+                                      using_spans_as_entities=using_spans_as_entities)
 
 
 def register_all(register, grammar, lf_tokenizer, dynamic_scope):
@@ -246,15 +251,23 @@ def register_all(register, grammar, lf_tokenizer, dynamic_scope):
                 # return tuple(chain(dynamic_scope.dynamic_trie.candidate_ids(id_seq_prefix),
                 #                    static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True)))
 
-                if dynamic_scope.allowing_duplicate_candidate_ids:
-                    # it's faster
-                    preprocess = identity
-                else:
-                    preprocess = set
+                static_arg_candidate_ids = static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True)
 
-                return tuple(preprocess(chain(
-                    dynamic_scope.dynamic_trie.candidate_ids(id_seq_prefix),
-                    static_trie.candidate_ids(id_seq_prefix, ignoring_errors=True))))
+                if dynamic_scope.using_spans_as_entities:
+                    if dynamic_scope.allowing_duplicate_candidate_ids:
+                        # it's faster
+                        preprocess = identity
+                    else:
+                        preprocess = set
+
+                    arg_candidate_ids = tuple(preprocess(chain(
+                        dynamic_scope.dynamic_trie.candidate_ids(id_seq_prefix),
+                        static_arg_candidate_ids)))
+                    del static_arg_candidate_ids
+                else:
+                    arg_candidate_ids = tuple(static_arg_candidate_ids)
+
+                return arg_candidate_ids
 
             return arg_candidate
 

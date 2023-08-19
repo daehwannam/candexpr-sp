@@ -16,6 +16,7 @@ from .execution import postprocess_prediction
 from .kopl_original import execute_kopl_program
 from . import kopl_transfer
 from . import learning
+from logic.formalism import InvalidCandidateActionError
 
 
 @config
@@ -31,6 +32,8 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
     postprocess_prediction_cumtime = 0
 
     action_seqs = []
+    extraction_info_list = []
+    num_incompatible_action_seqs = 0
 
     with TimeMeasure() as total_tm:
         for example_idx, example in tqdm(enumerate(raw_dataset), total=len(raw_dataset)):
@@ -50,14 +53,22 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
                 if verifying_grammar:
                     utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
                     dynamic_trie = learning._utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
-                    with grammar.let_dynamic_trie(dynamic_trie):
-                        last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
-                        # try:
-                        #     last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
-                        # except Exception:
-                        #     breakpoint()
+                    with grammar.let_dynamic_trie(dynamic_trie, using_spans_as_entities=False):
+                        # last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+                        try:
+                            last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+                        except InvalidCandidateActionError as error:
+                            extraction_info = dict(compatible_with_grammar=False,
+                                                   action_extraction_error_msg=error.args[0])
+                            num_incompatible_action_seqs += 1
+                            with grammar.let_dynamic_trie(dynamic_trie, using_spans_as_entities=True):
+                                last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+                        else:
+                            extraction_info = dict(compatible_with_grammar=True)
                 else:
                     last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+                    extraction_info = dict()
+                extraction_info_list.append(extraction_info)
             get_last_state_cumtime += tm.interval
 
             with tm:
@@ -102,7 +113,9 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             if v > 0:
                 print(f'- {k}: {v}')
 
-    return action_seqs
+    print('# incompatible action sequences = {}'.format(num_incompatible_action_seqs))
+
+    return action_seqs, extraction_info_list
 
 
 def action_seq_to_name_seq(action_seq):
@@ -116,8 +129,8 @@ def name_seq_to_action_seq(grammar, action_name_seq):
 def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_program=False, context=None):
     if adding_action_name_seq:
         print('Extracting action sequences from a dataset')
-        action_seqs = extract_action_seqs(raw_dataset, verbose=0, verifying=False)
-        assert len(raw_dataset) == len(action_seqs)
+        action_seqs, extraction_info_list = extract_action_seqs(raw_dataset, verbose=0, verifying=True)
+        assert len(raw_dataset) == len(action_seqs) == len(extraction_info_list)
     print('Augmenting the dataset')
     augmented_dataset = apply_recursively(raw_dataset)
     for example_idx, example in tqdm(enumerate(augmented_dataset), total=len(augmented_dataset)):
@@ -126,6 +139,9 @@ def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_
             action_seq = action_seqs[example_idx]
             action_name_seq = [action.name for action in action_seq]
             example['action_name_seq'] = action_name_seq
+
+            extraction_info = extraction_info_list[example_idx]
+            example.update(**extraction_info)
         if adding_answer_by_program:
             assert context is not None
             answer_by_program = postprocess_prediction(execute_kopl_program(context, example['program']))
@@ -237,7 +253,10 @@ def augment_dataset_with_strict_grammar(augmented_dataset, grammar):
     assert grammar.inferencing_subtypes is False
     for example in tqdm(augmented_dataset):
         new_example = dict(example)
-        action_seq = kopl_transfer.get_strictly_typed_action_seq(grammar, example['action_name_seq'])
+        action_seq = kopl_transfer.get_strictly_typed_action_seq(
+            grammar,
+            action_name_seq=example['action_name_seq'],
+            question=example['question'])
         action_name_seq = [action.name for action in action_seq]
         new_example['action_name_seq'] = action_name_seq  # update 'action_name_seq'
         yield new_example

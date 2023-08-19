@@ -16,6 +16,7 @@ from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, findit
 
 from . import kopl_read
 from . import kb_analysis
+from . import learning
 
 
 def iter_nl_token_actions(meta_name_to_meta_action, lf_tokenizer, using_distinctive_union_types):
@@ -349,7 +350,7 @@ with block:
                          param_types=[sub_type],
                          expr_dict=dict(default='{0}'))
 
-    def get_strictly_typed_action_seq(grammar, action_name_seq):
+    def get_strictly_typed_action_seq(grammar, action_name_seq, question):
         assert grammar.inferencing_subtypes is False
 
         input_action_seq = tuple(map(grammar.name_to_action, action_name_seq))
@@ -379,7 +380,10 @@ with block:
         while not state.tree.is_closed_root():
             expected_action = input_action_seq[num_processed_actions]
             num_processed_actions += 1
-            candidate_action_ids = state.get_candidate_action_ids()
+            utterance_token_id_seq = grammar.utterance_tokenizer(question)['input_ids']
+            dynamic_trie = learning._utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
+            with grammar.let_dynamic_trie(dynamic_trie, using_spans_as_entities=True):
+                candidate_action_ids = state.get_candidate_action_ids()
             if expected_action.id in candidate_action_ids:
                 output_action_seq.append(expected_action)
                 state = state.get_next_state(expected_action)

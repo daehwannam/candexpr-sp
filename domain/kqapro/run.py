@@ -6,6 +6,8 @@ import torch
 # from tqdm import tqdm
 import transformers
 
+from functools import lru_cache
+
 from configuration import config, save_config_info
 
 from . import learning
@@ -21,6 +23,11 @@ from dhnamlib.pylib.structure import AttrDict
 
 from dhnamlib.pylib.torchlib.optimization import get_linear_schedule_with_warmup
 from dhnamlib.pylib.torchlib.stat import get_performance, get_measure, is_better_performance
+
+
+@lru_cache(maxsize=None)
+def get_measures():
+    return [get_measure('accuracy', True), get_measure('accuracy_fraction', True)]
 
 
 @config
@@ -110,7 +117,7 @@ def run_train(
             last_performance=_last_performance,
             best_performance=_last_performance,
             history=[])
-    measures = [get_measure('accuracy', True), get_measure('accuracy_fraction', True)]
+    measures = get_measures()
 
     for epoch in range(status['last_epoch'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
@@ -300,7 +307,7 @@ def run_train_for_multiple_decoding_strategies(
             last_performance=_last_performance,
             best_performance=_last_performance,
             history=[])
-        measures = [get_measure('accuracy', True)]
+        measures = get_measures()
 
         return status, measures
 
@@ -314,13 +321,13 @@ def run_train_for_multiple_decoding_strategies(
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
-        # debug_batch_cnt = -1
+        debug_batch_cnt = -1
 
         loss = torch.tensor(0.)
         for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
-            # debug_batch_cnt += 1
-            # if debug_batch_cnt > 100:
-            #     break
+            debug_batch_cnt += 1
+            if debug_batch_cnt > 100:
+                break
 
             batched_input = dict(
                 input_ids=batch['utterance_token_ids'].to(device),
@@ -528,11 +535,11 @@ def validate(
     else:
         xtqdm_kwargs = dict()
 
-    # debug_batch_idx = -1
+    debug_batch_idx = -1
     for batch in config.xtqdm(data_loader, **xtqdm_kwargs):
-        # debug_batch_idx += 1
-        # if debug_batch_idx > 3:
-        #     break
+        debug_batch_idx += 1
+        if debug_batch_idx > 3:
+            break
 
         assert constrained_decoding or not softmax_masking
         if constrained_decoding:

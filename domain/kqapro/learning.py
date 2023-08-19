@@ -423,12 +423,30 @@ def load_and_update_scheduler(scheduler, dir_path):
 STATUS_FILE_NAME = 'status.json'
 
 
+class StatusJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Fraction):
+            return {'Fraction': (obj.numerator, obj.denominator)}
+        else:
+            return super().default(obj)
+
+
+def as_python_object_for_status(dic):
+    # https://stackoverflow.com/a/8230373
+    if isinstance(dic, dict) and len(dic) == 1 and 'Fraction' in dic:
+        return Fraction(*dic['Fraction'])
+    else:
+        return dic
+
+
 def save_status(status, dir_path, file_name=STATUS_FILE_NAME):
-    filesys.json_pretty_save(status, os.path.join(dir_path, file_name))
+    filesys.json_pretty_save(status, os.path.join(dir_path, file_name),
+                             cls=StatusJSONEncoder)
 
 
 def load_status(dir_path, file_name=STATUS_FILE_NAME):
-    return filesys.json_load(os.path.join(dir_path, file_name))
+    return filesys.json_load(os.path.join(dir_path, file_name),
+                             object_hook=as_python_object_for_status)
 
 
 class PerformanceJSONEncoder(json.JSONEncoder):
