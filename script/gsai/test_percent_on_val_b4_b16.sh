@@ -31,25 +31,25 @@ for data_type in 'val'; do
 
     CHECKPOINT_DIR_NAME='full-constraints:best'
     CHECKPOINT_DIR_PATH=${TRAIN_DIR_PATH}/${CHECKPOINT_DIR_NAME}
-    TEST_DIR_PATH=./model-test-keep/${TRAIN_DIR_NAME}:on-${data_type}:b4_b16:${CHECKPOINT_DIR_NAME}
+    TEST_DIR_PATH=./model-test-keep/${TRAIN_DIR_NAME}:on-${data_type}:b4:${CHECKPOINT_DIR_NAME}
     ADDITIONAL_CONFIG="${ADDITIONAL_CONFIG_COMMON}"
     python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_DIR_PATH --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 
     CHECKPOINT_DIR_NAME='no-arg-candidate:best'
     CHECKPOINT_DIR_PATH=${TRAIN_DIR_PATH}/${CHECKPOINT_DIR_NAME}
-    TEST_DIR_PATH=./model-test-keep/${TRAIN_DIR_NAME}:on-${data_type}:b4_b16:${CHECKPOINT_DIR_NAME}
+    TEST_DIR_PATH=./model-test-keep/${TRAIN_DIR_NAME}:on-${data_type}:b4:${CHECKPOINT_DIR_NAME}
     ADDITIONAL_CONFIG="${ADDITIONAL_CONFIG_COMMON}|config.additional.using_arg_candidate=False"
     python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_DIR_PATH --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 
     CHECKPOINT_DIR_NAME='no-ac-no-dut:best'
     CHECKPOINT_DIR_PATH=${TRAIN_DIR_PATH}/${CHECKPOINT_DIR_NAME}
-    TEST_DIR_PATH=./model-test-keep/${TRAIN_DIR_NAME}:on-${data_type}:b4_b16:${CHECKPOINT_DIR_NAME}
+    TEST_DIR_PATH=./model-test-keep/${TRAIN_DIR_NAME}:on-${data_type}:b4:${CHECKPOINT_DIR_NAME}
     ADDITIONAL_CONFIG="${ADDITIONAL_CONFIG_COMMON}|config.additional.using_arg_candidate=False|config.additional.using_distinctive_union_types=False"
     python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_DIR_PATH --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 
     CHECKPOINT_DIR_NAME='no-constrained-decoding:best'
     CHECKPOINT_DIR_PATH=${TRAIN_DIR_PATH}/${CHECKPOINT_DIR_NAME}
-    TEST_DIR_PATH=./model-test-keep/${TRAIN_DIR_NAME}:on-${data_type}:b4_b16:${CHECKPOINT_DIR_NAME}
+    TEST_DIR_PATH=./model-test-keep/${TRAIN_DIR_NAME}:on-${data_type}:b4:${CHECKPOINT_DIR_NAME}
     ADDITIONAL_CONFIG="${ADDITIONAL_CONFIG_COMMON}|config.additional.constrained_decoding=False"
     python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_DIR_PATH --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 done
