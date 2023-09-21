@@ -1,4 +1,24 @@
-;;; -*- mode: lisp -*-
+;;; -*- mode: emacs-lisp -*-
+
+
+;;; This code is written in Lissp, a dialect of Lisp, which is provided by Hissp.
+;;; - Hissp documentation: https://hissp.readthedocs.io
+;;; - Hissp github: https://hissp.readthedocs.io
+;;;
+;;; We slightly modify the syntax of Lissp:
+;;; - The syntax of `let' expression is similar to that of Common Lisp or Emacs Lisp.
+;;; - A backquote (`) is used to expand s-expressions rather than to define macros.
+;;; - The $ character is used to convert s-expressions to strings. For example, $(context.FindAll) becomes "(context.FindAll)" .
+
+
+;;; Types
+;;;
+;;; `define-types' define types in a hierarchy.
+;;; For example, the sub-types of `keyword' are `kw-concept', `kw-entity', `kw-relation', `kw-attribute' and `kw-qualifier',
+;;; and the sub-types of `kw-attribute' are `kw-attr-string' and `kw-attr-comparable'.
+;;;
+;;; Types that have "conceptual" as comments are not used for `act-type' or `param-types'.
+;;; The conceptual types are only for categorizing types.
 
 (define-types
   '(:type                               ; conceptual
@@ -69,6 +89,21 @@
     result-rel-q-value
     result-boolean))
 
+;; Note: KoPL functions that return the results of logical forms:
+;;
+;; - 'Count'
+;; - 'QueryAttr'
+;; - 'QueryAttrQualifier'
+;; - 'QueryRelation'
+;; - 'QueryRelationQualifier'
+;; - 'SelectAmong'
+;; - 'SelectBetween'
+;; - 'VerifyDate'
+;; - 'VerifyNum'
+;; - 'VerifyStr'
+;; - 'VerifyYear'
+;; - 'QueryName' ('What')
+
 (declare-conceptual-types
   '(type
     keyword
@@ -82,21 +117,17 @@
     vp-time))
 
 
-;; Result functions
-;;
-;; 'Count',
-;; 'QueryAttr',
-;; 'QueryAttrQualifier',
-;; 'QueryRelation',
-;; 'QueryRelationQualifier',
-;; 'SelectAmong',
-;; 'SelectBetween',
-;; 'VerifyDate',
-;; 'VerifyNum',
-;; 'VerifyStr',
-;; 'VerifyYear',
-;; 'QueryName' ('What')
-
+;;; Actions
+;;;
+;;; `define-action' defines an action.
+;;; `define-meta-action' defines a meta-action. `nl-token', which is "nlt" in the paper, is the only meta-action in this grammar.
+;;;
+;;; About the inputs of `define-action':
+;;; - `act-type' means the "return type" in the paper.
+;;; - `param-types' means the "parameter types" in the paper.
+;;; - `expr-dict' means the the "logical form template" in the paper.
+;;;   - `default' key is for an expression closely related to Python code, and the expression is converted to Python by Hissp
+;;;   - `visual' key is for a simplified expression.
 
 (define-action
   :name 'program
@@ -401,7 +432,6 @@
        :name name
        :act-type act-type
        :param-types `(,param-type &rest ,param-type)
-       ;; :arg-candidate (if-else (= name 'keyword-entity) None (retrieve `(candidate ,act-type)))
        :arg-candidate (retrieve `(candidate ,act-type))
        :expr-dict (mapkv :default concat-parts)))
    '((keyword-concept           kw-concept      kp-concept    )
