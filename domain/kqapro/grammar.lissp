@@ -7,25 +7,25 @@
 ;;;
 ;;; We slightly modify the syntax of Lissp:
 ;;; - The syntax of `let' expression is similar to that of Common Lisp or Emacs Lisp.
-;;; - A backquote (`) is used to expand s-expressions rather than to define macros.
-;;; - The $ character is used to convert s-expressions to strings. For example, $(context.FindAll) becomes "(context.FindAll)" .
+;;; - A backquote (`) is used to expand S-expressions rather than to define macros.
+;;; - The $ character is used to convert S-expressions to strings. For example, $(context.FindAll) becomes "(context.FindAll)" .
 
 
 ;;; Types
 ;;;
-;;; `define-types' define types in a hierarchy.
+;;; `define-types' defines types in a hierarchy.
 ;;; For example, the sub-types of `keyword' are `kw-concept', `kw-entity', `kw-relation', `kw-attribute' and `kw-qualifier',
 ;;; and the sub-types of `kw-attribute' are `kw-attr-string' and `kw-attr-comparable'.
 ;;;
-;;; Types that have "conceptual" as comments are not used for `act-type' or `param-types'.
-;;; The conceptual types are only for categorizing types.
+;;; The types that have "conceptual" as comments are not used for `act-type' or `param-types'.
+;;; The conceptual types are only used for categorizing types.
 
 (define-types
   '(:type                               ; conceptual
     (:obj-entity
      (:obj-entity-with-fact
-      obj-entity-with-attr
-      obj-entity-with-rel))
+      obj-entity-with-rel
+      obj-entity-with-attr))
 
     (:keyword                           ; conceptual
      kw-concept
@@ -82,12 +82,12 @@
 (define-types
   '(:result
     result-entity-name
-    result-number
     result-relation
+    result-number
+    result-boolean
     result-attr-value
     result-attr-q-value
-    result-rel-q-value
-    result-boolean))
+    result-rel-q-value))
 
 ;; Note: KoPL functions that return the results of logical forms:
 ;;
@@ -126,8 +126,9 @@
 ;;; - `act-type' means the "return type" in the paper.
 ;;; - `param-types' means the "parameter types" in the paper.
 ;;; - `expr-dict' means the the "logical form template" in the paper.
-;;;   - `default' key is for an expression closely related to Python code, and the expression is converted to Python by Hissp
-;;;   - `visual' key is for a simplified expression.
+;;;   - `default' is an expression closely related to Python code, and the expression is converted to Python by Hissp
+;;;   - `visual' is a simplified expression.
+;;; - `arg-candidate' means the "candidate expressions" in the paper.
 
 (define-action
   :name 'program
@@ -135,8 +136,7 @@
   :param-types '(result)
   :expr-dict (mapkv :default $(lambda (context)
                                 (postprocess-denotation {0}))
-                    :visual "{0}"
-                    :visual-1 $(program {0}))
+                    :visual "{0}")
   :starting True)
 
 (define-action
@@ -319,6 +319,7 @@
 ;;; op-*
 
 (define-action
+  ;; "st" stands for "smaller than"
   :name 'op-st
   :act-type 'op-st-or-bt
   :param-types '()
@@ -326,6 +327,7 @@
                     :visual "'less"))
 
 (define-action
+  ;; "bt" stands for "bigger than"
   :name 'op-bt
   :act-type 'op-st-or-bt
   :param-types '()
@@ -458,8 +460,8 @@
        :expr-dict (mapkv :default (if-else (= name 'constant-quantity) concat-tokens concat-parts))))
    '((constant-string    v-string    vp-string  )
      (constant-quantity  v-quantity  vp-quantity)
-     (constant-date      v-date      vp-date    )
-     (constant-year      v-year      vp-year    )))
+     (constant-year      v-year      vp-year    )
+     (constant-date      v-date      vp-date    )))
 
   (define-action
     :name 'constant-number
