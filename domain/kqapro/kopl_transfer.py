@@ -327,7 +327,7 @@ with block:
 
 with block:
     def iter_super_to_sub_actions(super_types_dict, is_non_conceptual_type):
-        from logic.formalism import Action
+        from splogic.formalism import Action
 
         super_sub_pair_set = set()
 

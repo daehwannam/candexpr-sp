@@ -15,7 +15,7 @@ from configuration import config
 
 from .execution import postprocess_prediction, invalid_program, get_counting_context
 
-from logic.formalism import InvalidCandidateActionError
+from splogic.formalism import InvalidCandidateActionError
 from utility.trie import SpanTrie
 
 from dhnamlib.pylib import filesys

@@ -3,9 +3,9 @@ import re
 import functools
 import types
 
-from logic.formalism import Compiler
-from logic.grammar import get_extra_ns
-from logic.function import make_call_limited
+from splogic.formalism import Compiler
+from splogic.grammar import get_extra_ns
+from splogic.function import make_call_limited
 
 # from kopl.kopl import KoPLEngine
 

@@ -16,7 +16,7 @@ from .execution import postprocess_prediction
 from .kopl_original import execute_kopl_program
 from . import kopl_transfer
 from . import learning
-from logic.formalism import InvalidCandidateActionError
+from splogic.formalism import InvalidCandidateActionError
 
 
 @config

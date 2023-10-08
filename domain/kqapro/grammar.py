@@ -3,8 +3,8 @@ import copy
 from itertools import chain
 
 from configuration import config
-from logic.grammar import Grammar
-from logic.formalism import make_program_tree_cls, make_search_state_cls
+from splogic.grammar import Grammar
+from splogic.formalism import make_program_tree_cls, make_search_state_cls
 
 from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary, deprecated
 from dhnamlib.pylib.function import identity

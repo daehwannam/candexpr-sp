@@ -19,7 +19,7 @@ from dhnamlib.pylib.text import parse_bool
 from dhnamlib.pylib.version_control import get_git_hash
 
 from utility.time import initial_date_str
-from logic.grammar import read_grammar
+from splogic.grammar import read_grammar
 
 from domain.kqapro.execution import KoPLContext, KoPLDebugContext
 

@@ -52,7 +52,7 @@ def test_dataset_answers():
 def test_grammar():
     from tqdm import tqdm
 
-    from logic.grammar import read_grammar
+    from splogic.grammar import read_grammar
     from dhnamlib.pylib.filesys import json_load
     from dhnamlib.pylib.time import TimeMeasure
     from .execution import postprocess_prediction
@@ -138,7 +138,7 @@ def test_grammar():
 
 
 # def _test():
-#     from logic.grammar import read_grammar
+#     from splogic.grammar import read_grammar
 #     from dhnamlib.pylib.filesys import json_load
 #     from dhnamlib.pylib.time import TimeMeasure
 #     # from dhnamlib.pylib.cProfiling import run_context
