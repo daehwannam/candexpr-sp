@@ -1,6 +1,6 @@
-[submodule ".submodules/python-library"]
-	path = .submodules/python-library
-	url = https://github.com/daehwannam/python-library.git
 [submodule ".submodules/KoPL"]
 	path = .submodules/KoPL
 	url = https://github.com/daehwannam/KoPL.git
+[submodule ".submodules/splogic"]
+	path = .submodules/splogic
+	url = https://github.com/daehwannam/splogic.git
