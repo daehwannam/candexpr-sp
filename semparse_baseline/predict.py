@@ -191,7 +191,7 @@ def main():
     parser.add_argument('--ckpt', required=True)
 
     # training parameters
-    parser.add_argument('--batch_size', default=256, type=int)
+    parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--seed', type=int, default=42, help='random seed')
 
     parser.add_argument('--postprocessing-answer', dest='postprocessing_answer', action='store_true', help='post-processing answers')
