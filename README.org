@@ -155,23 +155,26 @@ TEST_CONFIG='config.oracle_test_on_val_set'
 CHECKPOINT_PATH='path/to/checkpoint'
 COMMON_TEST_CMD="python -m domain.kqapro.run --config config.$TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH"
 
+BEAM_CONFIG='config.additional.num_prediction_beams=4'
+
 # full constraints
 TEST_DIR_PATH='path/to/test-result:full-constraints'
-$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH
+ADDITIONAL_CONFIG="${BEAM_CONFIG}"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 
 # without arg-candidate
 TEST_DIR_PATH='path/to/test-result:no-arg-candidate'
-ADDITIONAL_CONFIG='config.additional.using_arg_candidate=False'
+ADDITIONAL_CONFIG="${BEAM_CONFIG}|config.additional.using_arg_candidate=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 
 # without arg-candidate and union types
 TEST_DIR_PATH='path/to/test-result:no-arg-candidate'
-ADDITIONAL_CONFIG='config.additional.using_arg_candidate=False|config.additional.using_distinctive_union_types=False'
+ADDITIONAL_CONFIG="${BEAM_CONFIG}|config.additional.using_arg_candidate=False|config.additional.using_distinctive_union_types=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 
 # without constrained-decoding
 TEST_DIR_PATH='path/to/test-result:no-constrained-decoding'
-ADDITIONAL_CONFIG='config.additional.constrained_decoding=False'
+ADDITIONAL_CONFIG="${BEAM_CONFIG}|config.additional.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG
 #+end_src
 
