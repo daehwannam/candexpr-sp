@@ -1,6 +1,7 @@
 
 import os
 from fractions import Fraction
+# import warnings
 
 import torch
 # from tqdm import tqdm
@@ -16,13 +17,14 @@ from .execution import postprocess_prediction
 
 from kqapro.evaluate import whether_equal
 
-from dhnamlib.pylib import filesys
+from dhnamlib.pylib import filesys, iteration
 # from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.iteration import pairs2dicts, not_none_valued_pairs
 from dhnamlib.pylib.structure import AttrDict
 
 from dhnamlib.pylib.torchlib.optimization import get_linear_schedule_with_warmup
 from dhnamlib.pylib.torchlib.stat import get_performance, get_measure, is_better_performance
+from dhnamlib.pylib.time import TimeMeasure
 
 
 @lru_cache(maxsize=None)
@@ -440,6 +442,8 @@ def run_test(
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         evaluating,
+        analyzing=True,
+        using_oracle=False,
 ):
     if model_checkpoint_dir_path is None:
         assert model_learning_dir_path is not None
@@ -466,9 +470,12 @@ def run_test(
         batch_size=test_batch_size,
         num_beams=num_prediction_beams,
         generation_max_length=generation_max_length,
+        analyzing=analyzing,
         evaluating=evaluating,
         softmax_masking=softmax_masking,
-        constrained_decoding=constrained_decoding)
+        constrained_decoding=constrained_decoding,
+        using_oracle=using_oracle,
+    )
 
     if evaluating:
         logger.info('Performance: {}'.format(validation['performance']))
@@ -476,13 +483,56 @@ def run_test(
     filesys.mkloc_unless_exist(test_dir_path)
     save_config_info(test_dir_path)
 
-    learning.save_analysis(validation['analysis'], test_dir_path)
+    if analyzing:
+        learning.save_analysis(validation['analysis'], test_dir_path)
     learning.save_predictions(validation['predictions'], test_dir_path)
     if evaluating:
         learning.save_performance(validation['performance'], test_dir_path)
+    learning.save_time_info(validation['time_info'], test_dir_path)
 
     logger.info(f'Results are saved in "{test_dir_path}"')
 
+
+@config
+def run_oracle_test(
+        *,
+        model_learning_dir_path=config.ph(None),
+        model_checkpoint_dir_path=config.ph(None),
+        test_dir_path=config.ph,
+        grammar=config.ph,
+        compiler=config.ph,
+        device=config.ph,
+        logger=config.ph,
+        encoded_test_set,
+        test_batch_size=config.ph,
+        softmax_masking=config.ph,
+        constrained_decoding=config.ph,
+        context=config.ph,
+        num_prediction_beams=config.ph,
+        generation_max_length=config.ph,
+        evaluating,
+        analyzing=True,
+        using_oracle=False,
+):
+    run_test(
+        model_learning_dir_path=model_learning_dir_path,
+        model_checkpoint_dir_path=model_checkpoint_dir_path,
+        test_dir_path=test_dir_path,
+        grammar=grammar,
+        compiler=compiler,
+        device=device,
+        logger=logger,
+        encoded_test_set=encoded_test_set,
+        test_batch_size=test_batch_size,
+        softmax_masking=softmax_masking,
+        constrained_decoding=constrained_decoding,
+        context=context,
+        num_prediction_beams=num_prediction_beams,
+        generation_max_length=generation_max_length,
+        evaluating=evaluating,
+        analyzing=True,
+        using_oracle=True,
+    )
 
 def validate(
         *,
@@ -498,6 +548,7 @@ def validate(
         softmax_masking,
         constrained_decoding,
         evaluating,
+        using_oracle=False,
 ):
     assert not model.training
 
@@ -508,11 +559,25 @@ def validate(
     #     generation_kwargs = dict(
     #         prefix_allowed_tokens_fn=learning.make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams))
 
+    num_all_examples = 0
     all_predictions = []
+
     if evaluating:
         all_answers = []
 
+    if using_oracle:
+        # if analyzing:
+        #     warnings.warn('Analyzing with oracle is not implemented yet')
+        #     analyzing = False
+
+        assert batch_size > 1
+        num_return_sequences = num_beams
+    else:
+        num_return_sequences = 1
+
     if analyzing:
+        # assert not using_oracle
+
         all_example_ids = []
         all_utterances = []
         all_predicted_token_id_seqs = []
@@ -525,9 +590,9 @@ def validate(
 
         def update_realtime_accuracy():
             nonlocal realtime_num_correct
-            realtime_num_correct += compute_num_correct(predictions, answers)
-            assert len(all_predictions) == len(all_answers)
-            return realtime_num_correct / len(all_predictions)
+            realtime_num_correct += compute_num_correct(predictions, answers, num_return_sequences=num_return_sequences)
+            assert len(all_predictions) == len(all_answers) * num_return_sequences
+            return realtime_num_correct / len(all_answers)
 
         xtqdm_kwargs = dict(
             desc='accuracy: none',
@@ -535,6 +600,8 @@ def validate(
     else:
         xtqdm_kwargs = dict()
 
+    total_decoding_time = 0
+    tm = TimeMeasure()
     # debug_batch_idx = -1
     for batch in config.xtqdm(data_loader, **xtqdm_kwargs):
         # debug_batch_idx += 1
@@ -549,26 +616,31 @@ def validate(
         else:
             logits_processor = None
 
+        tm.check()
         token_id_seqs = learning.generate_token_id_seqs(
             grammar=grammar,
             model=model,
             utterance_token_ids=batch['utterance_token_ids'].to(model.device),
             max_length=generation_max_length,
             num_beams=num_beams,
+            num_return_sequences=num_return_sequences,
             logits_processor=logits_processor,
             # **generation_kwargs
         )
+        total_decoding_time += tm.elapse()
         ignoring_errors = config.ignoring_parsing_errors or not (
             constrained_decoding and config.using_arg_candidate and config.using_distinctive_union_types)
         last_states = learning.token_id_seqs_to_last_states(
             grammar, token_id_seqs,
             ignoring_parsing_errors=ignoring_errors,
             verifying=config.debug,
-            utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None)
+            utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None),
+            num_return_sequences=num_return_sequences
         )
         programs = learning.last_states_to_programs(
             grammar, compiler, last_states, tolerant=True, ignoring_compilation_errors=ignoring_errors)
 
+        num_all_examples += batch['utterance_token_ids'].shape[0]
         predictions = learning.programs_to_predictions(context, programs)
         all_predictions.extend(predictions)
 
@@ -596,11 +668,15 @@ def validate(
                     utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None))
                 all_answer_last_states.extend(answer_last_states)
 
+    assert len(all_predictions) == num_all_examples * num_return_sequences
+
     if evaluating:
-        assert len(all_predictions) == len(all_answers) == len(all_answer_last_states)
-        num_correct = compute_num_correct(all_predictions, all_answers)
-        accuracy = compute_accuracy(all_predictions, all_answers, num_correct=num_correct)
-        accuracy_fraction = compute_accuracy_fraction(all_predictions, all_answers, num_correct=num_correct)
+        assert len(all_predictions) == len(all_answers) * num_return_sequences
+        if analyzing:
+            assert len(all_answers) == len(all_answer_last_states)
+        num_correct = compute_num_correct(all_predictions, all_answers, num_return_sequences=num_return_sequences)
+        accuracy = compute_accuracy(predictions=None, answers=all_answers, num_correct=num_correct)
+        accuracy_fraction = compute_accuracy_fraction(predictions=None, answers=all_answers, num_correct=num_correct)
         performance = get_performance(accuracy=accuracy, accuracy_fraction=accuracy_fraction)
     else:
         performance = None
@@ -646,7 +722,12 @@ def validate(
             )))
             return program_analysis
 
-        # breakpoint()
+        def group_predictions_conditionally(predictions):
+            if num_return_sequences > 1:
+                prediction_groups = tuple(iteration.partition(predictions, num_return_sequences))
+            else:
+                prediction_groups = predictions
+            return prediction_groups
 
         if evaluating:
             correct_list = [whether_equal(answer=answer, prediction=prediction)
@@ -658,32 +739,73 @@ def validate(
             example_ids=all_example_ids,
             utterance=all_utterances,
             answer=all_answers if evaluating else None,
-            prediction=all_predictions,
+            prediction=group_predictions_conditionally(all_predictions),
             correct=correct_list,
-            predicted_program=analyze_program(all_predicted_last_states, all_predicted_token_id_seqs),
-            answer_program=(analyze_program(all_answer_last_states) if evaluating else None))))
+            predicted_program=group_predictions_conditionally(
+                analyze_program(all_predicted_last_states, all_predicted_token_id_seqs)),
+            answer_program=(analyze_program(all_answer_last_states) if evaluating else None),
+        )))
+
+    def get_time_info(total_decoding_time, num_examples):
+        average_time = total_decoding_time / num_examples
+        return dict(
+            total_decoding_time=total_decoding_time,
+            average_time=total_decoding_time / num_examples,
+            average_time_millisecond=average_time * 1000
+        )
 
     validation = dict(not_none_valued_pairs(
         performance=performance,
-        analysis=analysis,
+        analysis=analysis if analyzing else None,
+        time_info=get_time_info(total_decoding_time, len(all_example_ids)),
         predictions=all_predictions))
 
     return validation
 
 
-def compute_num_correct(predictions, answers):
-    assert len(predictions) == len(answers)
+def compute_num_correct(predictions, answers, num_return_sequences=1):
+    assert len(predictions) == len(answers) * num_return_sequences
+
+    if num_return_sequences > 1:
+        num_correct = compute_num_oracle_correct(
+            predictions, answers, num_return_sequences=num_return_sequences)
+    else:
+        num_correct = sum(
+            int(whether_equal(answer=answer, prediction=prediction))
+            for prediction, answer in zip(predictions, answers))
+
+    return num_correct
+
+
+def compute_num_oracle_correct(predictions, answers, num_return_sequences=1):
+    # if not (len(predictions) == len(answers) * num_return_sequences):
+    #     breakpoint()
+    assert len(predictions) == len(answers) * num_return_sequences
+
+    if num_return_sequences is not None and num_return_sequences > 1:
+        prediction_groups = tuple(iteration.partition(predictions, num_return_sequences))
+    else:
+        prediction_groups = predictions
+
+    assert len(prediction_groups) == len(answers)
 
     num_correct = sum(
-        int(whether_equal(answer=answer, prediction=prediction))
-        for prediction, answer in zip(predictions, answers))
+        int(any(whether_equal(answer=answer, prediction=prediction)
+                for prediction in prediction_groups))
+        for prediction_groups, answer in zip(prediction_groups, answers))
+
+    assert num_correct <= len(answers)
 
     return num_correct
 
 
 def compute_accuracy(predictions, answers, num_correct=None):
-    assert len(predictions) == len(answers)
-    num_examples = len(predictions)
+    if predictions is None:
+        assert num_correct is not None
+    else:
+        assert len(predictions) == len(answers)
+
+    num_examples = len(answers)
 
     if num_correct is None:
         num_correct = compute_num_correct(predictions, answers)
@@ -693,14 +815,29 @@ def compute_accuracy(predictions, answers, num_correct=None):
 
 
 def compute_accuracy_fraction(predictions, answers, num_correct=None):
-    assert len(predictions) == len(answers)
-    num_examples = len(predictions)
+    if predictions is None:
+        assert num_correct is not None
+    else:
+        assert len(predictions) == len(answers)
+
+    num_examples = len(answers)
 
     if num_correct is None:
         num_correct = compute_num_correct(predictions, answers)
 
     accuracy_fraction = Fraction(num_correct, num_examples)
     return accuracy_fraction
+
+
+def compute_oracle_accuracy(predictions, answers, num_correct=None, num_return_sequences=1):
+    assert len(predictions) == len(answers) * num_return_sequences
+    num_examples = len(answers)
+
+    if num_correct is None:
+        num_correct = compute_num_oracle_correct(predictions, answers, num_return_sequences=num_return_sequences)
+
+    accuracy = num_correct / num_examples
+    return accuracy
 
 
 if __name__ == '__main__':
@@ -716,6 +853,8 @@ if __name__ == '__main__':
         # run_context('run_test(encoded_test_set=config.encoded_val_set, evaluating=True)', sort='cumtime')
     elif config.run_mode == 'test-on-test-set':
         run_test(encoded_test_set=config.encoded_test_set, evaluating=False)
+    elif config.run_mode == 'oracle-test-on-val-set':
+        run_oracle_test(encoded_test_set=config.encoded_val_set, evaluating=True)
     else:
         raise Exception(f'Unknown execution type "{config.run_mode}"')
 

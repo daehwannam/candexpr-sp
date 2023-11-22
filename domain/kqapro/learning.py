@@ -313,12 +313,29 @@ def utterances_to_ids(grammar, utterances):
     return utterance_token_ids
 
 
-@construct(tuple)
+# @construct(tuple)
 def generate_token_id_seqs(
         grammar, model, utterance_token_ids, max_length, num_beams,
+        num_return_sequences=None,
         prefix_allowed_tokens_fn=None, logits_processor=transformers.LogitsProcessorList()
         # , **kwargs
 ):
+
+    """
+    It returns a list of token id sequences.
+    The size of output is 
+    (1) (batch_size, seq_len) or
+    (2) (batch_size * num_return_sequences, seq_len) if num_return_sequences > 1 .
+
+    if num_return_sequences > 1, the output can be split as (batch_size, num_return_sequences, seq_len) by
+    >>> token_id_seq_groups = tuple(iteration.partition(token_id_seqs, num_return_sequences))  # doctest: +SKIP
+    >>> assert len(token_id_seq_groups) == batch_size  # doctest: +SKIP
+    >>> assert len(token_id_seq_groups[0]) == num_return_sequences  # doctest: +SKIP
+    """
+
+    if num_return_sequences is not None:
+        assert 1 <= num_return_sequences <= num_beams
+
     if logits_processor is None:
         logits_processor = transformers.LogitsProcessorList()
 
@@ -327,6 +344,7 @@ def generate_token_id_seqs(
         input_ids=utterance_token_ids,
         max_length=max_length,
         num_beams=num_beams,
+        num_return_sequences=num_return_sequences,
         prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
         logits_processor=logits_processor
         # **kwargs
@@ -334,22 +352,33 @@ def generate_token_id_seqs(
 
     batched_token_ids = batched_output[:, 1:]  # removing `decoder_start_token_id`
 
+    token_id_seqs = []
     for token_id_seq in batched_token_ids.tolist():
         try:
             eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id, reverse=True)
             token_id_seq_without_padding = token_id_seq[:eos_token_id_idx + 1]
         except NotFoundError:
             token_id_seq_without_padding = token_id_seq
-        yield token_id_seq_without_padding
+        token_id_seqs.append(token_id_seq_without_padding)
+
+    return token_id_seqs
 
 
 def token_id_seqs_to_last_states(
         grammar, token_id_seqs, ignoring_parsing_errors=False, verifying=False,
-        utterance_token_id_seqs=None):
+        utterance_token_id_seqs=None,
+        num_return_sequences=1
+):
     if utterance_token_id_seqs is None:
         _utterance_token_id_seqs = [None] * len(token_id_seqs)
     else:
-        _utterance_token_id_seqs = utterance_token_id_seqs
+        if num_return_sequences > 1:
+            _utterance_token_id_seqs = tuple(iteration.repeat_in_order(
+                utterance_token_id_seqs, num_return_sequences))
+        else:
+            _utterance_token_id_seqs = utterance_token_id_seqs
+
+    assert len(token_id_seqs) == len(_utterance_token_id_seqs)
 
     predicted_last_states = tuple(
         token_id_seq_to_last_state(
@@ -474,6 +503,11 @@ def save_analysis(analysis, dir_path, file_name='analysis.json'):
 def save_predictions(predictions, dir_path):
     predictions_file_path = os.path.join(dir_path, 'predictions.txt')
     filesys.write_lines(predictions_file_path, tuple(map(str, predictions)))
+
+
+def save_time_info(time_info, dir_path, file_name='time_info.json'):
+    time_info_file_path = os.path.join(dir_path, file_name)
+    filesys.json_pretty_save(time_info, time_info_file_path)
 
 
 class SequencePrefixProcessor:
