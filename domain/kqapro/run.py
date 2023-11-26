@@ -511,8 +511,7 @@ def run_oracle_test(
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         evaluating,
-        analyzing=True,
-        using_oracle=False,
+        analyzing=False,
 ):
     run_test(
         model_learning_dir_path=model_learning_dir_path,
@@ -530,7 +529,7 @@ def run_oracle_test(
         num_prediction_beams=num_prediction_beams,
         generation_max_length=generation_max_length,
         evaluating=evaluating,
-        analyzing=True,
+        analyzing=analyzing,
         using_oracle=True,
     )
 
