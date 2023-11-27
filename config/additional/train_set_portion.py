@@ -1,5 +1,5 @@
 import argparse
-# import math
+import math
 
 import configuration
 
@@ -14,14 +14,11 @@ def _parse_cmd_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
     parser.add_argument('--train-set-percent', dest='train_set_percent', type=float, help='train set percent to be used')
+    parser.add_argument('--num-epoch-repeats', dest='num_epoch_repeats', type=float, help='the number of epoch repeats before validation')
+    parser.add_argument('--epoch-repeat-strategy', dest='epoch_repeat_strategy', type=str, choices=['linear', 'sqrt'], help='the way to compute the number of epoch repeats')
 
     args, unknown = parser.parse_known_args()
     return args
-
-
-def _get_train_set_percent():
-    args = _parse_cmd_args()
-    return args.train_set_percent
 
 
 def _extract_dataset_portion(dataset, percent, expected_dataset_size=None):
@@ -32,11 +29,16 @@ def _extract_dataset_portion(dataset, percent, expected_dataset_size=None):
     return dataset[:num_examples]
 
 
-def make_config(percent, shuffled_encoded_train_set_name):
+def make_config(percent, shuffled_encoded_train_set_name, num_epoch_repeats=None, epoch_repeat_strategy=None):
     assert 0 < percent <= 100
 
-    num_epoch_repeats = 100 / percent
-    # num_epoch_repeats = math.sqrt(100 / percent)
+    if num_epoch_repeats is None:
+        if epoch_repeat_strategy == 'linear':
+            num_epoch_repeats = 100 / percent
+        elif epoch_repeat_strategy == 'sqrt':
+            num_epoch_repeats = math.sqrt(100 / percent)
+        else:
+            raise Exception('Unknown epoch_repeat_strategy')
     num_used_train_examples = round(KQAPRO_TRAN_SET_SIZE * percent / 100)
 
     if percent == 100:
@@ -55,8 +57,11 @@ def make_config(percent, shuffled_encoded_train_set_name):
 
 
 def make_config_from_cmd(shuffled_encoded_train_set_name='shuffled_encoded_train_set'):
-    percent = _get_train_set_percent()
-    return make_config(percent, shuffled_encoded_train_set_name)
+    args = _parse_cmd_args()
+    percent = args.train_set_percent
+    num_epoch_repeats = args.num_epoch_repeats
+    epoch_repeat_strategy = args.epoch_repeat_strategy
+    return make_config(percent, shuffled_encoded_train_set_name, num_epoch_repeats, epoch_repeat_strategy)
 
 
 config = make_config_from_cmd()
