@@ -29,7 +29,7 @@ def _extract_dataset_portion(dataset, percent, expected_dataset_size=None):
     return dataset[:num_examples]
 
 
-def make_config(percent, shuffled_encoded_train_set_name, num_epoch_repeats=None, epoch_repeat_strategy=None):
+def make_config(percent, shuffled_encoded_train_set_name, num_epoch_repeats=None, epoch_repeat_strategy='linear'):
     assert 0 < percent <= 100
 
     if num_epoch_repeats is None:

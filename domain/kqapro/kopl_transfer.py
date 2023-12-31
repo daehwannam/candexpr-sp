@@ -4,13 +4,14 @@
 import re
 from itertools import chain
 from collections import deque
+from functools import lru_cache
 
 from configuration import config
 from utility.trie import TokenTrie
 
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.hflib.transforming import iter_default_non_special_tokens
-from dhnamlib.pylib.decoration import construct, lru_cache, curry, variable, id_cache
+from dhnamlib.pylib.decoration import construct, curry, variable, id_cache
 from dhnamlib.pylib.function import compose
 from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, finditer
 

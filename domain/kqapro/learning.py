@@ -24,7 +24,8 @@ from dhnamlib.pylib import iteration
 from dhnamlib.pylib.decoration import deprecated, construct
 from dhnamlib.pylib.exception import NotFoundError
 from dhnamlib.pylib.torchlib.dnn import (
-    candidate_ids_to_mask, lengths_to_mask, masked_log_softmax, nll_without_reduction, pad_sequence)
+    candidate_ids_to_mask, lengths_to_mask, masked_log_softmax, nll_without_reduction, pad_sequence, unpad_sequence)
+from dhnamlib.pylib.mllib.learning import get_measure
 from dhnamlib.pylib.data_structure import FIFODict
 
 
@@ -60,6 +61,22 @@ def get_last_dir_path(model_learning_dir_path, dir_name='last'):
 
 def get_best_dir_path(model_learning_dir_path, dir_name='best'):
     return os.path.join(model_learning_dir_path, dir_name)
+
+
+def get_last_search_dir(model_learning_dir_path, dir_name='last'):
+    return os.path.join(model_learning_dir_path, 'search', dir_name)
+
+
+def get_best_search_dir(model_learning_dir_path, dir_name='best'):
+    return os.path.join(model_learning_dir_path, 'search', dir_name)
+
+
+def get_last_optim_dir(model_learning_dir_path, dir_name='last'):
+    return os.path.join(model_learning_dir_path, 'optim', dir_name)
+
+
+def get_best_optim_dir(model_learning_dir_path, dir_name='best'):
+    return os.path.join(model_learning_dir_path, 'optim', dir_name)
 
 
 def load_model(pretrained_model_name_or_path, num_tokens=None):
@@ -116,9 +133,11 @@ def get_param_groups(model, learning_rate, weight_decay):
     return param_groups
 
 
+@config.accelerator.within_local_main_process
 def save_model(model, dir_path):
     filesys.touch_with_mkpdirs(os.path.join(dir_path, '.finetuned'))
-    model.save_pretrained(dir_path)
+    # model.save_pretrained(dir_path)
+    config.accelerator.save_pretrained_model(model, dir_path)
 
 
 def _token_id_seq_to_action_seq(grammar, token_id_seq):
@@ -320,14 +339,19 @@ def generate_token_id_seqs(
         prefix_allowed_tokens_fn=None, logits_processor=transformers.LogitsProcessorList()
         # , **kwargs
 ):
-
     """
     It returns a list of token id sequences.
-    The size of output is 
-    (1) (batch_size, seq_len) or
-    (2) (batch_size * num_return_sequences, seq_len) if num_return_sequences > 1 .
+    An output token id sequence starts with `bos_token_id` (the ID of '<s>') and ends with `eos_token_id` (the ID of '</s>').
+    To produce the output token sequence, `decoder_start_token_id` and `pad_token_id` are removed.
 
-    if num_return_sequences > 1, the output can be split as (batch_size, num_return_sequences, seq_len) by
+    The size of the output list depends on `batched_output` from `model.generate`, whose shape is
+    (1) (batch_size, seq_len) or
+    (2) (batch_size * num_return_sequences, seq_len) if `num_return_sequences` > 1 .
+
+    If num_return_sequences > 1, the output list can be further split as
+    a more nested list with a shape (batch_size, num_return_sequences, seq_len)
+    where seq_len is different for each token id sequence.
+    For example,
     >>> token_id_seq_groups = tuple(iteration.partition(token_id_seqs, num_return_sequences))  # doctest: +SKIP
     >>> assert len(token_id_seq_groups) == batch_size  # doctest: +SKIP
     >>> assert len(token_id_seq_groups[0]) == num_return_sequences  # doctest: +SKIP
@@ -354,11 +378,12 @@ def generate_token_id_seqs(
 
     token_id_seqs = []
     for token_id_seq in batched_token_ids.tolist():
-        try:
-            eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id, reverse=True)
-            token_id_seq_without_padding = token_id_seq[:eos_token_id_idx + 1]
-        except NotFoundError:
-            token_id_seq_without_padding = token_id_seq
+        # try:
+        #     eos_token_id_idx = iteration.index(token_id_seq, grammar.lf_tokenizer.eos_token_id, reverse=True)
+        #     token_id_seq_without_padding = token_id_seq[:eos_token_id_idx + 1]
+        # except NotFoundError:
+        #     token_id_seq_without_padding = token_id_seq
+        token_id_seq_without_padding = unpad_sequence(token_id_seq, grammar.lf_tokenizer.pad_token_id)
         token_id_seqs.append(token_id_seq_without_padding)
 
     return token_id_seqs
@@ -412,10 +437,12 @@ def last_states_to_programs(grammar, compiler, last_states, tolerant=False, igno
 
 
 @config
-def programs_to_predictions(context, programs, max_num_program_iterations=config.ph):
+def programs_to_predictions(context, programs, max_num_program_iterations=config.ph, strict_postprocessing=False):
     predictions = tuple(
-        postprocess_prediction(program(get_counting_context(
-            context, max_num_iterations=max_num_program_iterations)))
+        postprocess_prediction(
+            program(get_counting_context(
+                context, max_num_iterations=max_num_program_iterations)),
+            strict=strict_postprocessing)
         for program in programs)
 
     return predictions
@@ -429,6 +456,7 @@ def get_optimizer_file_path(dir_path):
     return os.path.join(dir_path, OPTIMIZER_FILE_NAME)
 
 
+@config.accelerator.within_local_main_process
 def save_optimizer(optimizer, dir_path):
     torch.save(optimizer.state_dict(), get_optimizer_file_path(dir_path))
 
@@ -441,12 +469,17 @@ def get_scheduler_file_path(dir_path):
     return os.path.join(dir_path, SCHEDULER_FILE_NAME)
 
 
+@config.accelerator.within_local_main_process
 def save_scheduler(scheduler, dir_path):
     torch.save(scheduler.state_dict(), get_scheduler_file_path(dir_path))
 
 
 def load_and_update_scheduler(scheduler, dir_path):
     scheduler.load_state_dict(torch.load(get_scheduler_file_path(dir_path)))
+
+
+optim_measures = [get_measure('accuracy', True), get_measure('accuracy_fraction', True)]
+search_measures = [get_measure('oracle_accuracy', True), get_measure('oracle_accuracy_fraction', True)]
 
 
 STATUS_FILE_NAME = 'status.json'
@@ -468,14 +501,24 @@ def as_python_object_for_status(dic):
         return dic
 
 
+@config.accelerator.within_local_main_process
 def save_status(status, dir_path, file_name=STATUS_FILE_NAME):
     filesys.json_pretty_save(status, os.path.join(dir_path, file_name),
                              cls=StatusJSONEncoder)
 
 
-def load_status(dir_path, file_name=STATUS_FILE_NAME):
-    return filesys.json_load(os.path.join(dir_path, file_name),
-                             object_hook=as_python_object_for_status)
+NO_DEFAULT = object()
+
+
+def load_status(dir_path, file_name=STATUS_FILE_NAME, default=NO_DEFAULT):
+    file_path = os.path.join(dir_path, file_name)
+    if os.path.isfile(file_path):
+        return filesys.json_load(os.path.join(dir_path, file_name),
+                                 object_hook=as_python_object_for_status)
+    elif default is NO_DEFAULT:
+        raise Exception(f'{file_path} does not exist')
+    else:
+        return default
 
 
 class PerformanceJSONEncoder(json.JSONEncoder):
@@ -488,6 +531,7 @@ class PerformanceJSONEncoder(json.JSONEncoder):
             return super().default(obj)
 
 
+@config.accelerator.within_local_main_process
 def save_performance(performance, dir_path, file_name='performance.json'):
     updated_performance = dict(performance)
     updated_performance.update(accuracy_percent='{:5.2f}'.format(performance['accuracy'] * 100))
@@ -495,19 +539,48 @@ def save_performance(performance, dir_path, file_name='performance.json'):
                              cls=PerformanceJSONEncoder)
 
 
+@config.accelerator.within_local_main_process
 def save_analysis(analysis, dir_path, file_name='analysis.json'):
     analysis_file_path = os.path.join(dir_path, file_name)
     filesys.json_pretty_save(analysis, analysis_file_path)
 
 
+@config.accelerator.within_local_main_process
 def save_predictions(predictions, dir_path):
     predictions_file_path = os.path.join(dir_path, 'predictions.txt')
     filesys.write_lines(predictions_file_path, tuple(map(str, predictions)))
 
 
+@config.accelerator.within_local_main_process
 def save_time_info(time_info, dir_path, file_name='time_info.json'):
     time_info_file_path = os.path.join(dir_path, file_name)
     filesys.json_pretty_save(time_info, time_info_file_path)
+
+
+WEAKSUP_FILE_NAME = 'weaksup.jsonl'
+
+
+@config.accelerator.within_local_main_process
+def save_weaksup_dataset(weaksup_dataset, dir_path, file_name=WEAKSUP_FILE_NAME):
+    weaksup_dataset_file_path = os.path.join(dir_path, file_name)
+    filesys.jsonl_save(weaksup_dataset, weaksup_dataset_file_path)
+
+
+def load_weaksup_dataset(dir_path, file_name=WEAKSUP_FILE_NAME):
+    weaksup_dataset_file_path = os.path.join(dir_path, file_name)
+    return filesys.jsonl_load(weaksup_dataset_file_path)
+
+
+def make_scheduler(*, optimizer, using_scheduler, train_data_loader, num_train_epochs, num_warmup_epochs):
+    if using_scheduler:
+        num_training_steps = len(train_data_loader) * num_train_epochs
+        num_warmup_steps = round(len(train_data_loader) * num_warmup_epochs)
+        scheduler = transformers.get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
+    else:
+        scheduler = transformers.get_constant_schedule(optimizer)
+
+    return scheduler
 
 
 class SequencePrefixProcessor:

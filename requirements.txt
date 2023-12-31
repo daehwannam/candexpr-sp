@@ -6,3 +6,4 @@ hissp==0.3.0
 pygtrie==2.5.0
 tqdm==4.65.0
 jsonlines==3.1.0
+accelerate==0.25.0

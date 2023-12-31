@@ -1,4 +1,5 @@
 
+# import math
 from argparse import ArgumentParser
 from itertools import chain
 from tqdm import tqdm
@@ -292,6 +293,48 @@ def process_for_encoded_strict_dataset(
         example_idx_as_id=example_idx_as_id)
 
 
+def extract_dataset_portion(dataset, percent, expected_dataset_size=None):
+    # ratio = percent / 100
+    num_examples = round(len(dataset) * percent / 100)
+    if expected_dataset_size is not None:
+        assert num_examples == expected_dataset_size
+    return dataset[:num_examples]
+
+
+def prepare_encoded_weaksup_pretraining_set(
+        *,
+        full_dataset,
+        weaksup_pretraining_set_file_path
+):
+    
+    assert len(full_dataset) == 94376
+
+    percent = 0.1
+    # num_epoch_repeats = math.sqrt(100 / percent)
+    num_used_train_examples = round(len(full_dataset) * percent / 100)
+
+    pretraining_dataset = extract_dataset_portion(
+        full_dataset,
+        percent=percent,
+        expected_dataset_size=num_used_train_examples)
+
+    jsonl_save(pretraining_dataset, weaksup_pretraining_set_file_path)
+    print(f'The weaksup pretraining dataset was saved as {weaksup_pretraining_set_file_path}')
+
+
+def prepare_encoded_weaksup_search_set(
+        *,
+        full_dataset,
+        weaksup_search_set_file_path
+):
+    keys = ['example_id', 'utterance_token_ids', 'answer']
+    search_dataset = [dict(zip(keys, map(example.__getitem__, keys)))
+                      for example in full_dataset]
+
+    jsonl_save(search_dataset, weaksup_search_set_file_path)
+    print(f'The weaksup search dataset was saved as {weaksup_search_set_file_path}')
+
+
 def _main():
     parser = ArgumentParser(description='Preprocess KoPL dataset',)
     parser.add_argument(
@@ -311,6 +354,8 @@ def _main():
             'encoded_strict_val_set',
             'shuffled_augmented_strict_train_set',
             'shuffled_encoded_strict_train_set',
+            'encoded_weaksup_pretraining_set',
+            'encoded_weaksup_search_set',
         ])
 
     args = parser.parse_args(config.remaining_cmd_args)
@@ -377,6 +422,14 @@ def _main():
         preprocess_for_shuffled_dataset(
             dataset=config.encoded_strict_train_set,
             shuffled_dataset_file_path=config.shuffled_encoded_strict_train_set_file_path)
+    elif args.goal == 'encoded_weaksup_pretraining_set':
+        prepare_encoded_weaksup_pretraining_set(
+            full_dataset=config.encoded_train_set,
+            weaksup_pretraining_set_file_path=config.encoded_weaksup_pretraining_set_file_path)
+    elif args.goal == 'encoded_weaksup_search_set':
+        prepare_encoded_weaksup_search_set(
+            full_dataset=config.encoded_train_set,
+            weaksup_search_set_file_path=config.encoded_weaksup_search_set_file_path)
     else:
         raise Exception('Unexpected goal')
 

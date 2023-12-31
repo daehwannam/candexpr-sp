@@ -22,7 +22,7 @@ from dhnamlib.pylib.iteration import pairs2dicts, not_none_valued_pairs
 from dhnamlib.pylib.structure import AttrDict
 
 from dhnamlib.pylib.torchlib.optimization import get_linear_schedule_with_warmup
-from dhnamlib.pylib.torchlib.stat import get_performance, get_measure, is_better_performance
+from dhnamlib.pylib.mllib.learning import get_performance, get_measure, is_better_performance
 
 
 @lru_cache(maxsize=None)

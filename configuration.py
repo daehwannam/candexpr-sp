@@ -4,19 +4,22 @@ from itertools import chain
 from importlib import import_module
 import argparse
 import shutil
+from functools import lru_cache
+from accelerate.utils.dataclasses import DistributedType
 
 from dhnamlib.pylib.context import Environment, LazyEval
 # from dhnamlib.pylib.decoration import Register
-from dhnamlib.pylib.decoration import lru_cache, variable
+from dhnamlib.pylib.decoration import variable
 from dhnamlib.pylib.filesys import (
     json_load, json_save, jsonl_load, json_skip_types,
-    mkpdirs_unless_exist, mkloc_unless_exist, make_logger, get_new_path_with_number)
+    mkpdirs_unless_exist, mkloc_unless_exist, make_logger, get_new_path_with_number, NoLogger)
 # from dhnamlib.pylib.filesys import pickle_load
 # from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.iteration import distinct_pairs, not_none_valued_pairs
 from dhnamlib.pylib.text import parse_bool
 # from dhnamlib.pylib.package import import_from_module
 from dhnamlib.pylib.version_control import get_git_hash
+from dhnamlib.pylib.hflib.acceleration import XAccelerator, NoAccelerator, set_seed_randomly
 
 from utility.time import initial_date_str
 from splogic.grammar import read_grammar
@@ -42,6 +45,10 @@ _encoded_strict_train_set_file_path = './processed/kqapro/encoded_strict_train.j
 _encoded_strict_val_set_file_path = './processed/kqapro/encoded_strict_val.jsonl'
 _shuffled_augmented_strict_train_set_file_path = './processed/kqapro/shuffled_augmented_strict_train.jsonl'
 _shuffled_encoded_strict_train_set_file_path = './processed/kqapro/shuffled_encoded_strict_train.jsonl'
+_encoded_weaksup_pretraining_set_file_path = './processed/kqapro/encoded_weaksup_pretraining.jsonl'
+_encoded_weaksup_search_set_file_path = './processed/kqapro/encoded_weaksup_search.jsonl'
+
+# _KQAPRO_TRAN_SET_SIZE = 94376
 
 
 _grammar_file_path = './domain/kqapro/grammar.lissp'
@@ -79,19 +86,26 @@ def _is_training_run_mode(run_mode):
     assert _is_valid_run_mode(config.run_mode)
     return run_mode in ['train-default', 'train-for-multiple-decoding-strategies']
 
+
 def _make_logger():
-    if _is_training_run_mode(config.run_mode):
-        log_file_path = os.path.join(config.model_learning_dir_path, f'{initial_date_str}_{config.run_mode}.log')
-        mkpdirs_unless_exist(log_file_path)
+    if config.accelerator.is_local_main_process:
+        if _is_training_run_mode(config.run_mode):
+            log_file_path = os.path.join(config.model_learning_dir_path, f'{initial_date_str}_{config.run_mode}.log')
+            mkpdirs_unless_exist(log_file_path)
+        else:
+            log_file_path = None
+
+        logger = make_logger(
+            name=config.run_mode,
+            log_file_path=log_file_path)
     else:
-        log_file_path = None
-    return make_logger(
-        name=config.run_mode,
-        log_file_path=log_file_path)
+        logger = NoLogger()
+
+    return logger
 
 
 def _get_xtqdm():
-    if config.using_tqdm:
+    if config.accelerator.is_local_main_process and config.using_tqdm:
         from dhnamlib.pylib.iteration import xtqdm
     else:
         def xtqdm(iterator, /, *args, **kwargs):
@@ -99,11 +113,50 @@ def _get_xtqdm():
     return xtqdm
 
 
+def _get_utqdm():
+    if config.accelerator.is_local_main_process and config.using_tqdm:
+        from dhnamlib.pylib.iteration import utqdm
+    else:
+        def utqdm(iterator, /, *args, **kwargs):
+            return iterator
+    return utqdm
+
+
 def _get_git_hash():
     try:
         return get_git_hash()
     except FileNotFoundError:
         return None
+
+
+# def _get_accelerator():
+#     if config.accelerating:
+#         kwargs = dict(split_batches=True, even_batches=False)
+#         set_seed_randomly()
+#         accelerator = XAccelerator(**kwargs)
+#     else:
+#         # assert config.device in ['cuda', 'cpu']
+#         # accelerator = XAccelerator(**kwargs,
+#         #                            cpu=(config.device == 'cpu'))
+#         accelerator = NoAccelerator(config.device)
+
+#     return accelerator
+
+def _get_accelerator():
+    # kwargs = dict(split_batches=True, even_batches=False)
+    kwargs = dict(split_batches=False, even_batches=False)
+    xaccelerator = XAccelerator(**kwargs)
+
+    if xaccelerator.accelerating:
+        set_seed_randomly()
+        accelerator = xaccelerator
+    else:
+        # assert config.device in ['cuda', 'cpu']
+        # accelerator = XAccelerator(**kwargs,
+        #                            cpu=(config.device == 'cpu'))
+        accelerator = NoAccelerator(config.device)
+
+    return accelerator
 
 
 _default_config = Environment(
@@ -132,6 +185,8 @@ _default_config = Environment(
     encoded_strict_val_set=LazyEval(lambda: jsonl_load(_encoded_strict_val_set_file_path)),
     shuffled_augmented_strict_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_strict_train_set_file_path)),
     shuffled_encoded_strict_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_strict_train_set_file_path)),
+    encoded_weaksup_pretraining_set=LazyEval(lambda: jsonl_load(_encoded_weaksup_pretraining_set_file_path)),
+    encoded_weaksup_search_set=LazyEval(lambda: jsonl_load(_encoded_weaksup_search_set_file_path)),
 
     grammar=LazyEval(_make_grammar),
     compiler=LazyEval(lambda: config.grammar.compiler_cls()),
@@ -154,6 +209,8 @@ _default_config = Environment(
     encoded_strict_val_set_file_path=_encoded_strict_val_set_file_path,
     shuffled_augmented_strict_train_set_file_path=_shuffled_augmented_strict_train_set_file_path,
     shuffled_encoded_strict_train_set_file_path=_shuffled_encoded_strict_train_set_file_path,
+    encoded_weaksup_pretraining_set_file_path=_encoded_weaksup_pretraining_set_file_path,
+    encoded_weaksup_search_set_file_path=_encoded_weaksup_search_set_file_path,
 
     device=LazyEval(_get_device),
     logger=LazyEval(_make_logger),
@@ -174,6 +231,11 @@ _default_config = Environment(
     debug=_DEBUG,
     # using_tqdm=True,
     xtqdm=LazyEval(_get_xtqdm),
+    utqdm=LazyEval(_get_utqdm),
+
+    accelerating=False,
+    # accelerator=LazyEval(lambda: XAccelerator(split_batches=True, even_batches=False) if config.accelerating else NoAccelerator(config.device)),
+    accelerator=LazyEval(_get_accelerator),
 )
 
 

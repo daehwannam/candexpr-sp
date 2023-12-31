@@ -43,7 +43,7 @@ def get_test_dir_path():
         assert os.path.isdir(test_dir_path), 'The path is to a file rather than a directory'
         assert len(os.listdir(test_dir_path)) == 0, 'A test directory should be empty'
 
-    os.makedirs(test_dir_path)
+    # os.makedirs(test_dir_path)
 
     return test_dir_path
 

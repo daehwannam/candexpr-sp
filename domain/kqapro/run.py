@@ -1,35 +1,37 @@
 
 import os
-from fractions import Fraction
 # import warnings
 
 import torch
 # from tqdm import tqdm
-import transformers
 
-from functools import lru_cache
+# from functools import lru_cache
 
 from configuration import config, save_config_info
 
 from . import learning
 from .data_read import make_data_loader
-from .execution import postprocess_prediction
+from .validation import validate
+from .learning import optim_measures, search_measures
+from .weaksup import search_to_collect
 
-from kqapro.evaluate import whether_equal
 
-from dhnamlib.pylib import filesys, iteration
+from dhnamlib.pylib import filesys
 # from dhnamlib.pylib.iteration import apply_recursively
-from dhnamlib.pylib.iteration import pairs2dicts, not_none_valued_pairs
-from dhnamlib.pylib.structure import AttrDict
+# from dhnamlib.pylib.structure import AttrDict
+from dhnamlib.pylib.context import skippable, skip_if_possible
 
-from dhnamlib.pylib.torchlib.optimization import get_linear_schedule_with_warmup
-from dhnamlib.pylib.torchlib.stat import get_performance, get_measure, is_better_performance
-from dhnamlib.pylib.time import TimeMeasure
+from dhnamlib.pylib.mllib.learning import get_init_status, update_status
+# from dhnamlib.pylib.mllib.learning import get_performance
 
 
-@lru_cache(maxsize=None)
-def get_measures():
-    return [get_measure('accuracy', True), get_measure('accuracy_fraction', True)]
+# wlmp = within_local_main_process
+save_config_info_wlmp = config.accelerator.within_local_main_process(save_config_info)
+mkloc_unless_exist_wlmp = config.accelerator.within_local_main_process(filesys.mkloc_unless_exist)
+copy_dir_wlmp = config.accelerator.within_local_main_process(filesys.copy_dir)
+copy_matched_wlmp = config.accelerator.within_local_main_process(filesys.copy_matched)
+replace_dir_wlmp = filesys.replace_dir if config.accelerator.is_local_main_process else skippable
+skip_if_not_wlmp = skip_if_possible
 
 
 @config
@@ -37,7 +39,7 @@ def run_train(
         pretrained_model_name_or_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
-        device=config.ph,
+        # device=config.ph,
         logger=config.ph,
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
@@ -50,9 +52,10 @@ def run_train(
         using_scheduler=config.ph,
         num_warmup_epochs=config.ph,
         max_grad_norm=config.ph,
+        patience=config.ph,
         softmax_masking=config.ph,
-        # softmax_masking=False,
         constrained_decoding=config.ph,
+        using_arg_candidate=config.ph,
         model_learning_dir_path=config.ph,
         restarting=False,
         context=config.ph,
@@ -68,83 +71,89 @@ def run_train(
     else:
         assert model_learning_dir_path is not None
 
-    save_config_info(model_learning_dir_path)
+    save_config_info_wlmp(model_learning_dir_path)
 
     last_dir_path = learning.get_last_dir_path(model_learning_dir_path)
-    filesys.mkloc_unless_exist(last_dir_path)
+    mkloc_unless_exist_wlmp(last_dir_path)
     best_dir_path = learning.get_best_dir_path(model_learning_dir_path)
-    filesys.mkloc_unless_exist(best_dir_path)
+    mkloc_unless_exist_wlmp(best_dir_path)
 
     model = learning.load_model(
         pretrained_model_name_or_path,
         num_tokens=len(grammar.lf_tokenizer))
-    model.to(device)
+    # model.to(device)
+    model.to(config.accelerator.device)
 
     train_data_loader = make_data_loader(
         encoded_dataset=encoded_train_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=train_batch_size,
-        shuffle=True)
+        shuffle=True,
+    )
     val_data_loader = make_data_loader(
         encoded_dataset=encoded_val_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=val_batch_size,
-        shuffle=False)
+        shuffle=False,
+    )
 
     param_groups = learning.get_param_groups(model, learning_rate=learning_rate, weight_decay=weight_decay)
 
     optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, eps=adam_epsilon)
 
-    if using_scheduler:
-        num_training_steps = len(train_data_loader) * num_train_epochs
-        num_warmup_steps = round(len(train_data_loader) * num_warmup_epochs)
-        scheduler = transformers.get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
-    else:
-        scheduler = transformers.get_constant_schedule(optimizer)
+    scheduler = learning.make_scheduler(
+        optimizer=optimizer,
+        using_scheduler=using_scheduler,
+        train_data_loader=train_data_loader,
+        num_train_epochs=num_train_epochs,
+        num_warmup_epochs=num_warmup_epochs,
+    )
 
     if restarting:
-        # TODO: what do optimizer and scheduler save?
+        # Question: what do optimizer and scheduler save?
         learning.load_and_update_optimizer(optimizer, pretrained_model_name_or_path)
         learning.load_and_update_scheduler(scheduler, pretrained_model_name_or_path)
 
-        status = AttrDict(learning.load_status(pretrained_model_name_or_path))
+        status = dict(learning.load_status(pretrained_model_name_or_path))
     else:
-        _last_performance = get_performance(accuracy=float('-inf'), accuracy_fraction=0)
-        status = AttrDict(
-            last_epoch=0,
-            best_epoch=0,
-            last_performance=_last_performance,
-            best_performance=_last_performance,
-            history=[])
-    measures = get_measures()
+        status = get_init_status(measures=optim_measures, update_unit='epoch')
 
-    for epoch in range(status['last_epoch'] + 1, num_train_epochs + 1):
+    # The model and optimizer should be passed together to the prepare method
+    # https://huggingface.co/docs/accelerate/quicktour#enable-distributed-training-in-your-script
+    model, train_data_loader, val_data_loader, optimizer, scheduler = config.accelerator.prepare(
+        model, train_data_loader, optimizer, scheduler)
+
+    val_data_loader = config.accelerator.prepare_val_data_loader(val_data_loader)
+
+    remaining_patience = patience
+
+    # TODO: use accelerate.local_sgd.LocalSGD
+    # https://huggingface.co/docs/accelerate/usage_guides/local_sgd
+
+    for epoch in range(status['last_update_num'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
         # debug_batch_idx = -1
         loss = torch.tensor(0.)
-        for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
-            # debug_batch_idx += 1
-            # if debug_batch_idx >= 100:
-            #     break
-
-            # TODO
-            # - Use `model.config.decoder_start_token_id` as the first id of sequences.
-            # - decoder_start_token_id -> bos_token_id -> others ...
+        # for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
+        for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss.item(), repr_format='{:7.4f}'):
+            # - `model.config.decoder_start_token_id` is the first id of output sequences.
+            # - the order or decoder output tokens in a sequence: decoder_start_token_id, bos_token_id, others ...
             batched_input = dict(
-                input_ids=batch['utterance_token_ids'].to(device),
-                attention_mask=batch['attention_mask'].to(device),
-                decoder_input_ids=batch['decoder_input_ids'].to(device))
+                input_ids=batch['utterance_token_ids'].to(config.accelerator.device),
+                attention_mask=batch['attention_mask'].to(config.accelerator.device),
+                decoder_input_ids=batch['decoder_input_ids'].to(config.accelerator.device))
 
             optimizer.zero_grad()
             batched_output = model(**batched_input)
 
             logits = batched_output['logits']
-            labels = batch['labels'].to(device)
+            # labels = batch['labels'].to(device)
+            labels = batch['labels'].to(config.accelerator.device)
+
             # if softmax_masking:
             #     softmax_mask = batch['softmax_mask'].to(device)
             # nll_mask = batch['nll_mask'].to(device)
@@ -157,10 +166,14 @@ def run_train(
                                          softmax_mask=softmax_mask,
                                          nll_mask=nll_mask)
 
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            config.accelerator.backward(loss)
+            if config.accelerator.sync_gradients:
+                config.accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
             scheduler.step()
+
+        config.accelerator.wait_for_everyone()
 
         model.eval()
         # from dhnamlib.pylib.cProfiling import run_context
@@ -176,40 +189,35 @@ def run_train(
             generation_max_length=generation_max_length,
             softmax_masking=softmax_masking,
             constrained_decoding=constrained_decoding,
+            using_arg_candidate=using_arg_candidate,
             evaluating=True)
 
         performance = validation['performance']
 
-        status.update(
-            last_performance=performance,
-            last_epoch=epoch)
-        status.history.append(
-            dict(epoch=epoch,
-                 performance=performance))
-
         logger.info(f'Epoch: {epoch} / Performance: {str(performance)}')
 
-        # breakpoint()
-        updating_best = is_better_performance(performance, status.best_performance, measures)
+        updating_best = update_status(status, performance=performance)
 
-        if updating_best:
-            status.update(
-                best_performance=performance,
-                best_epoch=epoch)
-            logger.info('Best model is updated')
+        with replace_dir_wlmp(last_dir_path) as temp_last_dir_path:
+            skip_if_not_wlmp(temp_last_dir_path)
 
-        with filesys.replace_dir(last_dir_path) as temp_last_dir_path:
             # save
             learning.save_status(status, temp_last_dir_path)
             learning.save_performance(performance, temp_last_dir_path)
-            if saving_optimizer:
-                learning.save_optimizer(optimizer, temp_last_dir_path)
-            learning.save_scheduler(scheduler, temp_last_dir_path)
+            # if saving_optimizer:
+            #     learning.save_optimizer(optimizer, temp_last_dir_path)
+            # learning.save_scheduler(scheduler, temp_last_dir_path)
             learning.save_model(model, temp_last_dir_path)
             learning.save_analysis(validation['analysis'], temp_last_dir_path)
 
         if updating_best:
-            filesys.copy_dir(last_dir_path, best_dir_path, replacing=True)
+            copy_dir_wlmp(last_dir_path, best_dir_path, replacing=True)
+            logger.info('Best model is updated')
+            remaining_patience = patience
+        else:
+            remaining_patience -= 1
+            if remaining_patience < 0:
+                break
 
         logger.info(f'Results are saved in "{model_learning_dir_path}"')
 
@@ -219,7 +227,7 @@ def run_train_for_multiple_decoding_strategies(
         pretrained_model_name_or_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
-        device=config.ph,
+        # device=config.ph,
         logger=config.ph,
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
@@ -232,46 +240,53 @@ def run_train_for_multiple_decoding_strategies(
         using_scheduler=config.ph,
         num_warmup_epochs=config.ph,
         max_grad_norm=config.ph,
+        patience=config.ph,
         softmax_masking=config.ph,
-        constrained_decoding=config.ph,
+        # constrained_decoding=config.ph,
+        # using_arg_candidate=config.ph,
         model_learning_dir_path=config.ph,
         restarting=False,
         context=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         saving_optimizer=config.ph,
+
+        # Argument for multiple decoding strategies
         decoding_strategy_configs=config.ph,
+
+        # Argument for limited size of training data
         num_epoch_repeats=config.ph(1),
 ):
     assert model_learning_dir_path is not None
+    assert patience == float('inf'), 'the feature of patience is not implemented'
 
-    save_config_info(model_learning_dir_path)
+    save_config_info_wlmp(model_learning_dir_path)
 
     last_common_dir = learning.get_last_dir_path(model_learning_dir_path, 'last:common')
-    filesys.mkloc_unless_exist(last_common_dir)
+    mkloc_unless_exist_wlmp(last_common_dir)
 
     def get_last_dir_path(decoding_strategy_name):
         last_dir_path = learning.get_last_dir_path(
             model_learning_dir_path, f'{decoding_strategy_name}:last')
-        filesys.mkloc_unless_exist(last_dir_path)
+        mkloc_unless_exist_wlmp(last_dir_path)
         return last_dir_path
 
     def get_best_dir_path(decoding_strategy_name):
         best_dir_path = learning.get_best_dir_path(
             model_learning_dir_path, f'{decoding_strategy_name}:best')
-        filesys.mkloc_unless_exist(best_dir_path)
+        mkloc_unless_exist_wlmp(best_dir_path)
         return best_dir_path
 
     def get_best_result_dir_path(decoding_strategy_name):
         best_result_dir_path = learning.get_best_dir_path(
             model_learning_dir_path, f'{decoding_strategy_name}:best-result')
-        filesys.mkloc_unless_exist(best_result_dir_path)
+        mkloc_unless_exist_wlmp(best_result_dir_path)
         return best_result_dir_path
 
     model = learning.load_model(
         pretrained_model_name_or_path,
         num_tokens=len(grammar.lf_tokenizer))
-    model.to(device)
+    model.to(config.accelerator.device)
 
     train_data_loader = make_data_loader(
         encoded_dataset=encoded_train_set,
@@ -291,33 +306,29 @@ def run_train_for_multiple_decoding_strategies(
 
     optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, eps=adam_epsilon)
 
-    if using_scheduler:
-        num_training_steps = len(train_data_loader) * num_train_epochs
-        num_warmup_steps = round(len(train_data_loader) * num_warmup_epochs)
-        scheduler = transformers.get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
-    else:
-        scheduler = transformers.get_constant_schedule(optimizer)
+    scheduler = learning.make_scheduler(
+        optimizer=optimizer,
+        using_scheduler=using_scheduler,
+        train_data_loader=train_data_loader,
+        num_train_epochs=num_train_epochs,
+        num_warmup_epochs=num_warmup_epochs,
+    )
 
-    assert not restarting
+    assert not restarting, 'The feature of restarting is not implemented'
 
-    def make_initial_status_measures_pair():
-        _last_performance = get_performance(accuracy=float('-inf'), accuracy_fraction=0)
-        status = AttrDict(
-            last_epoch=0,
-            best_epoch=0,
-            last_performance=_last_performance,
-            best_performance=_last_performance,
-            history=[])
-        measures = get_measures()
-
-        return status, measures
-
-    status_measures_pair_dict = dict(
-        [decoding_strategy_config.decoding_strategy_name, make_initial_status_measures_pair()]
+    status_dict = dict(
+        [decoding_strategy_config.decoding_strategy_name,
+         get_init_status(measures=optim_measures, update_unit='epoch')]
         for decoding_strategy_config in decoding_strategy_configs)
 
-    assert not softmax_masking
+    # The model and optimizer should be passed together to the prepare method
+    # https://huggingface.co/docs/accelerate/quicktour#enable-distributed-training-in-your-script
+    model, train_data_loader, val_data_loader, optimizer, scheduler = config.accelerator.prepare(
+        model, train_data_loader, val_data_loader, optimizer, scheduler)
+
+    val_data_loader = config.accelerator.prepare_val_data_loader(val_data_loader)
+
+    assert not softmax_masking, 'The feature of softmax_masking is not implemented'
 
     for epoch in range(1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
@@ -326,21 +337,23 @@ def run_train_for_multiple_decoding_strategies(
         # debug_batch_cnt = -1
 
         loss = torch.tensor(0.)
-        for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
+        # for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
+        for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss.item(), repr_format='{:7.4f}'):
             # debug_batch_cnt += 1
             # if debug_batch_cnt > 100:
             #     break
 
             batched_input = dict(
-                input_ids=batch['utterance_token_ids'].to(device),
-                attention_mask=batch['attention_mask'].to(device),
-                decoder_input_ids=batch['decoder_input_ids'].to(device))
+                input_ids=batch['utterance_token_ids'].to(config.accelerator.device),
+                attention_mask=batch['attention_mask'].to(config.accelerator.device),
+                decoder_input_ids=batch['decoder_input_ids'].to(config.accelerator.device))
 
             optimizer.zero_grad()
             batched_output = model(**batched_input)
 
             logits = batched_output['logits']
-            labels = batch['labels'].to(device)
+            labels = batch['labels'].to(config.accelerator.device)
+            # labels = batch['labels'].to(device)
 
             softmax_mask = None
             nll_mask = learning.labels_to_nll_mask(grammar, labels)
@@ -349,10 +362,15 @@ def run_train_for_multiple_decoding_strategies(
                                          softmax_mask=softmax_mask,
                                          nll_mask=nll_mask)
 
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            # loss.backward()
+            config.accelerator.backward(loss)
+            if config.accelerator.sync_gradients:
+                config.accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
             scheduler.step()
+
+        config.accelerator.wait_for_everyone()
 
         model.eval()
         last_model_saved = False
@@ -377,32 +395,22 @@ def run_train_for_multiple_decoding_strategies(
                     generation_max_length=generation_max_length,
                     softmax_masking=softmax_masking,
                     constrained_decoding=config.constrained_decoding,
+                    using_arg_candidate=config.using_arg_candidate,
                     evaluating=True)
 
                 performance = validation['performance']
 
-                status, measures = status_measures_pair_dict[config.decoding_strategy_name]
-
-                status.update(
-                    last_performance=performance,
-                    last_epoch=epoch)
-                status.history.append(
-                    dict(epoch=epoch,
-                         performance=performance))
-
                 logger.info(f'Decoding strategy: {config.decoding_strategy_name} / Performance: {str(performance)}')
 
-                updating_best = is_better_performance(performance, status.best_performance, measures)
+                status = status_dict[config.decoding_strategy_name]
 
-                if updating_best:
-                    status.update(
-                        best_performance=performance,
-                        best_epoch=epoch)
-                    logger.info('Best model is updated')
+                updating_best = update_status(status, performance=performance)
 
                 if not last_model_saved:
                     # save a model
-                    with filesys.replace_dir(last_common_dir) as temp_last_dir_path:
+                    with replace_dir_wlmp(last_common_dir) as temp_last_dir_path:
+                        skip_if_not_wlmp(temp_last_dir_path)
+
                         if saving_optimizer:
                             learning.save_optimizer(optimizer, temp_last_dir_path)
                         learning.save_scheduler(scheduler, temp_last_dir_path)
@@ -417,9 +425,11 @@ def run_train_for_multiple_decoding_strategies(
 
                 if updating_best:
                     strategy_best_dir = get_best_dir_path(config.decoding_strategy_name)
-                    filesys.copy_dir(last_common_dir, strategy_best_dir, replacing=True)
+                    copy_dir_wlmp(last_common_dir, strategy_best_dir, replacing=True)
                     strategy_best_result_dir = get_best_result_dir_path(config.decoding_strategy_name)
-                    filesys.copy_matched(os.path.join(strategy_last_dir, '*'), strategy_best_result_dir)
+                    copy_matched_wlmp(os.path.join(strategy_last_dir, '*'), strategy_best_result_dir)
+
+                    logger.info('Best model is updated')
 
                 logger.info(f'Results are saved in "{model_learning_dir_path}"')
 
@@ -432,12 +442,13 @@ def run_test(
         test_dir_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
-        device=config.ph,
+        # device=config.ph,
         logger=config.ph,
         encoded_test_set,
         test_batch_size=config.ph,
         softmax_masking=config.ph,
         constrained_decoding=config.ph,
+        using_arg_candidate=config.ph,
         context=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
@@ -446,12 +457,14 @@ def run_test(
         using_oracle=False,
 ):
     if model_checkpoint_dir_path is None:
+        # Check the default checkpoint path
         assert model_learning_dir_path is not None
         model_checkpoint_dir_path = learning.get_best_dir_path(model_learning_dir_path)
+        assert os.path.isdir(model_checkpoint_dir_path), "Specify the explicit path to the checkpoint"
     model = learning.load_model(
         model_checkpoint_dir_path,
         num_tokens=len(grammar.lf_tokenizer))
-    model.to(device)
+    model.to(config.accelerator.device)
 
     test_data_loader = make_data_loader(
         encoded_dataset=encoded_test_set,
@@ -459,6 +472,9 @@ def run_test(
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=test_batch_size,
         shuffle=False)
+
+    model = config.accelerator.prepare(model)
+    test_data_loader = config.accelerator.prepare_val_data_loader(test_data_loader)
 
     model.eval()
     validation = validate(
@@ -474,14 +490,15 @@ def run_test(
         evaluating=evaluating,
         softmax_masking=softmax_masking,
         constrained_decoding=constrained_decoding,
+        using_arg_candidate=using_arg_candidate,
         using_oracle=using_oracle,
     )
 
     if evaluating:
         logger.info('Performance: {}'.format(validation['performance']))
 
-    filesys.mkloc_unless_exist(test_dir_path)
-    save_config_info(test_dir_path)
+    mkloc_unless_exist_wlmp(test_dir_path)
+    save_config_info_wlmp(test_dir_path)
 
     if analyzing:
         learning.save_analysis(validation['analysis'], test_dir_path)
@@ -493,350 +510,165 @@ def run_test(
     logger.info(f'Results are saved in "{test_dir_path}"')
 
 
-@config
+# @config
 def run_oracle_test(
         *,
-        model_learning_dir_path=config.ph(None),
-        model_checkpoint_dir_path=config.ph(None),
-        test_dir_path=config.ph,
-        grammar=config.ph,
-        compiler=config.ph,
-        device=config.ph,
-        logger=config.ph,
+        # model_learning_dir_path=config.ph(None),
+        # model_checkpoint_dir_path=config.ph(None),
+        # test_dir_path=config.ph,
+        # grammar=config.ph,
+        # compiler=config.ph,
+        # device=config.ph,
+        # logger=config.ph,
         encoded_test_set,
-        test_batch_size=config.ph,
-        softmax_masking=config.ph,
-        constrained_decoding=config.ph,
-        context=config.ph,
-        num_prediction_beams=config.ph,
-        generation_max_length=config.ph,
+        # test_batch_size=config.ph,
+        # softmax_masking=config.ph,
+        # constrained_decoding=config.ph,
+        # using_arg_candidate=config.ph,
+        # context=config.ph,
+        # num_prediction_beams=config.ph,
+        # generation_max_length=config.ph,
         evaluating,
         analyzing=False,
 ):
     run_test(
-        model_learning_dir_path=model_learning_dir_path,
-        model_checkpoint_dir_path=model_checkpoint_dir_path,
-        test_dir_path=test_dir_path,
-        grammar=grammar,
-        compiler=compiler,
-        device=device,
-        logger=logger,
+        # model_learning_dir_path=model_learning_dir_path,
+        # model_checkpoint_dir_path=model_checkpoint_dir_path,
+        # test_dir_path=test_dir_path,
+        # grammar=grammar,
+        # compiler=compiler,
+        # device=device,
+        # logger=logger,
         encoded_test_set=encoded_test_set,
-        test_batch_size=test_batch_size,
-        softmax_masking=softmax_masking,
-        constrained_decoding=constrained_decoding,
-        context=context,
-        num_prediction_beams=num_prediction_beams,
-        generation_max_length=generation_max_length,
+        # test_batch_size=test_batch_size,
+        # softmax_masking=softmax_masking,
+        # constrained_decoding=constrained_decoding,
+        # using_arg_candidate=using_arg_candidate,
+        # context=context,
+        # num_prediction_beams=num_prediction_beams,
+        # generation_max_length=generation_max_length,
         evaluating=evaluating,
         analyzing=analyzing,
         using_oracle=True,
     )
 
-def validate(
-        *,
-        grammar,
-        compiler,
-        model,
-        context,
-        data_loader,
-        batch_size,
-        num_beams,
-        generation_max_length,
-        analyzing=True,
-        softmax_masking,
-        constrained_decoding,
-        evaluating,
-        using_oracle=False,
+
+# @config
+def run_search_train(
+        pretrained_model_name_or_path=config.ph,
+        grammar=config.ph,
+        compiler=config.ph,
+        devices=config.ph,
+        logger=config.ph,
+        encoded_weaksup_search_set=config.ph,
+        encoded_val_set=config.ph,
+        train_batch_size=config.ph,
+        val_batch_size=config.ph,
+        search_batch_size=config.ph,
+        learning_rate=config.ph,  # TODO
+        adam_epsilon=config.ph,   # TODO
+        weight_decay=config.ph,
+        num_train_epochs=config.ph,  # TODO
+        using_scheduler=config.ph,   # TODO
+        num_warmup_epochs=config.ph,  # TODO
+        max_grad_norm=config.ph,      # TODO
+        patience=config.ph,     # TODO
+        softmax_masking=config.ph,
+        constrained_decoding=config.ph,
+        using_arg_candidate=config.ph,
+        model_learning_dir_path=config.ph,
+        resuming=False,
+        max_num_iterations=None,
+        context=config.ph,
+        num_search_beams=config.ph,
+        generation_max_length=config.ph,
+        # saving_optimizer=config.ph,
+        max_search_optim_loops=config.ph(float('inf')),
 ):
-    assert not model.training
+    filesys.asserts_conditional_exist(model_learning_dir_path, resuming)
 
-    # if softmax_masking:
-    #     generation_kwargs = dict(
-    #         logits_processor=learning.get_rescaled_logits_processor(grammar, batch_size, num_beams))
-    # else:
-    #     generation_kwargs = dict(
-    #         prefix_allowed_tokens_fn=learning.make_prefix_allowed_tokens_fn(grammar, batch_size, num_beams))
+    last_optim_dir_path = learning.get_last_optim_dir(model_learning_dir_path)
+    best_optim_dir_path = learning.get_best_optim_dir(model_learning_dir_path)
+    last_search_dir_path = learning.get_last_search_dir(model_learning_dir_path)
+    best_search_dir_path = learning.get_best_search_dir(model_learning_dir_path)
 
-    num_all_examples = 0
-    all_predictions = []
+    def get_init_optim_status():
+        return get_init_status(measures=optim_measures, update_unit='optimization')
 
-    if evaluating:
-        all_answers = []
+    def get_init_search_status():
+        return get_init_status(measures=search_measures, update_unit='search')
 
-    if using_oracle:
-        # if analyzing:
-        #     warnings.warn('Analyzing with oracle is not implemented yet')
-        #     analyzing = False
+    if resuming:
+        optim_status = dict(learning.load_status(last_optim_dir_path, default=get_init_optim_status()))
+        search_status = dict(learning.load_status(last_search_dir_path, default=get_init_search_status()))
 
-        assert batch_size > 1
-        num_return_sequences = num_beams
+        assert search_status['last_update_num'] == search_status['best_update_num']
+        assert optim_status['last_update_num'] == optim_status['best_update_num']
+
+        assert search_status['last_update_num'] - 1 <= optim_status['last_update_num'] <= search_status['last_update_num']
+        optim_first = optim_status['last_update_num'] + 1 == search_status['last_update_num']
     else:
-        num_return_sequences = 1
+        optim_status = get_init_optim_status()
+        search_status = get_init_search_status()
+        optim_first = False
 
-    if analyzing:
-        # assert not using_oracle
-
-        all_example_ids = []
-        all_utterances = []
-        all_predicted_token_id_seqs = []
-        all_predicted_last_states = []
-        if evaluating:
-            all_answer_last_states = []
-
-    if evaluating:
-        realtime_num_correct = 0
-
-        def update_realtime_accuracy():
-            nonlocal realtime_num_correct
-            realtime_num_correct += compute_num_correct(predictions, answers, num_return_sequences=num_return_sequences)
-            assert len(all_predictions) == len(all_answers) * num_return_sequences
-            return realtime_num_correct / len(all_answers)
-
-        xtqdm_kwargs = dict(
-            desc='accuracy: none',
-            desc_fn=lambda: 'accuracy: {:5.2f}'.format(update_realtime_accuracy() * 100))
-    else:
-        xtqdm_kwargs = dict()
-
-    total_decoding_time = 0
-    tm = TimeMeasure()
-    # debug_batch_idx = -1
-    for batch in config.xtqdm(data_loader, **xtqdm_kwargs):
-        # debug_batch_idx += 1
-        # if debug_batch_idx > 3:
-        #     break
-
-        assert constrained_decoding or not softmax_masking
-        if constrained_decoding:
-            logits_processor = learning.get_logits_processor(
-                grammar, batch_size, num_beams, renormalizing=softmax_masking,
-                utterance_token_ids=batch['utterance_token_ids'])
+    def get_model_path():
+        if optim_status['last_update_num'] > 0:
+            return last_optim_dir_path
         else:
-            logits_processor = None
+            return filesys.asserts_exist(pretrained_model_name_or_path)
 
-        tm.check()
-        token_id_seqs = learning.generate_token_id_seqs(
-            grammar=grammar,
-            model=model,
-            utterance_token_ids=batch['utterance_token_ids'].to(model.device),
-            max_length=generation_max_length,
-            num_beams=num_beams,
-            num_return_sequences=num_return_sequences,
-            logits_processor=logits_processor,
-            # **generation_kwargs
-        )
-        total_decoding_time += tm.elapse()
-        ignoring_errors = config.ignoring_parsing_errors or not (
-            constrained_decoding and config.using_arg_candidate and config.using_distinctive_union_types)
-        last_states = learning.token_id_seqs_to_last_states(
-            grammar, token_id_seqs,
-            ignoring_parsing_errors=ignoring_errors,
-            verifying=config.debug,
-            utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None),
-            num_return_sequences=num_return_sequences
-        )
-        programs = learning.last_states_to_programs(
-            grammar, compiler, last_states, tolerant=True, ignoring_compilation_errors=ignoring_errors)
+    def run_search():
+        search_result = search_to_collect(
+            grammar=grammar, compiler=compiler, model_path=get_model_path(),
+            devices=devices,
+            context=context, encoded_dataset=encoded_weaksup_search_set,
+            batch_size=search_batch_size, num_beams=num_search_beams,
+            generation_max_length=generation_max_length,
+            constrained_decoding=constrained_decoding, using_arg_candidate=using_arg_candidate)
 
-        num_all_examples += batch['utterance_token_ids'].shape[0]
-        predictions = learning.programs_to_predictions(context, programs)
-        all_predictions.extend(predictions)
+        with replace_dir_wlmp(last_search_dir_path) as temp_last_dir_path:
+            skip_if_not_wlmp(temp_last_dir_path)
 
-        if evaluating:
-            assert 'answer' in batch
-            answers = batch['answer']
-            all_answers.extend(answers)
+            learning.save_status(search_status, temp_last_dir_path)
+            learning.save_performance(search_result['performance'], temp_last_dir_path)
+            learning.save_weaksup_dataset(search_result['weaksup_examples'], temp_last_dir_path)
 
-        if analyzing:
-            all_example_ids.extend(batch['example_id'])
+        updating_best = update_status(search_status, performance=search_result['performance'])
 
-            utterances = grammar.utterance_tokenizer.batch_decode(
-                batch['utterance_token_ids'], skip_special_tokens=True)
+        if updating_best:
+            copy_dir_wlmp(last_search_dir_path, best_search_dir_path, replacing=True)
 
-            all_utterances.extend(utterances)
-            all_predicted_token_id_seqs.extend(token_id_seqs)
-            all_predicted_last_states.extend(last_states)
+        return updating_best
 
-            if evaluating:
-                assert 'labels' in batch
-                answer_last_states = learning.token_id_seqs_to_last_states(
-                    grammar, batch['labels'].tolist(),
-                    ignoring_parsing_errors=ignoring_errors,
-                    verifying=True,  # config.debug,
-                    utterance_token_id_seqs=(batch['utterance_token_ids'].tolist() if config.using_arg_candidate else None))
-                all_answer_last_states.extend(answer_last_states)
+    def run_optimization():
+        raise NotImplementedError
 
-    assert len(all_predictions) == num_all_examples * num_return_sequences
-
-    if evaluating:
-        assert len(all_predictions) == len(all_answers) * num_return_sequences
-        if analyzing:
-            assert len(all_answers) == len(all_answer_last_states)
-        num_correct = compute_num_correct(all_predictions, all_answers, num_return_sequences=num_return_sequences)
-        accuracy = compute_accuracy(predictions=None, answers=all_answers, num_correct=num_correct)
-        accuracy_fraction = compute_accuracy_fraction(predictions=None, answers=all_answers, num_correct=num_correct)
-        performance = get_performance(accuracy=accuracy, accuracy_fraction=accuracy_fraction)
+    if optim_first:
+        optim_updating_best = run_optimization()
     else:
-        performance = None
+        optim_updating_best = True
 
-    if analyzing:
-        def get_action_seq(last_state):
-            if grammar.is_invalid_state(last_state):
-                return None
-            else:
-                if last_state.tree.is_closed_root():
-                    return list(map(repr, last_state.tree.get_values()))
-                else:
-                    return None
+    while True:
+        if optim_status['last_update_num'] < max_search_optim_loops:
+            logger.info('Maximum number of loops for search and optimization')
+            break
 
-        def get_tree_repr(last_state):
-            if grammar.is_invalid_state(last_state):
-                return None
-            else:
-                return repr(last_state.tree)
+        # Search
+        search_updating_best = run_search()
 
-        def get_expr_str(last_state, expr_key=None):
-            if grammar.is_invalid_state(last_state):
-                return None
-            else:
-                if last_state.tree.is_closed_root():
-                    try:
-                        return last_state.tree.get_expr_str(expr_key=expr_key)
-                    except Exception as error:
-                        if constrained_decoding:
-                            raise error
-                        else:
-                            return None
-                else:
-                    return None
+        if not search_updating_best:
+            logger.info('Early stopping after search')
+            break
 
-        def analyze_program(last_states, token_id_seqs=None):
-            program_analysis = list(pairs2dicts(not_none_valued_pairs(
-                tokens=list(map(grammar.lf_tokenizer.convert_ids_to_tokens, token_id_seqs)) if token_id_seqs is not None else None,
-                action_seq=list(map(get_action_seq, last_states)),
-                tree=list(map(get_tree_repr, last_states)),
-                expr=list(map(get_expr_str, last_states)),
-                visual_expr=list(map(lambda last_state: get_expr_str(last_state, expr_key='visual'), last_states)),
-            )))
-            return program_analysis
+        # Optimization
+        optim_updating_best = run_optimization()
 
-        def group_predictions_conditionally(predictions):
-            if num_return_sequences > 1:
-                prediction_groups = tuple(iteration.partition(predictions, num_return_sequences))
-            else:
-                prediction_groups = predictions
-            return prediction_groups
+        if not optim_updating_best:
+            logger.info('Early stopping after optimization')
+            break
 
-        if evaluating:
-            correct_list = [whether_equal(answer=answer, prediction=prediction)
-                            for prediction, answer in zip(all_predictions, all_answers)]
-        else:
-            correct_list = None
-
-        analysis = list(pairs2dicts(not_none_valued_pairs(
-            example_ids=all_example_ids,
-            utterance=all_utterances,
-            answer=all_answers if evaluating else None,
-            prediction=group_predictions_conditionally(all_predictions),
-            correct=correct_list,
-            predicted_program=group_predictions_conditionally(
-                analyze_program(all_predicted_last_states, all_predicted_token_id_seqs)),
-            answer_program=(analyze_program(all_answer_last_states) if evaluating else None),
-        )))
-
-    def get_time_info(total_decoding_time, num_examples):
-        average_time = total_decoding_time / num_examples
-        return dict(
-            total_decoding_time=total_decoding_time,
-            average_time=total_decoding_time / num_examples,
-            average_time_millisecond=average_time * 1000
-        )
-
-    validation = dict(not_none_valued_pairs(
-        performance=performance,
-        analysis=analysis if analyzing else None,
-        time_info=get_time_info(total_decoding_time, len(all_example_ids)),
-        predictions=all_predictions))
-
-    return validation
-
-
-def compute_num_correct(predictions, answers, num_return_sequences=1):
-    assert len(predictions) == len(answers) * num_return_sequences
-
-    if num_return_sequences > 1:
-        num_correct = compute_num_oracle_correct(
-            predictions, answers, num_return_sequences=num_return_sequences)
-    else:
-        num_correct = sum(
-            int(whether_equal(answer=answer, prediction=prediction))
-            for prediction, answer in zip(predictions, answers))
-
-    return num_correct
-
-
-def compute_num_oracle_correct(predictions, answers, num_return_sequences=1):
-    # if not (len(predictions) == len(answers) * num_return_sequences):
-    #     breakpoint()
-    assert len(predictions) == len(answers) * num_return_sequences
-
-    if num_return_sequences is not None and num_return_sequences > 1:
-        prediction_groups = tuple(iteration.partition(predictions, num_return_sequences))
-    else:
-        prediction_groups = predictions
-
-    assert len(prediction_groups) == len(answers)
-
-    num_correct = sum(
-        int(any(whether_equal(answer=answer, prediction=prediction)
-                for prediction in prediction_groups))
-        for prediction_groups, answer in zip(prediction_groups, answers))
-
-    assert num_correct <= len(answers)
-
-    return num_correct
-
-
-def compute_accuracy(predictions, answers, num_correct=None):
-    if predictions is None:
-        assert num_correct is not None
-    else:
-        assert len(predictions) == len(answers)
-
-    num_examples = len(answers)
-
-    if num_correct is None:
-        num_correct = compute_num_correct(predictions, answers)
-
-    accuracy = num_correct / num_examples
-    return accuracy
-
-
-def compute_accuracy_fraction(predictions, answers, num_correct=None):
-    if predictions is None:
-        assert num_correct is not None
-    else:
-        assert len(predictions) == len(answers)
-
-    num_examples = len(answers)
-
-    if num_correct is None:
-        num_correct = compute_num_correct(predictions, answers)
-
-    accuracy_fraction = Fraction(num_correct, num_examples)
-    return accuracy_fraction
-
-
-def compute_oracle_accuracy(predictions, answers, num_correct=None, num_return_sequences=1):
-    assert len(predictions) == len(answers) * num_return_sequences
-    num_examples = len(answers)
-
-    if num_correct is None:
-        num_correct = compute_num_oracle_correct(predictions, answers, num_return_sequences=num_return_sequences)
-
-    accuracy = num_correct / num_examples
-    return accuracy
+    raise NotImplementedError
 
 
 if __name__ == '__main__':

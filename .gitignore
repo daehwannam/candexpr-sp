@@ -1,6 +1,7 @@
 
 # temporary files
 _tmp_*
+/tmpcmd
 
 # emacs temporary files
 *~

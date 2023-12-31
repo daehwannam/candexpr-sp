@@ -1,12 +1,13 @@
 
 import copy
 from itertools import chain
+from functools import lru_cache
 
 from configuration import config
 from splogic.grammar import Grammar
 from splogic.formalism import make_program_tree_cls, make_search_state_cls
 
-from dhnamlib.pylib.decoration import lru_cache, construct, variable, unnecessary, deprecated
+from dhnamlib.pylib.decoration import construct, variable, unnecessary, deprecated
 from dhnamlib.pylib.function import identity
 from dhnamlib.pylib.klass import Interface
 from dhnamlib.pylib.context import block, Environment
