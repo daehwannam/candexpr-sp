@@ -1,37 +1,19 @@
 
 import os
 # import warnings
-
 import torch
-# from tqdm import tqdm
 
-# from functools import lru_cache
-
-from configuration import config, save_config_info
+from configuration import config
 
 from . import learning
 from .data_read import make_data_loader
 from .validation import validate
 from .learning import optim_measures, search_measures
-from .weaksup import search_to_collect
 
 
 from dhnamlib.pylib import filesys
-# from dhnamlib.pylib.iteration import apply_recursively
-# from dhnamlib.pylib.structure import AttrDict
-from dhnamlib.pylib.context import skippable, skip_if_possible
-
+from dhnamlib.pylib.iteration import not_none_valued_dict
 from dhnamlib.pylib.mllib.learning import get_init_status, update_status
-# from dhnamlib.pylib.mllib.learning import get_performance
-
-
-# wlmp = within_local_main_process
-save_config_info_wlmp = config.accelerator.within_local_main_process(save_config_info)
-mkloc_unless_exist_wlmp = config.accelerator.within_local_main_process(filesys.mkloc_unless_exist)
-copy_dir_wlmp = config.accelerator.within_local_main_process(filesys.copy_dir)
-copy_matched_wlmp = config.accelerator.within_local_main_process(filesys.copy_matched)
-replace_dir_wlmp = filesys.replace_dir if config.accelerator.is_local_main_process else skippable
-skip_if_not_wlmp = skip_if_possible
 
 
 @config
@@ -71,12 +53,15 @@ def run_train(
     else:
         assert model_learning_dir_path is not None
 
-    save_config_info_wlmp(model_learning_dir_path)
+    learning.save_config_info(model_learning_dir_path)
 
     last_dir_path = learning.get_last_dir_path(model_learning_dir_path)
-    mkloc_unless_exist_wlmp(last_dir_path)
+    # mkloc_unless_exist_wlmp(last_dir_path)
+    # make_symlink_wlmp(learning.get_new_checkpoint_dir_path(model_learning_dir_path), last_dir_path)
+
     best_dir_path = learning.get_best_dir_path(model_learning_dir_path)
-    mkloc_unless_exist_wlmp(best_dir_path)
+    # mkloc_unless_exist_wlmp(best_dir_path)
+    # copy_symlink_wlmp(last_dir_path, best_dir_path)
 
     model = learning.load_model(
         pretrained_model_name_or_path,
@@ -122,7 +107,7 @@ def run_train(
 
     # The model and optimizer should be passed together to the prepare method
     # https://huggingface.co/docs/accelerate/quicktour#enable-distributed-training-in-your-script
-    model, train_data_loader, val_data_loader, optimizer, scheduler = config.accelerator.prepare(
+    model, train_data_loader, optimizer, scheduler = config.accelerator.prepare(
         model, train_data_loader, optimizer, scheduler)
 
     val_data_loader = config.accelerator.prepare_val_data_loader(val_data_loader)
@@ -140,6 +125,11 @@ def run_train(
         loss = torch.tensor(0.)
         # for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
         for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss.item(), repr_format='{:7.4f}'):
+            # if debug_batch_idx > 100:
+            #     break
+            # else:
+            #     debug_batch_idx += 1
+
             # - `model.config.decoder_start_token_id` is the first id of output sequences.
             # - the order or decoder output tokens in a sequence: decoder_start_token_id, bos_token_id, others ...
             batched_input = dict(
@@ -198,20 +188,32 @@ def run_train(
 
         updating_best = update_status(status, performance=performance)
 
-        with replace_dir_wlmp(last_dir_path) as temp_last_dir_path:
-            skip_if_not_wlmp(temp_last_dir_path)
+        new_checkpoint_dir_path = learning.get_new_checkpoint_dir_path(model_learning_dir_path)
+        with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
+            learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
 
-            # save
+            if saving_optimizer:
+                learning.save_optimizer(optimizer, temp_checkpoint_dir_path)
+            learning.save_scheduler(scheduler, temp_checkpoint_dir_path)
+            learning.save_model(model, temp_checkpoint_dir_path)
+
+        with learning.replace_result_dir(last_dir_path) as temp_last_dir_path:
+            learning.skip_if_not_wlmp(temp_last_dir_path)
+
             learning.save_status(status, temp_last_dir_path)
             learning.save_performance(performance, temp_last_dir_path)
-            # if saving_optimizer:
-            #     learning.save_optimizer(optimizer, temp_last_dir_path)
-            # learning.save_scheduler(scheduler, temp_last_dir_path)
-            learning.save_model(model, temp_last_dir_path)
             learning.save_analysis(validation['analysis'], temp_last_dir_path)
 
+            learning.make_symlink(
+                new_checkpoint_dir_path,
+                learning.get_model_path(temp_last_dir_path))
+
         if updating_best:
-            copy_dir_wlmp(last_dir_path, best_dir_path, replacing=True)
+            with learning.replace_result_dir(best_dir_path) as temp_best_dir_path:
+                learning.skip_if_not_wlmp(temp_best_dir_path)
+
+                learning.copy_dir(last_dir_path, temp_best_dir_path)
+
             logger.info('Best model is updated')
             remaining_patience = patience
         else:
@@ -260,28 +262,15 @@ def run_train_for_multiple_decoding_strategies(
     assert model_learning_dir_path is not None
     assert patience == float('inf'), 'the feature of patience is not implemented'
 
-    save_config_info_wlmp(model_learning_dir_path)
+    learning.save_config_info(model_learning_dir_path)
 
-    last_common_dir = learning.get_last_dir_path(model_learning_dir_path, 'last:common')
-    mkloc_unless_exist_wlmp(last_common_dir)
-
-    def get_last_dir_path(decoding_strategy_name):
-        last_dir_path = learning.get_last_dir_path(
-            model_learning_dir_path, f'{decoding_strategy_name}:last')
-        mkloc_unless_exist_wlmp(last_dir_path)
-        return last_dir_path
+    common_last_dir_path = learning.get_last_dir_path(model_learning_dir_path, 'common:last')
 
     def get_best_dir_path(decoding_strategy_name):
-        best_dir_path = learning.get_best_dir_path(
-            model_learning_dir_path, f'{decoding_strategy_name}:best')
-        mkloc_unless_exist_wlmp(best_dir_path)
-        return best_dir_path
+        return learning.get_best_dir_path(model_learning_dir_path, f'{decoding_strategy_name}:best')
 
-    def get_best_result_dir_path(decoding_strategy_name):
-        best_result_dir_path = learning.get_best_dir_path(
-            model_learning_dir_path, f'{decoding_strategy_name}:best-result')
-        mkloc_unless_exist_wlmp(best_result_dir_path)
-        return best_result_dir_path
+    def get_last_dir_path(decoding_strategy_name):
+        return learning.get_last_dir_path(model_learning_dir_path, f'{decoding_strategy_name}:last')
 
     model = learning.load_model(
         pretrained_model_name_or_path,
@@ -323,8 +312,8 @@ def run_train_for_multiple_decoding_strategies(
 
     # The model and optimizer should be passed together to the prepare method
     # https://huggingface.co/docs/accelerate/quicktour#enable-distributed-training-in-your-script
-    model, train_data_loader, val_data_loader, optimizer, scheduler = config.accelerator.prepare(
-        model, train_data_loader, val_data_loader, optimizer, scheduler)
+    model, train_data_loader, optimizer, scheduler = config.accelerator.prepare(
+        model, train_data_loader, optimizer, scheduler)
 
     val_data_loader = config.accelerator.prepare_val_data_loader(val_data_loader)
 
@@ -407,27 +396,43 @@ def run_train_for_multiple_decoding_strategies(
                 updating_best = update_status(status, performance=performance)
 
                 if not last_model_saved:
+                    last_model_saved = True
+
                     # save a model
-                    with replace_dir_wlmp(last_common_dir) as temp_last_dir_path:
-                        skip_if_not_wlmp(temp_last_dir_path)
+                    new_checkpoint_dir_path = learning.get_new_checkpoint_dir_path(model_learning_dir_path)
+                    with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
+                        learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
 
                         if saving_optimizer:
-                            learning.save_optimizer(optimizer, temp_last_dir_path)
-                        learning.save_scheduler(scheduler, temp_last_dir_path)
-                        learning.save_model(model, temp_last_dir_path)
-                        last_model_saved = True
+                            learning.save_optimizer(optimizer, temp_checkpoint_dir_path)
+                        learning.save_scheduler(scheduler, temp_checkpoint_dir_path)
+                        learning.save_model(model, temp_checkpoint_dir_path)
+
+                    with learning.replace_result_dir(common_last_dir_path) as temp_common_last_dir_path:
+                        learning.skip_if_not_wlmp(temp_common_last_dir_path)
+
+                        learning.make_symlink(
+                            new_checkpoint_dir_path,
+                            learning.get_model_path(temp_common_last_dir_path))
 
                 # save for a decoding strategy
-                strategy_last_dir = get_last_dir_path(config.decoding_strategy_name)
-                learning.save_status(status, strategy_last_dir)
-                learning.save_performance(performance, strategy_last_dir)
-                learning.save_analysis(validation['analysis'], strategy_last_dir)
+                strategy_last_dir_path = get_last_dir_path(config.decoding_strategy_name)
+                with learning.replace_result_dir(strategy_last_dir_path) as temp_strategy_last_dir_path:
+                    learning.skip_if_not_wlmp(temp_strategy_last_dir_path)
+
+                    learning.save_status(status, temp_strategy_last_dir_path)
+                    learning.save_performance(performance, temp_strategy_last_dir_path)
+                    learning.save_analysis(validation['analysis'], temp_strategy_last_dir_path)
+
+                    learning.copy_symlink(learning.get_model_path(common_last_dir_path),
+                                          learning.get_model_path(temp_strategy_last_dir_path))
 
                 if updating_best:
-                    strategy_best_dir = get_best_dir_path(config.decoding_strategy_name)
-                    copy_dir_wlmp(last_common_dir, strategy_best_dir, replacing=True)
-                    strategy_best_result_dir = get_best_result_dir_path(config.decoding_strategy_name)
-                    copy_matched_wlmp(os.path.join(strategy_last_dir, '*'), strategy_best_result_dir)
+                    strategy_best_dir_path = get_best_dir_path(config.decoding_strategy_name)
+                    with learning.replace_result_dir(strategy_best_dir_path) as temp_strategy_best_dir_path:
+                        learning.skip_if_not_wlmp(temp_strategy_best_dir_path)
+
+                        learning.copy_dir(strategy_last_dir_path, temp_strategy_best_dir_path)
 
                     logger.info('Best model is updated')
 
@@ -439,6 +444,7 @@ def run_test(
         *,
         model_learning_dir_path=config.ph(None),
         model_checkpoint_dir_path=config.ph(None),
+        model_dir_name=config.ph(None),
         test_dir_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
@@ -459,8 +465,10 @@ def run_test(
     if model_checkpoint_dir_path is None:
         # Check the default checkpoint path
         assert model_learning_dir_path is not None
-        model_checkpoint_dir_path = learning.get_best_dir_path(model_learning_dir_path)
-        assert os.path.isdir(model_checkpoint_dir_path), "Specify the explicit path to the checkpoint"
+        assert os.path.isdir(model_learning_dir_path), f'The learning directory {model_learning_dir_path} does not exist'
+        model_checkpoint_dir_path = learning.get_model_path(learning.get_best_dir_path(
+            model_learning_dir_path, **not_none_valued_dict(dir_name=model_dir_name)))
+        assert os.path.isdir(model_checkpoint_dir_path), f'The checkpoint {model_checkpoint_dir_path} does not exist'
     model = learning.load_model(
         model_checkpoint_dir_path,
         num_tokens=len(grammar.lf_tokenizer))
@@ -497,8 +505,8 @@ def run_test(
     if evaluating:
         logger.info('Performance: {}'.format(validation['performance']))
 
-    mkloc_unless_exist_wlmp(test_dir_path)
-    save_config_info_wlmp(test_dir_path)
+    learning.mkloc_unless_exist(test_dir_path)
+    learning.save_config_info(test_dir_path)
 
     if analyzing:
         learning.save_analysis(validation['analysis'], test_dir_path)

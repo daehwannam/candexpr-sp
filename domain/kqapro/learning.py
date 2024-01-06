@@ -6,12 +6,15 @@ import math
 import warnings
 import json
 from fractions import Fraction
+# import datetime
+# from shutil import copyfile
+import shutil
 
 import torch
 import torch.nn.functional as F
 from transformers import BartTokenizer, BartForConditionalGeneration, BartConfig
 import transformers
-from configuration import config
+from configuration import config, save_config_info
 
 from .execution import postprocess_prediction, invalid_program, get_counting_context
 
@@ -21,12 +24,15 @@ from utility.trie import SpanTrie
 from dhnamlib.pylib import filesys
 from dhnamlib.pylib.hflib.transforming import logit_rescaling, MaskedLogitsProcessor
 from dhnamlib.pylib import iteration
-from dhnamlib.pylib.decoration import deprecated, construct
+from dhnamlib.pylib.decoration import deprecated, curry
+# from dhnamlib.pylib.decoration import construct
 from dhnamlib.pylib.exception import NotFoundError
 from dhnamlib.pylib.torchlib.dnn import (
     candidate_ids_to_mask, lengths_to_mask, masked_log_softmax, nll_without_reduction, pad_sequence, unpad_sequence)
 from dhnamlib.pylib.mllib.learning import get_measure
 from dhnamlib.pylib.data_structure import FIFODict
+from dhnamlib.pylib.time import get_YmdHMSf
+from dhnamlib.pylib.context import must_skipped, skip_if_possible
 
 
 def is_finetuned(pretrained_model_name_or_path):
@@ -55,28 +61,104 @@ def load_tokenizer(pretrained_model_name_or_path, add_prefix_space, non_nl_token
     return tokenizer
 
 
-def get_last_dir_path(model_learning_dir_path, dir_name='last'):
-    return os.path.join(model_learning_dir_path, dir_name)
+_DEFAULT_CHECKPOINT_DIR_NAME = 'checkpoint'
 
 
-def get_best_dir_path(model_learning_dir_path, dir_name='best'):
-    return os.path.join(model_learning_dir_path, dir_name)
+@config.accelerator.within_local_main_process
+def get_new_checkpoint_dir_path(base_dir_path):
+    # while True:
+    #     time_str = get_YmdHMSf()
+    #     checkpoint_dir_path = os.path.join(base_dir_path, 'checkpoint', time_str)
+    #     if not os.path.exists(checkpoint_dir_path):
+    #         break
+    time_str = get_YmdHMSf()
+    checkpoint_dir_path = os.path.join(base_dir_path, _DEFAULT_CHECKPOINT_DIR_NAME, time_str)
+    assert not os.path.exists(checkpoint_dir_path)
+
+    return checkpoint_dir_path
 
 
-def get_last_search_dir(model_learning_dir_path, dir_name='last'):
-    return os.path.join(model_learning_dir_path, 'search', dir_name)
+@deprecated
+@config.accelerator.within_local_main_process
+def make_checkpoint_dir(base_dir_path):
+    # time_str = get_YmdHMSf()
+    # # checkpoint_dir_path = os.path.join(base_dir_path, f'checkpoint-{time_str}')
+    # checkpoint_dir_path = os.path.join(base_dir_path, 'checkpoint', time_str)
+    checkpoint_dir_path = get_new_checkpoint_dir_path(base_dir_path)
+    # os.mkdir(checkpoint_dir_path)
+    os.makedirs(checkpoint_dir_path)
+    return checkpoint_dir_path
 
 
-def get_best_search_dir(model_learning_dir_path, dir_name='best'):
-    return os.path.join(model_learning_dir_path, 'search', dir_name)
+_DEFAULT_MODEL_DIR_NAME = 'model'
 
 
-def get_last_optim_dir(model_learning_dir_path, dir_name='last'):
-    return os.path.join(model_learning_dir_path, 'optim', dir_name)
+def is_checkpoint_in_use(checkpoint_dir_path):
+    checkpoint_dir_abspath = os.path.abspath(checkpoint_dir_path)
+    assert os.path.basename(filesys.get_parent_path(checkpoint_dir_abspath, depth=1)) == _DEFAULT_CHECKPOINT_DIR_NAME
+    base_dir_path = filesys.get_parent_path(checkpoint_dir_abspath, depth=2)
+    return filesys.any_matched_symlink(
+        os.path.join(base_dir_path, '*', _DEFAULT_MODEL_DIR_NAME),
+        checkpoint_dir_abspath
+    )
 
 
-def get_best_optim_dir(model_learning_dir_path, dir_name='best'):
-    return os.path.join(model_learning_dir_path, 'optim', dir_name)
+@config.accelerator.within_local_main_process
+def remove_checkpoint_unless_in_use(checkpoint_dir_path):
+    if os.path.exists(checkpoint_dir_path):
+        checkpoint_dir_realpath = os.path.realpath(checkpoint_dir_path)
+        if not is_checkpoint_in_use(checkpoint_dir_realpath):
+            shutil.rmtree(os.path.realpath(checkpoint_dir_realpath))
+
+
+class _ReplaceResultDirectory(filesys._ReplaceDirectory):
+    def __init__(self, dir_path):
+        super().__init__(dir_path=dir_path, strict=False)
+        self.old_checkpoint_dir_path = os.path.realpath(get_model_path(dir_path))
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        super().__exit__(exc_type, exc_value, exc_tb)
+        remove_checkpoint_unless_in_use(self.old_checkpoint_dir_path)
+
+
+skip_if_not_wlmp = skip_if_possible
+replace_result_dir = _ReplaceResultDirectory if config.accelerator.is_local_main_process else must_skipped
+copy_dir = config.accelerator.within_local_main_process(curry(filesys.copy_dir)(replacing=True, deep=False))
+mkloc_unless_exist = config.accelerator.within_local_main_process(filesys.mkloc_unless_exist)
+copy_symlink = config.accelerator.within_local_main_process(curry(filesys.copy_symlink)(replacing=True))
+prepare_dir = filesys.prepare_dir if config.accelerator.is_local_main_process else must_skipped
+# change_symlink = config.accelerator.within_local_main_process(curry(filesys.change_symlink)(strict=False))
+make_symlink = config.accelerator.within_local_main_process(filesys.make_symlink)
+save_config_info = config.accelerator.within_local_main_process(save_config_info)
+
+
+def get_last_dir_path(base_dir_path, dir_name='last'):
+    last_dir_path = os.path.join(base_dir_path, dir_name)
+    return last_dir_path
+
+
+def get_best_dir_path(base_dir_path, dir_name='best'):
+    return os.path.join(base_dir_path, dir_name)
+
+
+def get_last_search_dir(base_dir_path, dir_name='last'):
+    return os.path.join(base_dir_path, 'search', dir_name)
+
+
+def get_best_search_dir(base_dir_path, dir_name='best'):
+    return os.path.join(base_dir_path, 'search', dir_name)
+
+
+def get_last_optim_dir(base_dir_path, dir_name='last'):
+    return os.path.join(base_dir_path, 'optim', dir_name)
+
+
+def get_best_optim_dir(base_dir_path, dir_name='best'):
+    return os.path.join(base_dir_path, 'optim', dir_name)
+
+
+def get_model_path(base_dir_path, dir_name=_DEFAULT_MODEL_DIR_NAME):
+    return os.path.join(base_dir_path, dir_name)
 
 
 def load_model(pretrained_model_name_or_path, num_tokens=None):

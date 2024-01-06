@@ -105,7 +105,7 @@ SS_MODEL_LEARNING_DIR_PATH=./model-instance/strongly-supervised-models
 #+begin_src sh
 python -m domain.kqapro.run --config config.train_for_multiple_decoding_strategies \
        --model-learning-dir $SS_MODEL_LEARNING_DIR_PATH \
-       --additional-config config.additional.weaksup_pretraining \
+       --additional-config config.additional.weaksup_pretraining
 #+end_src
 
 *** Learning form weak supervision
@@ -140,6 +140,15 @@ WS_MODEL_LEARNING_DIR_PATH=$COMMON_WS_MODEL_LEARNING_DIR_PATH/$DECODING
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 # e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
 python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
+#+end_src
+
+*** Testing on the validation set with a specific model directory name
+#+begin_src sh
+MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
+# e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
+MODEL_DIR_NAME='full-constraints:best'
+# Options for MODEL_DIR_NAME: best, common:best, full-constraints:best, no-arg-candidate:best, no-ac-no-dut:best, no-constrained-decoding:best
+python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH --model-dir-name $MODEL_DIR_NAME
 #+end_src
 
 *** Testing on the test set with the default checkpoint path

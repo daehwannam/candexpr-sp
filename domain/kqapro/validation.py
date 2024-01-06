@@ -91,7 +91,13 @@ def validate(
 
     unwrapped_model = config.accelerator.unwrap_model(model)
 
+    # debug_batch_idx = -1
     for batch in config.utqdm(data_loader, **utqdm_kwargs):
+        # if debug_batch_idx > 5:
+        #     break
+        # else:
+        #     debug_batch_idx += 1
+
         assert constrained_decoding or not softmax_masking
         if constrained_decoding:
             logits_processor = learning.get_logits_processor(
