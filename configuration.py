@@ -77,7 +77,7 @@ def _get_device():
 def _is_valid_run_mode(run_mode):
     return run_mode in [
         'train-default', 'train-for-multiple-decoding-strategies', 'test-on-val-set', 'test-on-test-set',
-        'oracle-test-on-val-set',
+        'oracle-test-on-val-set', 'search-train'
         # 'retrain', 'finetune',
     ]
 

@@ -12,8 +12,13 @@ from .learning import optim_measures, search_measures
 
 
 from dhnamlib.pylib import filesys
-from dhnamlib.pylib.iteration import not_none_valued_dict
+# from dhnamlib.pylib.iteration import not_none_valued_dict
 from dhnamlib.pylib.mllib.learning import get_init_status, update_status
+
+
+MODEL_SYMLINK_NAME = 'model'
+# COLLECTION_SYMLINK_NAME = 'collection'
+# LEARNING_SYMLINK_NAME = 'learning'
 
 
 @config
@@ -44,6 +49,7 @@ def run_train(
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         saving_optimizer=config.ph,
+        # weaksup_training=config.ph(False),
 ):
     if restarting:
         assert learning.is_finetuned(pretrained_model_name_or_path)
@@ -55,13 +61,18 @@ def run_train(
 
     learning.save_config_info(model_learning_dir_path)
 
-    last_dir_path = learning.get_last_dir_path(model_learning_dir_path)
+    last_dir_path = os.path.join(model_learning_dir_path, 'last')
     # mkloc_unless_exist_wlmp(last_dir_path)
-    # make_symlink_wlmp(learning.get_new_checkpoint_dir_path(model_learning_dir_path), last_dir_path)
+    # make_symlink_wlmp(learning.get_new_checkpoint_path(model_learning_dir_path), last_dir_path)
 
-    best_dir_path = learning.get_best_dir_path(model_learning_dir_path)
+    best_dir_path = os.path.join(model_learning_dir_path, 'best')
     # mkloc_unless_exist_wlmp(best_dir_path)
     # copy_symlink_wlmp(last_dir_path, best_dir_path)
+
+    cpm = learning.AcceleratedCheckpointManager(
+        checkpoint_loc_path=os.path.join(model_learning_dir_path, 'checkpoint'),
+        symlink_glob_patterns=[os.path.join(model_learning_dir_path, 'last', MODEL_SYMLINK_NAME),
+                               os.path.join(model_learning_dir_path, 'best', MODEL_SYMLINK_NAME)])
 
     model = learning.load_model(
         pretrained_model_name_or_path,
@@ -188,7 +199,7 @@ def run_train(
 
         updating_best = update_status(status, performance=performance)
 
-        new_checkpoint_dir_path = learning.get_new_checkpoint_dir_path(model_learning_dir_path)
+        new_checkpoint_dir_path = cpm.get_new_checkpoint_path()
         with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
             learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
 
@@ -197,7 +208,7 @@ def run_train(
             learning.save_scheduler(scheduler, temp_checkpoint_dir_path)
             learning.save_model(model, temp_checkpoint_dir_path)
 
-        with learning.replace_result_dir(last_dir_path) as temp_last_dir_path:
+        with cpm.cleaning(learning.replace_dir(last_dir_path)) as temp_last_dir_path:
             learning.skip_if_not_wlmp(temp_last_dir_path)
 
             learning.save_status(status, temp_last_dir_path)
@@ -206,16 +217,17 @@ def run_train(
 
             learning.make_symlink(
                 new_checkpoint_dir_path,
-                learning.get_model_path(temp_last_dir_path))
+                os.path.join(temp_last_dir_path, MODEL_SYMLINK_NAME))
 
         if updating_best:
-            with learning.replace_result_dir(best_dir_path) as temp_best_dir_path:
+            with cpm.cleaning(learning.replace_dir(best_dir_path)) as temp_best_dir_path:
                 learning.skip_if_not_wlmp(temp_best_dir_path)
 
                 learning.copy_dir(last_dir_path, temp_best_dir_path)
 
-            logger.info('Best model is updated')
             remaining_patience = patience
+
+            logger.info('Best model is updated')
         else:
             remaining_patience -= 1
             if remaining_patience < 0:
@@ -264,13 +276,18 @@ def run_train_for_multiple_decoding_strategies(
 
     learning.save_config_info(model_learning_dir_path)
 
-    common_last_dir_path = learning.get_last_dir_path(model_learning_dir_path, 'common:last')
+    common_last_dir_path = os.path.join(model_learning_dir_path, 'common:last')
 
     def get_best_dir_path(decoding_strategy_name):
-        return learning.get_best_dir_path(model_learning_dir_path, f'{decoding_strategy_name}:best')
+        return os.path.join(model_learning_dir_path, f'{decoding_strategy_name}:best')
 
     def get_last_dir_path(decoding_strategy_name):
-        return learning.get_last_dir_path(model_learning_dir_path, f'{decoding_strategy_name}:last')
+        return os.path.join(model_learning_dir_path, f'{decoding_strategy_name}:last')
+
+    cpm = learning.AcceleratedCheckpointManager(
+        checkpoint_loc_path=os.path.join(model_learning_dir_path, 'checkpoint'),
+        symlink_glob_patterns=[os.path.join(model_learning_dir_path, '*:last', MODEL_SYMLINK_NAME),
+                               os.path.join(model_learning_dir_path, '*:best', MODEL_SYMLINK_NAME)])
 
     model = learning.load_model(
         pretrained_model_name_or_path,
@@ -399,7 +416,7 @@ def run_train_for_multiple_decoding_strategies(
                     last_model_saved = True
 
                     # save a model
-                    new_checkpoint_dir_path = learning.get_new_checkpoint_dir_path(model_learning_dir_path)
+                    new_checkpoint_dir_path = cpm.get_new_checkpoint_path()
                     with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
                         learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
 
@@ -408,28 +425,28 @@ def run_train_for_multiple_decoding_strategies(
                         learning.save_scheduler(scheduler, temp_checkpoint_dir_path)
                         learning.save_model(model, temp_checkpoint_dir_path)
 
-                    with learning.replace_result_dir(common_last_dir_path) as temp_common_last_dir_path:
+                    with cpm.cleaning(learning.replace_dir(common_last_dir_path)) as temp_common_last_dir_path:
                         learning.skip_if_not_wlmp(temp_common_last_dir_path)
 
                         learning.make_symlink(
                             new_checkpoint_dir_path,
-                            learning.get_model_path(temp_common_last_dir_path))
+                            os.path.join(temp_common_last_dir_path, MODEL_SYMLINK_NAME))
 
                 # save for a decoding strategy
-                strategy_last_dir_path = get_last_dir_path(config.decoding_strategy_name)
-                with learning.replace_result_dir(strategy_last_dir_path) as temp_strategy_last_dir_path:
+                strategy_last_dir_path = os.path.join(model_learning_dir_path, f'{config.decoding_strategy_name}:last')
+                with cpm.cleaning(learning.replace_dir(strategy_last_dir_path)) as temp_strategy_last_dir_path:
                     learning.skip_if_not_wlmp(temp_strategy_last_dir_path)
 
                     learning.save_status(status, temp_strategy_last_dir_path)
                     learning.save_performance(performance, temp_strategy_last_dir_path)
                     learning.save_analysis(validation['analysis'], temp_strategy_last_dir_path)
 
-                    learning.copy_symlink(learning.get_model_path(common_last_dir_path),
-                                          learning.get_model_path(temp_strategy_last_dir_path))
+                    learning.copy_symlink(os.path.join(common_last_dir_path, MODEL_SYMLINK_NAME),
+                                          os.path.join(temp_strategy_last_dir_path, MODEL_SYMLINK_NAME))
 
                 if updating_best:
-                    strategy_best_dir_path = get_best_dir_path(config.decoding_strategy_name)
-                    with learning.replace_result_dir(strategy_best_dir_path) as temp_strategy_best_dir_path:
+                    strategy_best_dir_path = os.path.join(model_learning_dir_path, f'{config.decoding_strategy_name}:best')
+                    with cpm.cleaning(learning.replace_dir(strategy_best_dir_path)) as temp_strategy_best_dir_path:
                         learning.skip_if_not_wlmp(temp_strategy_best_dir_path)
 
                         learning.copy_dir(strategy_last_dir_path, temp_strategy_best_dir_path)
@@ -444,7 +461,7 @@ def run_test(
         *,
         model_learning_dir_path=config.ph(None),
         model_checkpoint_dir_path=config.ph(None),
-        model_dir_name=config.ph(None),
+        model_dir_name=config.ph('best'),
         test_dir_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
@@ -466,8 +483,7 @@ def run_test(
         # Check the default checkpoint path
         assert model_learning_dir_path is not None
         assert os.path.isdir(model_learning_dir_path), f'The learning directory {model_learning_dir_path} does not exist'
-        model_checkpoint_dir_path = learning.get_model_path(learning.get_best_dir_path(
-            model_learning_dir_path, **not_none_valued_dict(dir_name=model_dir_name)))
+        model_checkpoint_dir_path = os.path.join(model_learning_dir_path, model_dir_name, MODEL_SYMLINK_NAME)
         assert os.path.isdir(model_checkpoint_dir_path), f'The checkpoint {model_checkpoint_dir_path} does not exist'
     model = learning.load_model(
         model_checkpoint_dir_path,
@@ -566,49 +582,64 @@ def run_search_train(
         pretrained_model_name_or_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
-        devices=config.ph,
+        # # devices=config.ph,
         logger=config.ph,
-        encoded_weaksup_search_set=config.ph,
+        encoded_train_set=config.ph,
         encoded_val_set=config.ph,
+        encoded_weaksup_search_set=config.ph,  # New
         train_batch_size=config.ph,
         val_batch_size=config.ph,
-        search_batch_size=config.ph,
-        learning_rate=config.ph,  # TODO
-        adam_epsilon=config.ph,   # TODO
+        search_batch_size=config.ph,  # New
+        learning_rate=config.ph,
+        adam_epsilon=config.ph,
         weight_decay=config.ph,
-        num_train_epochs=config.ph,  # TODO
-        using_scheduler=config.ph,   # TODO
-        num_warmup_epochs=config.ph,  # TODO
-        max_grad_norm=config.ph,      # TODO
-        patience=config.ph,     # TODO
+        num_train_epochs=config.ph,
+        using_scheduler=config.ph,
+        num_warmup_epochs=config.ph,
+        max_grad_norm=config.ph,
+        patience=config.ph,
         softmax_masking=config.ph,
         constrained_decoding=config.ph,
         using_arg_candidate=config.ph,
         model_learning_dir_path=config.ph,
-        resuming=False,
-        max_num_iterations=None,
+        resuming=config.ph(None),         # New
+        # # max_num_iterations=None,  # New
         context=config.ph,
-        num_search_beams=config.ph,
+        num_prediction_beams=config.ph,
+        num_search_beams=config.ph,  # New
         generation_max_length=config.ph,
-        # saving_optimizer=config.ph,
-        max_search_optim_loops=config.ph(float('inf')),
+        # # saving_optimizer=config.ph,
+        max_search_optim_loops=config.ph(float('inf')),  # New
 ):
-    filesys.asserts_conditional_exist(model_learning_dir_path, resuming)
+    if resuming is None:
+        resuming = os.path.exists(model_learning_dir_path)
+    else:
+        filesys.asserts_conditional_exist(model_learning_dir_path, resuming)
 
-    last_optim_dir_path = learning.get_last_optim_dir(model_learning_dir_path)
-    best_optim_dir_path = learning.get_best_optim_dir(model_learning_dir_path)
-    last_search_dir_path = learning.get_last_search_dir(model_learning_dir_path)
-    best_search_dir_path = learning.get_best_search_dir(model_learning_dir_path)
+    if resuming:
+        logger.info('Learning resumes with the directory "{model_learning_dir_path}"')
 
-    def get_init_optim_status():
-        return get_init_status(measures=optim_measures, update_unit='optimization')
+    search_dir_path = os.path.join(model_learning_dir_path, 'search')
+    optim_dir_path = os.path.join(model_learning_dir_path, 'optim')
+
+    search_cpm = learning.AcceleratedCheckpointManager(
+        checkpoint_loc_path=os.path.join(search_dir_path, 'checkpoint'),
+        symlink_glob_patterns=[os.path.join(search_dir_path, 'last'),
+                               os.path.join(search_dir_path, 'best')])
+    optim_cpm = learning.AcceleratedCheckpointManager(
+        checkpoint_loc_path=os.path.join(optim_dir_path, 'checkpoint'),
+        symlink_glob_patterns=[os.path.join(optim_dir_path, 'last'),
+                               os.path.join(optim_dir_path, 'best')])
 
     def get_init_search_status():
         return get_init_status(measures=search_measures, update_unit='search')
 
+    def get_init_optim_status():
+        return get_init_status(measures=optim_measures, update_unit='optimization')
+
     if resuming:
-        optim_status = dict(learning.load_status(last_optim_dir_path, default=get_init_optim_status()))
-        search_status = dict(learning.load_status(last_search_dir_path, default=get_init_search_status()))
+        search_status = learning.load_status(os.path.join(search_dir_path, 'last'), default=get_init_search_status())
+        optim_status = learning.load_status(os.path.join(optim_dir_path, 'last'), default=get_init_optim_status())
 
         assert search_status['last_update_num'] == search_status['best_update_num']
         assert optim_status['last_update_num'] == optim_status['best_update_num']
@@ -616,44 +647,79 @@ def run_search_train(
         assert search_status['last_update_num'] - 1 <= optim_status['last_update_num'] <= search_status['last_update_num']
         optim_first = optim_status['last_update_num'] + 1 == search_status['last_update_num']
     else:
-        optim_status = get_init_optim_status()
         search_status = get_init_search_status()
+        optim_status = get_init_optim_status()
         optim_first = False
 
-    def get_model_path():
-        if optim_status['last_update_num'] > 0:
-            return last_optim_dir_path
-        else:
-            return filesys.asserts_exist(pretrained_model_name_or_path)
+    weaksup_search_data_loader = config.accelerator.prepare_val_data_loader(make_data_loader(
+        encoded_dataset=encoded_weaksup_search_set,
+        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
+        pad_token_id=grammar.lf_tokenizer.pad_token_id,
+        batch_size=val_batch_size,
+        shuffle=False,
+    ))
 
-    def run_search():
-        search_result = search_to_collect(
-            grammar=grammar, compiler=compiler, model_path=get_model_path(),
-            devices=devices,
-            context=context, encoded_dataset=encoded_weaksup_search_set,
-            batch_size=search_batch_size, num_beams=num_search_beams,
+    def run_search(epoch):
+        model_path = (os.path.join(optim_dir_path, 'last', 'best') if optim_status['last_update_num'] > 0 else
+                      filesys.asserts_exist(pretrained_model_name_or_path))
+
+        model = learning.load_model(
+            model_path,
+            num_tokens=len(grammar.lf_tokenizer))
+        model.to(config.accelerator.device)
+
+        model = config.accelerator.prepare(model)
+
+        model.eval()
+
+        validation = validate(
+            grammar=grammar,
+            compiler=compiler,
+            model=model,
+            context=context,
+            data_loader=weaksup_search_data_loader,
+            batch_size=search_batch_size,
+            num_beams=num_prediction_beams,
             generation_max_length=generation_max_length,
-            constrained_decoding=constrained_decoding, using_arg_candidate=using_arg_candidate)
+            analyzing=False,
+            softmax_masking=softmax_masking,
+            constrained_decoding=constrained_decoding,
+            using_arg_candidate=using_arg_candidate,
+            evaluating=True,
+            using_oracle=True,
+            collecting_weaksup_examples=True,
+            strict_postprocessing=True,
+        )
 
-        with replace_dir_wlmp(last_search_dir_path) as temp_last_dir_path:
-            skip_if_not_wlmp(temp_last_dir_path)
+        performance = validation['performance']
 
-            learning.save_status(search_status, temp_last_dir_path)
-            learning.save_performance(search_result['performance'], temp_last_dir_path)
-            learning.save_weaksup_dataset(search_result['weaksup_examples'], temp_last_dir_path)
+        updating_best = update_status(search_status, performance=performance)
 
-        updating_best = update_status(search_status, performance=search_result['performance'])
+        logger.info(f'Search Update Number: {search_status["last_update_num"]} / Performance: {str(performance)}')
+
+        new_checkpoint_dir_path = search_cpm.get_new_checkpoint_path()
+        with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
+            learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
+
+            learning.save_performance(performance, temp_checkpoint_dir_path)
+            learning.save_weaksup_dataset(validation['weaksup_examples'], temp_checkpoint_dir_path)
+            learning.save_time_info(validation['time_info'], temp_checkpoint_dir_path)
+            learning.save_predictions(validation['predictions'], temp_checkpoint_dir_path)
+
+        last_dir_path = os.path.join(search_dir_path, 'last')
+        learning.make_symlink(new_checkpoint_dir_path, last_dir_path)
+        search_cpm.clean()
 
         if updating_best:
-            copy_dir_wlmp(last_search_dir_path, best_search_dir_path, replacing=True)
+            best_dir_path = os.path.join(search_dir_path, 'best')
+            learning.copy_symlink(last_dir_path, best_dir_path)
+            search_cpm.clean()
 
-        return updating_best
-
-    def run_optimization():
+    def run_optim():
         raise NotImplementedError
 
     if optim_first:
-        optim_updating_best = run_optimization()
+        optim_updating_best = run_optim()
     else:
         optim_updating_best = True
 
@@ -670,11 +736,12 @@ def run_search_train(
             break
 
         # Optimization
-        optim_updating_best = run_optimization()
+        import sys; sys.exit()  # not implemented yet
+        optim_updating_best = run_optim()
 
-        if not optim_updating_best:
-            logger.info('Early stopping after optimization')
-            break
+        # if not optim_updating_best:
+        #     logger.info('Early stopping after optimization')
+        #     break
 
     raise NotImplementedError
 
