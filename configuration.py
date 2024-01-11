@@ -84,7 +84,7 @@ def _is_valid_run_mode(run_mode):
 
 def _is_training_run_mode(run_mode):
     assert _is_valid_run_mode(config.run_mode)
-    return run_mode in ['train-default', 'train-for-multiple-decoding-strategies']
+    return run_mode in ['train-default', 'train-for-multiple-decoding-strategies', 'search-train']
 
 
 def _make_logger():
@@ -245,7 +245,7 @@ def _parse_cmd_args():
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
     parser.add_argument('--additional-config', dest='additional_config_modules', help='an additional config module(s) which can overwrite other configurations. When more than one module is passed, the modules are separated by commas.')
     parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of learning')
-    parser.add_argument('--model-checkpoint-dir', dest='model_checkpoint_dir_path', help='a path to the directory of a checkpoint')
+    parser.add_argument('--model-path', dest='model_path', help='a path to the directory of a checkpoint')
     parser.add_argument('--model-dir-name', dest='model_dir_name', help='the name of the directory of a model')
     # parser.add_argument('--run_mode', dest='run_mode', help='an execution run_mode', choices=['train', 'test'])
     parser.add_argument('--using-tqdm', dest='using_tqdm', type=parse_bool, default=True, help='whether using tqdm')

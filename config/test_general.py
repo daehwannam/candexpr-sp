@@ -25,7 +25,7 @@ def get_test_dir_path():
         test_dir_name = os.path.basename(configuration.config.model_learning_dir_path)
         test_dir_path = test_dir_name_to_path(test_dir_name)
     else:
-        assert 'model_checkpoint_dir_path' in configuration.config
+        assert 'model_path' in configuration.config
         parser = argparse.ArgumentParser(description='Testing a semantic parser')
         parser.add_argument('--test-dir-name', dest='test_dir_name', help='a name of the directory for test output')
         parser.add_argument('--test-dir', dest='test_dir_path', help='a path to the directory for test output')

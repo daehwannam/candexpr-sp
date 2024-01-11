@@ -12,8 +12,10 @@ from .learning import optim_measures, search_measures
 
 
 from dhnamlib.pylib import filesys
-# from dhnamlib.pylib.iteration import not_none_valued_dict
+from dhnamlib.pylib.iteration import not_none_valued_dict
 from dhnamlib.pylib.mllib.learning import get_init_status, update_status
+from dhnamlib.pylib.function import identity
+from dhnamlib.pylib.hflib.acceleration import broadcast_object
 
 
 MODEL_SYMLINK_NAME = 'model'
@@ -49,7 +51,7 @@ def run_train(
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         saving_optimizer=config.ph,
-        # weaksup_training=config.ph(False),
+        weaksup_learning=config.ph(False),
 ):
     if restarting:
         assert learning.is_finetuned(pretrained_model_name_or_path)
@@ -128,6 +130,20 @@ def run_train(
     # TODO: use accelerate.local_sgd.LocalSGD
     # https://huggingface.co/docs/accelerate/usage_guides/local_sgd
 
+    def to_ws_key(key):
+        """
+        Convert a key for strongly supervised learning to that of weakly supervised learning
+        """
+        assert key in {'utterance_token_ids', 'attention_mask', 'decoder_input_ids', 'labels'}
+        return 'ws_' + key
+
+    if weaksup_learning:
+        to_key = to_ws_key
+        compute_loss = learning.compute_nlml_loss
+    else:
+        to_key = identity
+        compute_loss = learning.compute_nll_loss
+
     for epoch in range(status['last_update_num'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
         model.train()
@@ -144,28 +160,30 @@ def run_train(
             # - `model.config.decoder_start_token_id` is the first id of output sequences.
             # - the order or decoder output tokens in a sequence: decoder_start_token_id, bos_token_id, others ...
             batched_input = dict(
-                input_ids=batch['utterance_token_ids'].to(config.accelerator.device),
-                attention_mask=batch['attention_mask'].to(config.accelerator.device),
-                decoder_input_ids=batch['decoder_input_ids'].to(config.accelerator.device))
+                input_ids=batch[to_key('utterance_token_ids')].to(config.accelerator.device),
+                attention_mask=batch[to_key('attention_mask')].to(config.accelerator.device),
+                decoder_input_ids=batch[to_key('decoder_input_ids')].to(config.accelerator.device))
 
             optimizer.zero_grad()
             batched_output = model(**batched_input)
 
             logits = batched_output['logits']
-            # labels = batch['labels'].to(device)
-            labels = batch['labels'].to(config.accelerator.device)
+            labels = batch[to_key('labels')].to(config.accelerator.device)
 
-            # if softmax_masking:
-            #     softmax_mask = batch['softmax_mask'].to(device)
-            # nll_mask = batch['nll_mask'].to(device)
             if softmax_masking:
+                assert not weaksup_learning
                 softmax_mask, nll_mask = learning.labels_to_masks(grammar, labels, batch['utterance_token_ids'])
             else:
                 softmax_mask = None
                 nll_mask = learning.labels_to_nll_mask(grammar, labels)
-            loss = learning.compute_loss(grammar, logits, labels,
-                                         softmax_mask=softmax_mask,
-                                         nll_mask=nll_mask)
+            group_lengths = batch.get('group_lengths', None)
+
+            loss = compute_loss(**not_none_valued_dict(
+                grammar=grammar, logits=logits, labels=labels,
+                softmax_mask=softmax_mask,
+                nll_mask=nll_mask,
+                group_lengths=group_lengths,
+            ))
 
             config.accelerator.backward(loss)
             if config.accelerator.sync_gradients:
@@ -364,7 +382,7 @@ def run_train_for_multiple_decoding_strategies(
             softmax_mask = None
             nll_mask = learning.labels_to_nll_mask(grammar, labels)
 
-            loss = learning.compute_loss(grammar, logits, labels,
+            loss = learning.compute_nll_loss(grammar, logits, labels,
                                          softmax_mask=softmax_mask,
                                          nll_mask=nll_mask)
 
@@ -460,7 +478,7 @@ def run_train_for_multiple_decoding_strategies(
 def run_test(
         *,
         model_learning_dir_path=config.ph(None),
-        model_checkpoint_dir_path=config.ph(None),
+        model_path=config.ph(None),
         model_dir_name=config.ph('best'),
         test_dir_path=config.ph,
         grammar=config.ph,
@@ -479,14 +497,14 @@ def run_test(
         analyzing=True,
         using_oracle=False,
 ):
-    if model_checkpoint_dir_path is None:
+    if model_path is None:
         # Check the default checkpoint path
         assert model_learning_dir_path is not None
         assert os.path.isdir(model_learning_dir_path), f'The learning directory {model_learning_dir_path} does not exist'
-        model_checkpoint_dir_path = os.path.join(model_learning_dir_path, model_dir_name, MODEL_SYMLINK_NAME)
-        assert os.path.isdir(model_checkpoint_dir_path), f'The checkpoint {model_checkpoint_dir_path} does not exist'
+        model_path = os.path.join(model_learning_dir_path, model_dir_name, MODEL_SYMLINK_NAME)
+        assert os.path.isdir(model_path), f'The checkpoint {model_path} does not exist'
     model = learning.load_model(
-        model_checkpoint_dir_path,
+        model_path,
         num_tokens=len(grammar.lf_tokenizer))
     model.to(config.accelerator.device)
 
@@ -538,7 +556,7 @@ def run_test(
 def run_oracle_test(
         *,
         # model_learning_dir_path=config.ph(None),
-        # model_checkpoint_dir_path=config.ph(None),
+        # model_path=config.ph(None),
         # test_dir_path=config.ph,
         # grammar=config.ph,
         # compiler=config.ph,
@@ -557,7 +575,7 @@ def run_oracle_test(
 ):
     run_test(
         # model_learning_dir_path=model_learning_dir_path,
-        # model_checkpoint_dir_path=model_checkpoint_dir_path,
+        # model_path=model_path,
         # test_dir_path=test_dir_path,
         # grammar=grammar,
         # compiler=compiler,
@@ -577,9 +595,9 @@ def run_oracle_test(
     )
 
 
-# @config
+@config
 def run_search_train(
-        pretrained_model_name_or_path=config.ph,
+        pretrained_model_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
         # # devices=config.ph,
@@ -611,13 +629,9 @@ def run_search_train(
         # # saving_optimizer=config.ph,
         max_search_optim_loops=config.ph(float('inf')),  # New
 ):
-    if resuming is None:
-        resuming = os.path.exists(model_learning_dir_path)
-    else:
-        filesys.asserts_conditional_exist(model_learning_dir_path, resuming)
-
+    filesys.asserts_conditional_exist(os.path.join(model_learning_dir_path, 'checkpoint'), resuming)
     if resuming:
-        logger.info('Learning resumes with the directory "{model_learning_dir_path}"')
+        logger.info(f'Learning resumes with the directory "{model_learning_dir_path}"')
 
     search_dir_path = os.path.join(model_learning_dir_path, 'search')
     optim_dir_path = os.path.join(model_learning_dir_path, 'optim')
@@ -655,21 +669,22 @@ def run_search_train(
         encoded_dataset=encoded_weaksup_search_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
-        batch_size=val_batch_size,
+        batch_size=search_batch_size,
         shuffle=False,
     ))
 
-    def run_search(epoch):
-        model_path = (os.path.join(optim_dir_path, 'last', 'best') if optim_status['last_update_num'] > 0 else
-                      filesys.asserts_exist(pretrained_model_name_or_path))
+    def get_latest_model_path():
+        return (os.path.join(optim_dir_path, 'last', 'best') if optim_status['last_update_num'] > 0 else
+                filesys.asserts_exist(pretrained_model_path))
 
-        model = learning.load_model(
-            model_path,
-            num_tokens=len(grammar.lf_tokenizer))
+    def load_latest_model():
+        model = learning.load_model(get_latest_model_path(), num_tokens=len(grammar.lf_tokenizer))
         model.to(config.accelerator.device)
-
         model = config.accelerator.prepare(model)
+        return model
 
+    def run_search():
+        model = load_latest_model()
         model.eval()
 
         validation = validate(
@@ -679,7 +694,7 @@ def run_search_train(
             context=context,
             data_loader=weaksup_search_data_loader,
             batch_size=search_batch_size,
-            num_beams=num_prediction_beams,
+            num_beams=num_search_beams,
             generation_max_length=generation_max_length,
             analyzing=False,
             softmax_masking=softmax_masking,
@@ -692,10 +707,9 @@ def run_search_train(
         )
 
         performance = validation['performance']
-
         updating_best = update_status(search_status, performance=performance)
 
-        logger.info(f'Search Update Number: {search_status["last_update_num"]} / Performance: {str(performance)}')
+        logger.info(f'Search update number: {search_status["last_update_num"]} / Performance: {str(performance)}')
 
         new_checkpoint_dir_path = search_cpm.get_new_checkpoint_path()
         with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
@@ -715,19 +729,71 @@ def run_search_train(
             learning.copy_symlink(last_dir_path, best_dir_path)
             search_cpm.clean()
 
+            logger.info('Best search result is updated')
+
+        return updating_best
+
     def run_optim():
-        raise NotImplementedError
+        temp_checkpoint_dir_path = broadcast_object(learning.mkdtemp(dir=os.path.join(optim_dir_path, 'checkpoint')))
+        
+        run_train(
+            pretrained_model_path=get_latest_model_path(),
+            grammar=grammar,
+            compiler=compiler,
+            logger=logger,
+            encoded_train_set=encoded_train_set,
+            encoded_val_set=encoded_val_set,
+            train_batch_size=train_batch_size,
+            val_batch_size=val_batch_size,
+            learning_rate=learning_rate,
+            adam_epsilon=adam_epsilon,
+            weight_decay=weight_decay,
+            num_train_epochs=num_train_epochs,
+            using_scheduler=using_scheduler,
+            num_warmup_epochs=num_warmup_epochs,
+            max_grad_norm=max_grad_norm,
+            patience=patience,
+            softmax_masking=softmax_masking,
+            constrained_decoding=constrained_decoding,
+            using_arg_candidate=using_arg_candidate,
+            model_learning_dir_path=temp_checkpoint_dir_path,
+            restarting=False,
+            context=context,
+            num_prediction_beams=num_prediction_beams,
+            generation_max_length=generation_max_length,
+            saving_optimizer=False,
+            weaksup_learning=True,
+        )
+
+        new_checkpoint_dir_path = optim_cpm.get_new_checkpoint_path()
+        learning.rename_dir(temp_checkpoint_dir_path, new_checkpoint_dir_path)
+
+        config.accelerator.wait_for_everyone()
+
+        performance = learning.load_performance(os.path.join(new_checkpoint_dir_path, 'best'))
+        updating_best = update_status(optim_status, performance=performance)
+
+        last_dir_path = os.path.join(optim_dir_path, 'last')
+        learning.make_symlink(new_checkpoint_dir_path, last_dir_path)
+        optim_cpm.clean()
+
+        logger.info(f'Optimization update number: {optim_status["last_update_num"]} / Performance: {str(performance)}')
+
+        if updating_best:
+            best_dir_path = os.path.join(optim_dir_path, 'best')
+            learning.copy_symlink(last_dir_path, best_dir_path)
+            optim_cpm.clean()
+
+            logger.info('Best optimization result is updated')
+
+        return updating_best
 
     if optim_first:
         optim_updating_best = run_optim()
     else:
         optim_updating_best = True
 
-    while True:
-        if optim_status['last_update_num'] < max_search_optim_loops:
-            logger.info('Maximum number of loops for search and optimization')
-            break
-
+    while optim_status['last_update_num'] < max_search_optim_loops:
         # Search
         search_updating_best = run_search()
 
@@ -736,14 +802,13 @@ def run_search_train(
             break
 
         # Optimization
-        import sys; sys.exit()  # not implemented yet
         optim_updating_best = run_optim()
 
         # if not optim_updating_best:
         #     logger.info('Early stopping after optimization')
         #     break
-
-    raise NotImplementedError
+    else:
+        logger.info('Maximum number of loops for search and optimization')
 
 
 if __name__ == '__main__':
@@ -757,6 +822,8 @@ if __name__ == '__main__':
         run_test(encoded_test_set=config.encoded_val_set, evaluating=True)
         # from dhnamlib.pylib.cProfiling import run_context
         # run_context('run_test(encoded_test_set=config.encoded_val_set, evaluating=True)', sort='cumtime')
+    elif config.run_mode == 'search-train':
+        run_search_train()
     elif config.run_mode == 'test-on-test-set':
         run_test(encoded_test_set=config.encoded_test_set, evaluating=False)
     elif config.run_mode == 'oracle-test-on-val-set':

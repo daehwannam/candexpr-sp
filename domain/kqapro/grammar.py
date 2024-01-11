@@ -129,15 +129,15 @@ class KoPLGrammar(Grammar):
     def iter_all_token_ids(self):
         return range(len(self.lf_tokenizer))
 
-    _INVALID_STATE = 'INVALID'
+    # _INVALID_STATE = 'INVALID'
 
-    @classmethod
-    def is_invalid_state(cls, state):
-        return state == cls._INVALID_STATE
+    # @classmethod
+    # def is_invalid_state(cls, state):
+    #     return state == cls._INVALID_STATE
 
-    @classmethod
-    def get_invalid_state(cls):
-        return cls._INVALID_STATE
+    # @classmethod
+    # def get_invalid_state(cls):
+    #     return cls._INVALID_STATE
 
     def let_dynamic_trie(self, dynamic_trie, using_spans_as_entities=None):
         if using_spans_as_entities is None:

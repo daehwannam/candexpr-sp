@@ -91,12 +91,13 @@ def validate(
 
     unwrapped_model = config.accelerator.unwrap_model(model)
 
-    # debug_batch_idx = -1
+    print('---- Remove debug code ----')
+    debug_batch_idx = -1
     for batch in config.utqdm(data_loader, **utqdm_kwargs):
-        # if debug_batch_idx > 5:
-        #     break
-        # else:
-        #     debug_batch_idx += 1
+        if debug_batch_idx > 5:
+            break
+        else:
+            debug_batch_idx += 1
 
         assert constrained_decoding or not softmax_masking
         if constrained_decoding:
@@ -161,7 +162,8 @@ def validate(
                 xns.all_answer_last_states.extend(answer_last_states)
 
         if collecting_weaksup_examples:
-            xns.all_utterance_token_id_seqs.extend(unpad_sequence(batch['utterance_token_ids'], grammar.lf_tokenizer.pad_token_id))
+            xns.all_utterance_token_id_seqs.extend(unpad_sequence(
+                batch['utterance_token_ids'].tolist(), grammar.lf_tokenizer.pad_token_id))
 
     assert len(pred_collector.predictions) == num_all_examples * num_return_sequences
 
@@ -244,7 +246,7 @@ def analyze(
         predicted_token_id_seqs, predictions, answers
 ):
     def get_action_seq(last_state):
-        if grammar.is_invalid_state(last_state):
+        if last_state is grammar.search_state_cls.INVALID:
             return None
         else:
             if last_state.tree.is_closed_root():
@@ -253,13 +255,13 @@ def analyze(
                 return None
 
     def get_tree_repr(last_state):
-        if grammar.is_invalid_state(last_state):
+        if last_state is grammar.search_state_cls.INVALID:
             return None
         else:
             return repr(last_state.tree)
 
     def get_expr_str(last_state, expr_key=None):
-        if grammar.is_invalid_state(last_state):
+        if last_state is grammar.search_state_cls.INVALID:
             return None
         else:
             if last_state.tree.is_closed_root():

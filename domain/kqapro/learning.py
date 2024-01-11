@@ -3,8 +3,9 @@ import os
 from itertools import chain
 from typing import List, Tuple, Callable
 import math
+import tempfile
 import warnings
-import json
+# import json
 from fractions import Fraction
 # import datetime
 # from shutil import copyfile
@@ -35,66 +36,6 @@ from dhnamlib.pylib.time import get_YmdHMSf
 from dhnamlib.pylib.context import must_skipped, skip_if_possible
 
 
-# _DEFAULT_CHECKPOINT_DIR_NAME = 'checkpoint'
-
-
-# @config.accelerator.within_local_main_process
-# def get_new_checkpoint_path(base_dir_path):
-#     # while True:
-#     #     time_str = get_YmdHMSf()
-#     #     checkpoint_dir_path = os.path.join(base_dir_path, 'checkpoint', time_str)
-#     #     if not os.path.exists(checkpoint_dir_path):
-#     #         break
-#     time_str = get_YmdHMSf()
-#     checkpoint_dir_path = os.path.join(base_dir_path, _DEFAULT_CHECKPOINT_DIR_NAME, time_str)
-#     assert not os.path.exists(checkpoint_dir_path)
-
-#     return checkpoint_dir_path
-
-
-# @deprecated
-# @config.accelerator.within_local_main_process
-# def make_checkpoint_dir(base_dir_path):
-#     # time_str = get_YmdHMSf()
-#     # # checkpoint_dir_path = os.path.join(base_dir_path, f'checkpoint-{time_str}')
-#     # checkpoint_dir_path = os.path.join(base_dir_path, 'checkpoint', time_str)
-#     checkpoint_dir_path = get_new_checkpoint_path(base_dir_path)
-#     # os.mkdir(checkpoint_dir_path)
-#     os.makedirs(checkpoint_dir_path)
-#     return checkpoint_dir_path
-
-
-# _DEFAULT_MODEL_DIR_NAME = 'model'
-
-
-# def is_checkpoint_in_use(checkpoint_dir_path):
-#     checkpoint_dir_abspath = os.path.abspath(checkpoint_dir_path)
-#     assert os.path.basename(filesys.get_parent_path(checkpoint_dir_abspath, depth=1)) == _DEFAULT_CHECKPOINT_DIR_NAME
-#     base_dir_path = filesys.get_parent_path(checkpoint_dir_abspath, depth=2)
-#     return filesys.any_matched_symlink(
-#         os.path.join(base_dir_path, '*', _DEFAULT_MODEL_DIR_NAME),
-#         checkpoint_dir_abspath
-#     )
-
-
-# @config.accelerator.within_local_main_process
-# def remove_checkpoint_unless_in_use(checkpoint_dir_path):
-#     if os.path.exists(checkpoint_dir_path):
-#         checkpoint_dir_realpath = os.path.realpath(checkpoint_dir_path)
-#         if not is_checkpoint_in_use(checkpoint_dir_realpath):
-#             shutil.rmtree(os.path.realpath(checkpoint_dir_realpath))
-
-
-# class _ReplaceResultDirectory(filesys._ReplaceDirectory):
-#     def __init__(self, dir_path):
-#         super().__init__(dir_path=dir_path, strict=False)
-#         self.old_checkpoint_dir_path = os.path.realpath(get_model_path(dir_path))
-
-#     def __exit__(self, exc_type, exc_value, exc_tb):
-#         super().__exit__(exc_type, exc_value, exc_tb)
-#         remove_checkpoint_unless_in_use(self.old_checkpoint_dir_path)
-
-
 skip_if_not_wlmp = skip_if_possible  # wlmp == within local main process
 replace_dir = curry(filesys.replace_dir)(strict=False) if config.accelerator.is_local_main_process else must_skipped
 prepare_dir = filesys.prepare_dir if config.accelerator.is_local_main_process else must_skipped
@@ -102,9 +43,8 @@ copy_dir = config.accelerator.within_local_main_process(curry(filesys.copy_dir)(
 mkloc_unless_exist = config.accelerator.within_local_main_process(filesys.mkloc_unless_exist)
 make_symlink = config.accelerator.within_local_main_process(filesys.make_symlink)
 copy_symlink = config.accelerator.within_local_main_process(curry(filesys.copy_symlink)(replacing=True))
-# replace_result_dir = _ReplaceResultDirectory if config.accelerator.is_local_main_process else must_skipped
-# # change_symlink = config.accelerator.within_local_main_process(curry(filesys.change_symlink)(strict=False))
-# save_config_info = config.accelerator.within_local_main_process(save_config_info)
+mkdtemp = config.accelerator.within_local_main_process(tempfile.mkdtemp)
+rename_dir = config.accelerator.within_local_main_process(os.rename)
 
 
 class AcceleratedCheckpointManager(CheckpointManager):
@@ -115,48 +55,6 @@ class AcceleratedCheckpointManager(CheckpointManager):
     @config.accelerator.within_local_main_process
     def clean(self):
         super().clean()
-
-
-# def get_last_dir_path(base_dir_path, dir_name='last'):
-#     last_dir_path = os.path.join(base_dir_path, dir_name)
-#     return last_dir_path
-
-
-# def get_best_dir_path(base_dir_path, dir_name='best'):
-#     return os.path.join(base_dir_path, dir_name)
-
-
-# def get_model_path(base_dir_path, dir_name=_DEFAULT_MODEL_DIR_NAME):
-#     return os.path.join(base_dir_path, dir_name)
-
-# def get_checkpoint_symlink_path(base_dir_path, symlink_name='checkpoint'):
-#     symlink_path = os.path.join(base_dir_path, symlink_name)
-#     assert os.path.islink(symlink_path)
-#     return symlink_path
-
-
-def get_search_dir_path(base_dir_path, dir_name='search'):
-    return os.path.join(base_dir_path, dir_name)
-
-
-def get_optim_dir_path(base_dir_path, dir_name='optim'):
-    return os.path.join(base_dir_path, dir_name)
-
-
-# def get_last_search_dir_path(base_dir_path, dir_name='last'):
-#     return os.path.join(get_search_dir_path(base_dir_path), dir_name)
-
-
-# def get_best_search_dir_path(base_dir_path, dir_name='best'):
-#     return os.path.join(get_search_dir_path(base_dir_path), dir_name)
-
-
-# def get_last_optim_dir_path(base_dir_path, dir_name='last'):
-#     return os.path.join(get_optim_dir_path(base_dir_path), dir_name)
-
-
-# def get_best_optim_dir_path(base_dir_path, dir_name='best'):
-#     return os.path.join(get_optim_dir_path(base_dir_path), dir_name)
 
 
 def is_finetuned(pretrained_model_name_or_path):
@@ -271,10 +169,10 @@ def token_id_seq_to_last_state(grammar, token_id_seq, ignoring_parsing_errors=Fa
 
         return last_state
     except NotFoundError:
-        return grammar.get_invalid_state()
+        return grammar.search_state_cls.INVALID
     except Exception as error:
         if ignoring_parsing_errors:
-            return grammar.get_invalid_state()
+            return grammar.search_state_cls.INVALID
         else:
             raise error
 
@@ -403,9 +301,12 @@ def labels_to_nll_mask(grammar, labels, except_eos=False):
     return nll_mask
 
 
-def compute_loss(grammar, logits, labels, softmax_mask=None, nll_mask=None):
-    assert logits.dim() == 3
-    assert labels.dim() == 2
+def compute_nll_loss(grammar, logits, labels, softmax_mask=None, nll_mask=None):
+    """
+    Compute a negative log likelihood loss
+    """
+    assert logits.dim() == 3    # batch, seq-length, vocab
+    assert labels.dim() == 2    # batch, seq-length
     assert logits.size()[:-1] == labels.size()
 
     # softmax_mask, nll_mask = labels_to_masks(grammar, labels)
@@ -420,6 +321,31 @@ def compute_loss(grammar, logits, labels, softmax_mask=None, nll_mask=None):
 
     loss = masked_nll.sum(dim=-1).mean(dim=0)
 
+    return loss
+
+
+def compute_nlml_loss(grammar, logits, labels, nll_mask, group_lengths):
+    """
+    Compute a negative log marginal likelihood loss, which is known as the maximum marginal likelihood (MML) loss
+    """
+    assert logits.dim() == 3    # batch, seq-length, vocab
+    assert labels.dim() == 2    # batch, seq-length
+    assert logits.size()[:-1] == labels.size()
+
+    log_probs = masked_log_softmax(logits, mask=None, dim=-1)
+    nll = nll_without_reduction(log_probs, labels)
+    masked_nll = nll * nll_mask.to(nll.device)
+    
+    example_nll = masked_nll.sum(dim=-1)  # nll for each example
+    example_weight = torch.zeros_like(example_nll)
+    assert example_weight.dim == 1
+    next_index = 0
+    for group_length in group_lengths:
+        prev_index = next_index
+        next_index = prev_index + group_length
+        example_weight[prev_index: next_index] = F.softmax(example_nll[prev_index: next_index], dim=0)
+
+    loss = (example_weight * example_nll).sum(dim=0)
     return loss
 
 
@@ -522,7 +448,7 @@ def token_id_seqs_to_last_states(
 
 def last_states_to_programs(grammar, compiler, last_states, tolerant=False, ignoring_compilation_errors=False):
     def state_to_program(state):
-        if grammar.is_invalid_state(state):
+        if state is grammar.search_state_cls.INVALID:
             return invalid_program
         else:
             if state.tree.is_closed_root():
@@ -591,26 +517,9 @@ search_measures = [get_measure('oracle_accuracy', True), get_measure('oracle_acc
 STATUS_FILE_NAME = 'status.json'
 
 
-class StatusJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Fraction):
-            return {'Fraction': (obj.numerator, obj.denominator)}
-        else:
-            return super().default(obj)
-
-
-def as_python_object_for_status(dic):
-    # https://stackoverflow.com/a/8230373
-    if isinstance(dic, dict) and len(dic) == 1 and 'Fraction' in dic:
-        return Fraction(*dic['Fraction'])
-    else:
-        return dic
-
-
 @config.accelerator.within_local_main_process
 def save_status(status, dir_path, file_name=STATUS_FILE_NAME):
-    filesys.json_pretty_save(status, os.path.join(dir_path, file_name),
-                             cls=StatusJSONEncoder)
+    filesys.extended_json_pretty_save(status, os.path.join(dir_path, file_name))
 
 
 NO_DEFAULT = object()
@@ -619,30 +528,30 @@ NO_DEFAULT = object()
 def load_status(dir_path, file_name=STATUS_FILE_NAME, default=NO_DEFAULT):
     file_path = os.path.join(dir_path, file_name)
     if os.path.isfile(file_path):
-        return filesys.json_load(os.path.join(dir_path, file_name),
-                                 object_hook=as_python_object_for_status)
+        return filesys.extended_json_load(os.path.join(dir_path, file_name))
     elif default is NO_DEFAULT:
         raise Exception(f'{file_path} does not exist')
     else:
         return default
 
 
-class PerformanceJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Fraction):
-            # return {'Fraction': (obj.numerator, obj.denominator)}
-            # return repr(obj)
-            return f'{obj.numerator}/{obj.denominator}'
-        else:
-            return super().default(obj)
-
-
 @config.accelerator.within_local_main_process
 def save_performance(performance, dir_path, file_name='performance.json'):
+    filesys.extended_json_pretty_save(performance, os.path.join(dir_path, file_name))
+
     updated_performance = dict(performance)
-    updated_performance.update(accuracy_percent='{:5.2f}'.format(performance['accuracy'] * 100))
-    filesys.json_pretty_save(updated_performance, os.path.join(dir_path, file_name),
-                             cls=PerformanceJSONEncoder)
+    if 'accuracy' in performance:
+        updated_performance.update(accuracy_percent='{:5.2f}'.format(performance['accuracy'] * 100))
+    if 'oracle_accuracy' in performance:
+        updated_performance.update(oracle_accuracy_percent='{:5.2f}'.format(performance['oracle_accuracy'] * 100))
+
+    name, extension = os.path.splitext(file_name)
+    new_file_name = f'{name}-visual.{extension}'
+    filesys.extended_json_pretty_save(updated_performance, os.path.join(dir_path, new_file_name))
+
+
+def load_performance(dir_path, file_name='performance.json'):
+    return filesys.extended_json_load(os.path.join(dir_path, file_name))
 
 
 @config.accelerator.within_local_main_process
@@ -694,7 +603,7 @@ class SequencePrefixProcessor:
         self.grammar = grammar
         self.dynamic_tries = dynamic_tries
 
-        # multiplying "2" is for caching both previous states and the next sates
+        #  Multiplying "2" is for caching both previous states and the next sates
         self.num_beams = num_beams
         self.cache_size = batch_size * num_beams * 2
         self.state_fifo_dict = FIFODict(self.cache_size)
@@ -719,30 +628,35 @@ class SequencePrefixProcessor:
             else:
                 if action_id_seq[:-1] in self.state_fifo_dict:
                     prev_state = self.state_fifo_dict[action_id_seq[:-1]]
-                    if self.grammar.is_invalid_state(prev_state):
-                        curr_state = self.grammar.get_invalid_state()
+                    if prev_state is self.grammar.search_state_cls.INVALID:
+                        curr_state = self.grammar.search_state_cls.INVALID
                     else:
                         next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
                 else:
-                    warnings.warn('cache_size is not enough')
-                    prev_state = None
-                    next_action_id_seq = action_id_seq
+                    breakpoint()
+                    raise Exception('cache_size is not enough')
+                    # warnings.warn('cache_size is not enough')
+                    # prev_state = None
+                    # next_action_id_seq = action_id_seq
 
                 if curr_state is None:
                     try:
                         action_seq = tuple(map(self.grammar.id_to_action, next_action_id_seq))
                     except NotFoundError:
-                        curr_state = self.grammar.get_invalid_state()
+                        curr_state = self.grammar.search_state_cls.INVALID
                     else:
                         try:
                             if prev_state.tree.is_closed_root():
-                                # breakpoint()
+                                # This block is entered when using beam search,
+                                # which examines all items in a beam,
+                                # whether the item has a valid or invalid state.
                                 assert self.num_beams > 1
-                                curr_state = self.grammar.get_invalid_state()
+                                curr_state = self.grammar.search_state_cls.INVALID
                             else:
-                                curr_state = self.grammar.search_state_cls.get_last_state(action_seq, initial_state=prev_state, verifying=True)
+                                curr_state = self.grammar.search_state_cls.get_last_state(
+                                    action_seq, initial_state=prev_state, verifying=True)
                         except InvalidCandidateActionError:
-                            curr_state = self.grammar.get_invalid_state()
+                            curr_state = self.grammar.search_state_cls.INVALID
 
             self.state_fifo_dict[action_id_seq] = curr_state
             return curr_state
@@ -781,7 +695,7 @@ class SequencePrefixProcessor:
                 with self.grammar.let_dynamic_trie(self.dynamic_tries[batch_id]):
                     curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
 
-                if self.grammar.is_invalid_state(curr_state):
+                if curr_state is self.grammar.search_state_cls.INVALID:
                     return True, []
                 elif curr_state.tree.is_closed_root():
                     return True, [self.EOS_TOKEN_ID]
@@ -816,7 +730,7 @@ class SequencePrefixProcessor:
                 assert bos_token_id == self.BOS_TOKEN_ID
                 curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
 
-                if self.grammar.is_invalid_state(curr_state):
+                if curr_state is self.grammar.search_state_cls.INVALID:
                     return []
                 elif curr_state.tree.is_closed_root():
                     return [self.EOS_TOKEN_ID]
@@ -861,7 +775,7 @@ class SequencePrefixProcessor:
                     assert bos_token_id == self.BOS_TOKEN_ID
                     curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
 
-                    if self.grammar.is_invalid_state(curr_state):
+                    if curr_state is self.grammar.search_state_cls.INVALID:
                         mask = self.candidate_ids_to_mask([])
                         cache_mask(mask)
                     elif curr_state.tree.is_closed_root():

@@ -111,7 +111,7 @@ python -m domain.kqapro.run --config config.train_for_multiple_decoding_strategi
 *** Learning form weak supervision
 **** Configuration for weakly-supervised learning
 #+begin_src sh
-COMMON_WS_MODEL_LEARNING_DIR_PATH=./model-instance/weakly-supervised-model
+COMMON_WS_MODEL_LEARNING_DIR_PATH=./model-instance/weakly-supervised-models
 #+end_src
 
 ***** Fully-constrained decoding
@@ -122,20 +122,21 @@ DECODING=full-constraints
 # DECODING=no-ac-no-dut
 # DECODING=no-constrained-decoding
 
-PRETRAINED_CHECKPOINT_PATH=$SS_MODEL_LEARNING_DIR_PATH/$DECODING:best
+PRETRAINED_MODEL_PATH=$SS_MODEL_LEARNING_DIR_PATH/$DECODING:best/model
 WS_MODEL_LEARNING_DIR_PATH=$COMMON_WS_MODEL_LEARNING_DIR_PATH/$DECODING
 #+end_src
 
 **** Training with question-answer pairs
 #+begin_src sh
-# TODO
+python -m domain.kqapro.run --config config.search_train \
+       --model-learning-dir $WS_MODEL_LEARNING_DIR_PATH
 #+end_src
 
 ** Testing
 - Testing on the validation set make a prediction file and an evaluation result.
 - Testing on the test set makes a prediction file without evaluation.
 
-*** Testing on the validation set with the default checkpoint path
+*** Testing on the validation set with the default model path
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 # e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
@@ -146,33 +147,33 @@ python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 # e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
-MODEL_DIR_NAME='full-constraints:best'
-# Options for MODEL_DIR_NAME: best, common:best, full-constraints:best, no-arg-candidate:best, no-ac-no-dut:best, no-constrained-decoding:best
+MODEL_DIR_NAME='full-constraints:best/model'
+# Options for MODEL_DIR_NAME: best/model, common:best/model, full-constraints:best/model, no-arg-candidate:best/model, no-ac-no-dut:best/model, no-constrained-decoding:best/model
 python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH --model-dir-name $MODEL_DIR_NAME
 #+end_src
 
-*** Testing on the test set with the default checkpoint path
+*** Testing on the test set with the default model path
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 # e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
 python -m domain.kqapro.run --config config.test_on_test_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src
 
-*** Testing with specifying checkpoint path and test directory path
+*** Testing with specifying a model path and test directory path
 #+begin_src sh
 TEST_CONFIG='config.test_on_test_set'  # or 'config.test_on_val_set'
-CHECKPOINT_PATH='path/to/checkpoint'
+MODEL_PATH='path/to/model'
 TEST_DIR_PATH='path/to/test-result'
-# e.g. TEST_DIR_PATH='./model-test/2023-07-19_01:17:04_094104_full-constraints:best'
+# e.g. TEST_DIR_PATH='./model-test/2023-07-19_01:17:04_094104_full-constraints:best/model'
 
-python -m domain.kqapro.run --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH
+python -m domain.kqapro.run --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
 #+end_src
 
 *** Testing with a specific decoding strategy
 #+begin_src sh
 TEST_CONFIG='config.test_on_test_set'  # or 'config.test_on_val_set'
-CHECKPOINT_PATH='path/to/checkpoint'
-COMMON_TEST_CMD="python -m domain.kqapro.run --config config.$TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH"
+MODEL_PATH='path/to/model'
+COMMON_TEST_CMD="python -m domain.kqapro.run --config config.$TEST_CONFIG --model-path $MODEL_PATH"
 
 # full constraints
 TEST_DIR_PATH='path/to/test-result:full-constraints'
@@ -192,19 +193,19 @@ $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFI
 *** Testing with disabling arg-candidate for an action
 #+begin_src sh
 TEST_CONFIG='config.test_on_val_set'  # or 'config.test_on_test_set'
-CHECKPOINT_PATH='path/to/checkpoint'
+MODEL_PATH='path/to/model'
 TEST_DIR_PATH='path/to/test-result'
-# e.g. TEST_DIR_PATH='./model-test/2023-07-19_01:17:04_094104_full-constraints:best'
+# e.g. TEST_DIR_PATH='./model-test/2023-07-19_01:17:04_094104_full-constraints:best/model'
 ACTION_NAME=keyword-concept     # or keyword-entity, keyword-relation, ...
 
-python -m domain.kqapro.run --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
+python -m domain.kqapro.run --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
 #+end_src
 
 *** Testing with oracle on the validation set
 #+begin_src sh
 TEST_CONFIG='config.oracle_test_on_val_set'
-CHECKPOINT_PATH='path/to/checkpoint'
-COMMON_TEST_CMD="python -m domain.kqapro.run --config config.$TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH"
+MODEL_PATH='path/to/model'
+COMMON_TEST_CMD="python -m domain.kqapro.run --config config.$TEST_CONFIG --model-path $MODEL_PATH"
 
 BEAM_CONFIG='config.additional.num_prediction_beams=4'
 
