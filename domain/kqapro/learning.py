@@ -41,6 +41,7 @@ prepare_dir = filesys.prepare_dir if config.accelerator.is_local_main_process el
 copy_dir = config.accelerator.within_local_main_process(curry(filesys.copy_dir)(replacing=True, deep=False))
 mkloc_unless_exist = config.accelerator.within_local_main_process(filesys.mkloc_unless_exist)
 make_symlink = config.accelerator.within_local_main_process(filesys.make_symlink)
+change_symlink = config.accelerator.within_local_main_process(curry(filesys.change_symlink)(strict=False))
 copy_symlink = config.accelerator.within_local_main_process(curry(filesys.copy_symlink)(replacing=True))
 mkdtemp = config.accelerator.within_local_main_process(tempfile.mkdtemp)
 rename_dir = config.accelerator.within_local_main_process(os.rename)

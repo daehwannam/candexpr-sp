@@ -129,7 +129,9 @@ WS_MODEL_LEARNING_DIR_PATH=$COMMON_WS_MODEL_LEARNING_DIR_PATH/$DECODING
 **** Training with question-answer pairs
 #+begin_src sh
 python -m domain.kqapro.run --config config.search_train \
-       --model-learning-dir $WS_MODEL_LEARNING_DIR_PATH
+       --model-learning-dir $WS_MODEL_LEARNING_DIR_PATH \
+       --pretrained-model-path $PRETRAINED_MODEL_PATH \
+       --resuming false
 #+end_src
 
 ** Testing

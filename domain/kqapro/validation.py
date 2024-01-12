@@ -91,13 +91,13 @@ def validate(
 
     unwrapped_model = config.accelerator.unwrap_model(model)
 
-    print('---- Remove debug code ----')
-    debug_batch_idx = -1
+    # print('---- Remove debug code ----')
+    # debug_batch_idx = -1
     for batch in config.utqdm(data_loader, **utqdm_kwargs):
-        if debug_batch_idx > 5:
-            break
-        else:
-            debug_batch_idx += 1
+        # if debug_batch_idx > 5:
+        #     break
+        # else:
+        #     debug_batch_idx += 1
 
         assert constrained_decoding or not softmax_masking
         if constrained_decoding:

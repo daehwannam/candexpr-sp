@@ -681,8 +681,10 @@ def run_search_train(
     ))
 
     def get_latest_model_path():
-        return (os.path.join(optim_dir_path, 'last', 'best') if optim_status['last_update_num'] > 0 else
-                filesys.asserts_exist(pretrained_model_path))
+        if optim_status['last_update_num'] > 0:
+            return os.path.join(optim_dir_path, 'last', 'best', MODEL_SYMLINK_NAME)
+        else:
+            return filesys.asserts_exist(pretrained_model_path)
 
     def load_latest_model():
         model = learning.load_model(get_latest_model_path(), num_tokens=len(grammar.lf_tokenizer))
@@ -732,7 +734,7 @@ def run_search_train(
             learning.save_predictions(validation['predictions'], temp_checkpoint_dir_path)
 
         last_dir_path = os.path.join(search_dir_path, 'last')
-        learning.make_symlink(new_checkpoint_dir_path, last_dir_path)
+        learning.change_symlink(new_checkpoint_dir_path, last_dir_path)
         search_cpm.clean()
 
         if updating_best:
@@ -748,10 +750,12 @@ def run_search_train(
         config.accelerator.wait_for_everyone()  # before loading encoded_weaksup_set
         encoded_weaksup_set = load_latest_encoded_weaksup_set()
 
-        checkpoint_loc_path = os.path.join(optim_dir_path, 'checkpoint')
-        learning.mkloc_unless_exist(checkpoint_loc_path)
-        temp_checkpoint_dir_path = broadcast_object(learning.mkdtemp(dir=checkpoint_loc_path))
-        
+        new_checkpoint_dir_path = broadcast_object(optim_cpm.get_new_checkpoint_path())
+
+        # checkpoint_loc_path = os.path.join(optim_dir_path, 'checkpoint')
+        # learning.mkloc_unless_exist(checkpoint_loc_path)
+        # temp_checkpoint_dir_path = broadcast_object(learning.mkdtemp(dir=checkpoint_loc_path))
+
         run_train(
             pretrained_model_name_or_path=get_latest_model_path(),
             grammar=grammar,
@@ -772,7 +776,7 @@ def run_search_train(
             softmax_masking=softmax_masking,
             constrained_decoding=constrained_decoding,
             using_arg_candidate=using_arg_candidate,
-            model_learning_dir_path=temp_checkpoint_dir_path,
+            model_learning_dir_path=new_checkpoint_dir_path,
             restarting=False,
             context=context,
             num_prediction_beams=num_prediction_beams,
@@ -781,15 +785,15 @@ def run_search_train(
             weaksup_learning=True,
         )
 
-        new_checkpoint_dir_path = optim_cpm.get_new_checkpoint_path()
-        learning.rename_dir(temp_checkpoint_dir_path, new_checkpoint_dir_path)
+        # new_checkpoint_dir_path = optim_cpm.get_new_checkpoint_path()
+        # learning.rename_dir(temp_checkpoint_dir_path, new_checkpoint_dir_path)
 
         config.accelerator.wait_for_everyone()  # before loading performance
         performance = learning.load_performance(os.path.join(new_checkpoint_dir_path, 'best'))
         updating_best = update_status(optim_status, performance=performance)
 
         last_dir_path = os.path.join(optim_dir_path, 'last')
-        learning.make_symlink(new_checkpoint_dir_path, last_dir_path)
+        learning.change_symlink(new_checkpoint_dir_path, last_dir_path)
         optim_cpm.clean()
 
         logger.info(f'Optimization update number: {optim_status["last_update_num"]} / Performance: {str(performance)}')

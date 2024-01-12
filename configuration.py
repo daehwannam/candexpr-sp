@@ -144,7 +144,7 @@ def _get_git_hash():
 
 def _get_accelerator():
     # kwargs = dict(split_batches=True, even_batches=False)
-    kwargs = dict(split_batches=False, even_batches=False)
+    kwargs = dict(split_batches=False, even_batches=True)  # default options for Accelerator
     xaccelerator = XAccelerator(**kwargs)
 
     if xaccelerator.accelerating:
@@ -325,6 +325,7 @@ def _config_to_json_dict(config):
                 if not isinstance(value, (LazyEval,)))
 
 
+@config.accelerator.within_local_main_process
 def save_config_info(dir_path):
     json_dict = dict(config.items())
     config_info_path = get_new_path_with_number(
