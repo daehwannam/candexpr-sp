@@ -59,9 +59,9 @@ def make_collate(decoder_start_token_id, pad_token_id):
         if 'action_id_seq_group' in batched_example:
             action_id_seq_group_len = tuple(map(len, batched_example['action_id_seq_group']))
             ws_utterance_token_ids = LazyEval(lambda: make_batched_long_tensor(tuple(itertools.chain(
-                [token_id_seq] * group_len
-                for token_id_seq, group_len in zip(batched_example['utterance_token_ids'],
-                                                   action_id_seq_group_len)))))
+                *([token_id_seq] * group_len
+                  for token_id_seq, group_len in zip(batched_example['utterance_token_ids'],
+                                                     action_id_seq_group_len))))))
             ws_attention_mask = LazyEval(lambda: id_tensor_to_mask(ws_utterance_token_ids.get(), pad_token_id))
 
             _all_action_id_seq_group = make_batched_long_tensor(tuple(itertools.chain(*batched_example['action_id_seq_group'])))

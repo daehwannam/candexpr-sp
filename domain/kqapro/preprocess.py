@@ -314,7 +314,7 @@ def prepare_encoded_weaksup_pretraining_set(
     num_used_train_examples = round(len(full_dataset) * percent / 100)
 
     pretraining_dataset = extract_dataset_portion(
-        full_dataset,
+        shuffle_dataset(full_dataset),
         percent=percent,
         expected_dataset_size=num_used_train_examples)
 

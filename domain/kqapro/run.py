@@ -1,6 +1,8 @@
 
 import os
 # import warnings
+import glob
+
 import torch
 
 from configuration import config
@@ -176,7 +178,7 @@ def run_train(
             else:
                 softmax_mask = None
                 nll_mask = learning.labels_to_nll_mask(grammar, labels)
-            group_lengths = batch.get('group_lengths', None)
+            group_lengths = batch.get('action_id_seq_group_len', None)
 
             loss = compute_loss(**not_none_valued_dict(
                 grammar=grammar, logits=logits, labels=labels,
@@ -602,7 +604,7 @@ def run_search_train(
         compiler=config.ph,
         # # devices=config.ph,
         logger=config.ph,
-        encoded_train_set=config.ph,
+        # encoded_train_set=config.ph,
         encoded_val_set=config.ph,
         encoded_weaksup_search_set=config.ph,  # New
         train_batch_size=config.ph,
@@ -629,12 +631,17 @@ def run_search_train(
         # # saving_optimizer=config.ph,
         max_search_optim_loops=config.ph(float('inf')),  # New
 ):
-    filesys.asserts_conditional_exist(os.path.join(model_learning_dir_path, 'checkpoint'), resuming)
     if resuming:
         logger.info(f'Learning resumes with the directory "{model_learning_dir_path}"')
 
     search_dir_path = os.path.join(model_learning_dir_path, 'search')
     optim_dir_path = os.path.join(model_learning_dir_path, 'optim')
+
+    filesys.asserts_conditional_exist(
+        os.path.join(search_dir_path, 'last'), resuming,
+        f'When resuming == True, {model_learning_dir_path} should contain previous result of learning',
+        f'When resuming == False, {model_learning_dir_path} should not contain any previous result of learning',
+    )
 
     search_cpm = learning.AcceleratedCheckpointManager(
         checkpoint_loc_path=os.path.join(search_dir_path, 'checkpoint'),
@@ -683,7 +690,11 @@ def run_search_train(
         model = config.accelerator.prepare(model)
         return model
 
+    def load_latest_encoded_weaksup_set():
+        return learning.load_weaksup_dataset(os.path.join(search_dir_path, 'last'))
+
     def run_search():
+        config.accelerator.wait_for_everyone()  # before loading model
         model = load_latest_model()
         model.eval()
 
@@ -734,14 +745,19 @@ def run_search_train(
         return updating_best
 
     def run_optim():
-        temp_checkpoint_dir_path = broadcast_object(learning.mkdtemp(dir=os.path.join(optim_dir_path, 'checkpoint')))
+        config.accelerator.wait_for_everyone()  # before loading encoded_weaksup_set
+        encoded_weaksup_set = load_latest_encoded_weaksup_set()
+
+        checkpoint_loc_path = os.path.join(optim_dir_path, 'checkpoint')
+        learning.mkloc_unless_exist(checkpoint_loc_path)
+        temp_checkpoint_dir_path = broadcast_object(learning.mkdtemp(dir=checkpoint_loc_path))
         
         run_train(
-            pretrained_model_path=get_latest_model_path(),
+            pretrained_model_name_or_path=get_latest_model_path(),
             grammar=grammar,
             compiler=compiler,
             logger=logger,
-            encoded_train_set=encoded_train_set,
+            encoded_train_set=encoded_weaksup_set,
             encoded_val_set=encoded_val_set,
             train_batch_size=train_batch_size,
             val_batch_size=val_batch_size,
@@ -768,8 +784,7 @@ def run_search_train(
         new_checkpoint_dir_path = optim_cpm.get_new_checkpoint_path()
         learning.rename_dir(temp_checkpoint_dir_path, new_checkpoint_dir_path)
 
-        config.accelerator.wait_for_everyone()
-
+        config.accelerator.wait_for_everyone()  # before loading performance
         performance = learning.load_performance(os.path.join(new_checkpoint_dir_path, 'best'))
         updating_best = update_status(optim_status, performance=performance)
 

@@ -32,7 +32,6 @@ from dhnamlib.pylib.torchlib.dnn import (
     candidate_ids_to_mask, lengths_to_mask, masked_log_softmax, nll_without_reduction, pad_sequence, unpad_sequence)
 from dhnamlib.pylib.mllib.learning import get_measure, CheckpointManager
 from dhnamlib.pylib.data_structure import FIFODict
-from dhnamlib.pylib.time import get_YmdHMSf
 from dhnamlib.pylib.context import must_skipped, skip_if_possible
 
 
@@ -338,14 +337,16 @@ def compute_nlml_loss(grammar, logits, labels, nll_mask, group_lengths):
     
     example_nll = masked_nll.sum(dim=-1)  # nll for each example
     example_weight = torch.zeros_like(example_nll)
-    assert example_weight.dim == 1
+    assert example_weight.dim() == 1
     next_index = 0
     for group_length in group_lengths:
         prev_index = next_index
         next_index = prev_index + group_length
         example_weight[prev_index: next_index] = F.softmax(example_nll[prev_index: next_index], dim=0)
 
-    loss = (example_weight * example_nll).sum(dim=0)
+    num_examples = len(group_lengths)
+    loss = (example_weight * example_nll).sum(dim=0) / num_examples
+
     return loss
 
 
@@ -546,7 +547,7 @@ def save_performance(performance, dir_path, file_name='performance.json'):
         updated_performance.update(oracle_accuracy_percent='{:5.2f}'.format(performance['oracle_accuracy'] * 100))
 
     name, extension = os.path.splitext(file_name)
-    new_file_name = f'{name}-visual.{extension}'
+    new_file_name = f'{name}-visual{extension}'
     filesys.extended_json_pretty_save(updated_performance, os.path.join(dir_path, new_file_name))
 
 
