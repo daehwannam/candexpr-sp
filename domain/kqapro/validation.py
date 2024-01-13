@@ -193,7 +193,7 @@ def validate(
                     action_id_seq_group=consistent_action_id_seq_groups)
                 if len(example['action_id_seq_group']) > 0
             )
-            overall_weaksup_examples = alternate_object(weaksup_examples, batch_size=batch_size)
+            overall_weaksup_examples = sorted(gather_object(weaksup_examples), key=lambda example: example['example_id'])
     else:
         overall_performance = None
 
@@ -228,7 +228,9 @@ def validate(
     overall_decoding_time = max(gather_object([all_decoding_time]))
     num_overall_examples = sum(gather_object([num_all_examples]))
 
-    overall_predictions = alternate_object(pred_collector.predictions, batch_size=batch_size)
+    overall_predictions = alternate_object(
+        pred_collector.predictions,
+        batch_size=batch_size * num_return_sequences)
 
     validation = dict(not_none_valued_pairs(
         performance=overall_performance,
