@@ -730,6 +730,7 @@ def run_search_train(
         with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
             learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
 
+            learning.save_status(search_status, temp_checkpoint_dir_path)
             learning.save_performance(performance, temp_checkpoint_dir_path)
             learning.save_weaksup_dataset(validation['weaksup_examples'], temp_checkpoint_dir_path)
             learning.save_time_info(validation['time_info'], temp_checkpoint_dir_path)
@@ -793,8 +794,11 @@ def run_search_train(
         # learning.rename_dir(temp_checkpoint_dir_path, new_checkpoint_dir_path)
 
         config.accelerator.wait_for_everyone()  # before loading performance
+
         performance = learning.load_performance(os.path.join(new_checkpoint_dir_path, 'best'))
         updating_best = update_status(optim_status, performance=performance)
+
+        learning.save_status(optim_status, new_checkpoint_dir_path)  # save the status after update
 
         last_dir_path = os.path.join(optim_dir_path, 'last')
         learning.change_symlink(new_checkpoint_dir_path, last_dir_path)

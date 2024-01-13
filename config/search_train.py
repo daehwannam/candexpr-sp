@@ -14,7 +14,8 @@ from .train_general import config as train_general_config
 search_config = Environment(
     search_batch_size=8,
     num_search_beams=8,
-    max_search_optim_loops=float('inf'),
+    # max_search_optim_loops=float('inf'),
+    max_search_optim_loops=16,
 )
 
 

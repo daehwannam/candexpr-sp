@@ -109,29 +109,55 @@ python -m domain.kqapro.run --config config.train_for_multiple_decoding_strategi
 #+end_src
 
 *** Learning form weak supervision
-**** Configuration for weakly-supervised learning
+**** Configuration for Multiple GPUs
 #+begin_src sh
-COMMON_WS_MODEL_LEARNING_DIR_PATH=./model-instance/weakly-supervised-models
+# 4 GPUs
+export CUDA_VISIBLE_DEVICES=$(seq -s , 0 3)  # 0,1,2,3
+NUM_GPUS=$(($(echo $CUDA_VISIBLE_DEVICES | tr -cd , | wc -c) + 1))  # 4
+ACCELERATE_CONFIG="accelerate/${NUM_GPUS}gpus.yaml"
 #+end_src
 
+**** Configuration for a decoding method
 ***** Fully-constrained decoding
 #+begin_src sh
-# decoding strategies: ['full-constraints', 'no-arg-candidate', 'no-ac-no-dut', 'no-constrained-decoding']
 DECODING=full-constraints
-# DECODING=no-arg-candidate
-# DECODING=no-ac-no-dut
-# DECODING=no-constrained-decoding
+ADDITIONAL_OPTIONS=''
+#+end_src
+
+***** Without arg-candidate
+#+begin_src sh
+DECODING=no-arg-candidate
+ADDITIONAL_OPTIONS='--additional-config config.additional.using_arg_candidate=False'
+#+end_src
+
+***** Without arg-candidate and without union types
+#+begin_src sh
+DECODING=no-ac-no-dut
+ADDITIONAL_OPTIONS='--additional-config config.additional.using_arg_candidate=False|config.additional.using_distinctive_union_types=False'
+#+end_src
+
+***** Without any constrained decoding
+#+begin_src sh
+DECODING=no-constrained-decoding
+ADDITIONAL_OPTIONS='--additional-config config.additional.constrained_decoding=False'
+#+end_src
+
+**** Training with question-answer pairs on 4 GPUs
+#+begin_src sh
+SS_MODEL_LEARNING_DIR_PATH=./model-instance/strongly-supervised-models
+COMMON_WS_MODEL_LEARNING_DIR_PATH=./model-instance/weakly-supervised-models
 
 PRETRAINED_MODEL_PATH=$SS_MODEL_LEARNING_DIR_PATH/$DECODING:best/model
 WS_MODEL_LEARNING_DIR_PATH=$COMMON_WS_MODEL_LEARNING_DIR_PATH/$DECODING
-#+end_src
 
-**** Training with question-answer pairs
-#+begin_src sh
-python -m domain.kqapro.run --config config.search_train \
-       --model-learning-dir $WS_MODEL_LEARNING_DIR_PATH \
-       --pretrained-model-path $PRETRAINED_MODEL_PATH \
-       --resuming false
+accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG \
+           --main_process_port $(shuf -i 49152–65535 -n 1) \
+           -m domain.kqapro.run --using-tqdm false \
+           --config config.search_train \
+           --model-learning-dir $WS_MODEL_LEARNING_DIR_PATH \
+           --pretrained-model-path $PRETRAINED_MODEL_PATH \
+           --resuming false \
+           $ADDITIONAL_OPTIONS
 #+end_src
 
 ** Testing
@@ -251,15 +277,6 @@ TEST_DIR_NAME='YOUR-TEST-DIRECTORY-NAME'
 # e.g. TEST_DIR_NAME=2023-07-15_10:10:24_916400#0
 PREDICTION_FILE_PATH="./model-test/$TEST_DIR_NAME/predictions.txt"
 python -m kqapro.evaluate --train $TRAIN_DATA_SET_PATH --test $TEST_DATA_SET_PATH --pred $PREDICTION_FILE_PATH
-#+end_src
-
-** Using multi-GPUs with Accelerate
-#+begin_src sh
-export CUDA_VISIBLE_DEVICES=$(seq -s , 0 3)  # 0,1,2,3
-NUM_GPUS=$(($(echo $CUDA_VISIBLE_DEVICES | tr -cd , | wc -c) + 1))  # 4
-ACCELERATE_CONFIG="accelerate/${NUM_GPUS}gpus.yaml"
-RUN_OPTIONS="--config config.train_default"
-accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG -m domain.kqapro.run $RUN_OPTIONS
 #+end_src
 
 * Acknowledgements
