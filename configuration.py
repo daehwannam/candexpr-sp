@@ -7,7 +7,7 @@ import shutil
 from functools import lru_cache
 from accelerate.utils.dataclasses import DistributedType
 
-from dhnamlib.pylib.context import Environment, LazyEval
+from dhnamlib.pylib.context import Environment, LazyEval, suppress_stderr, contextless
 # from dhnamlib.pylib.decoration import Register
 from dhnamlib.pylib.decoration import variable
 from dhnamlib.pylib.filesys import (
@@ -63,6 +63,11 @@ if _DEBUG:
 else:
     _context_cls = KoPLDebugContext
     _default_config_module_name = None
+
+
+def _make_context():
+    with (contextless if config.using_tqdm else suppress_stderr)():
+        return _context_cls(config.kb)
 
 def _make_grammar():
     from domain.kqapro.grammar import KoPLGrammar
@@ -164,7 +169,8 @@ _default_config = Environment(
 
     kb=LazyEval(lambda: json_load(_kb_file_path)),
     # context=LazyEval(lambda: _context_cls(apply_recursively(config.kb))),
-    context=LazyEval(lambda: _context_cls(config.kb)),
+    # context=LazyEval(lambda: _context_cls(config.kb)),
+    context=LazyEval(_make_context),
     max_num_program_iterations=200000,
 
     raw_train_set=LazyEval(lambda: json_load(_train_set_file_path)),
