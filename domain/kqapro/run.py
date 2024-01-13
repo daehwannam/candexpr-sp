@@ -700,6 +700,8 @@ def run_search_train(
         model = load_latest_model()
         model.eval()
 
+        logger.info('Search starts')
+
         validation = validate(
             grammar=grammar,
             compiler=compiler,
@@ -755,6 +757,8 @@ def run_search_train(
         # checkpoint_loc_path = os.path.join(optim_dir_path, 'checkpoint')
         # learning.mkloc_unless_exist(checkpoint_loc_path)
         # temp_checkpoint_dir_path = broadcast_object(learning.mkdtemp(dir=checkpoint_loc_path))
+
+        logger.info('Optimization starts')
 
         run_train(
             pretrained_model_name_or_path=get_latest_model_path(),
