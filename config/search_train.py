@@ -24,7 +24,11 @@ optim_config = Environment(
     train_general_config.items(),
 
     # Updated values
-    num_train_epochs=16,
+    num_train_epochs=8,
+    train_batch_size=8,
+    val_batch_size=64,
+    using_scheduler=False,
+    learning_rate=2e-5,
 )
 
 
