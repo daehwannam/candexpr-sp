@@ -17,6 +17,7 @@ PRETRAINED_MODEL_PATH=$SS_MODEL_LEARNING_DIR_PATH/$DECODING:best/model
 WS_MODEL_LEARNING_DIR_PATH=$COMMON_WS_MODEL_LEARNING_DIR_PATH/$DECODING
 
 accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG \
+           --main_process_port $(shuf -i 49152-65535 -n 1) \
            -m domain.kqapro.run --using-tqdm false \
            --config config.search_train \
            --model-learning-dir $WS_MODEL_LEARNING_DIR_PATH \

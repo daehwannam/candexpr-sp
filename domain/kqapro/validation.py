@@ -165,6 +165,8 @@ def validate(
             xns.all_utterance_token_id_seqs.extend(unpad_sequence(
                 batch['utterance_token_ids'].tolist(), grammar.lf_tokenizer.pad_token_id))
 
+    config.accelerator.wait_for_everyone()
+
     assert len(pred_collector.predictions) == num_all_examples * num_return_sequences
 
     if evaluating:
