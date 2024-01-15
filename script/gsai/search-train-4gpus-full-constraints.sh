@@ -3,6 +3,8 @@
 source /home/dhnam/program/miniconda3/etc/profile.d/conda.sh
 conda activate kqapro
 
+export NCCL_P2P_LEVEL=NVL
+
 export CUDA_VISIBLE_DEVICES=$(seq -s , 0 3)  # 0,1,2,3
 NUM_GPUS=$(($(echo $CUDA_VISIBLE_DEVICES | tr -cd , | wc -c) + 1))  # 4
 ACCELERATE_CONFIG="accelerate/${NUM_GPUS}gpus.yaml"

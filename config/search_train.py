@@ -11,11 +11,15 @@ from .train_general import get_model_learning_dir_path
 from .train_general import config as train_general_config
 
 
+common_config = Environment(
+    # max_search_optim_loops=float('inf'),
+    max_search_optim_loops=16,
+)
+
+
 search_config = Environment(
     search_batch_size=8,
     num_search_beams=8,
-    # max_search_optim_loops=float('inf'),
-    max_search_optim_loops=16,
 )
 
 
@@ -43,6 +47,7 @@ def parse_args():
 
 config = Environment(not_none_valued_pairs(
     itertools.chain(
+        common_config.items(),
         search_config.items(),
         optim_config.items(),
         parse_args().items()
