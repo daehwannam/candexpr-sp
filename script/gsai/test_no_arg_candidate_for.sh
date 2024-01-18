@@ -13,5 +13,5 @@ TEST_DIR_PATH="./model-test-keep/test-on-val:${TEST_DIR_TAG}:no-arg-candidate:${
 
 
 
-python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
-# echo "python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME"
+python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --extra-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
+# echo "python -m domain.kqapro.run --using-tqdm false --config $TEST_CONFIG --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --extra-config config.additional.no_arg_candidate --no-arg-candidate-for $ACTION_NAME"

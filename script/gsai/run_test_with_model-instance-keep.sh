@@ -36,17 +36,17 @@ for dir in $DIRS; do
 
         if [ $decoding == 'no-arg-candidate:best' ]; then
             # echo $decoding
-            additional_config='--additional-config config.additional.using_arg_candidate=False'
-            additional_config_b4='--additional-config config.additional.using_arg_candidate=False_and_b=4'
+            additional_config='--extra-config config.additional.using_arg_candidate=False'
+            additional_config_b4='--extra-config config.additional.using_arg_candidate=False_and_b=4'
             # echo $additional_config
         elif [ $decoding == 'no-constrained-decoding:best' ]; then
             # echo $decoding
-            additional_config='--additional-config config.additional.constrained_decoding=False'
-            additional_config_b4='--additional-config config.additional.constrained_decoding=False_and_b=4'
+            additional_config='--extra-config config.additional.constrained_decoding=False'
+            additional_config_b4='--extra-config config.additional.constrained_decoding=False_and_b=4'
             # echo $additional_config
         else
             additional_config=''
-            additional_config_b4='--additional-config config.additional.num_prediction_beams=4'
+            additional_config_b4='--extra-config config.additional.num_prediction_beams=4'
             # echo $decoding
         fi
         # beam size = 1

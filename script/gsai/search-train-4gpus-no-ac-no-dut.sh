@@ -10,7 +10,7 @@ NUM_GPUS=$(($(echo $CUDA_VISIBLE_DEVICES | tr -cd , | wc -c) + 1))  # 4
 ACCELERATE_CONFIG="accelerate/${NUM_GPUS}gpus.yaml"
 
 DECODING=no-ac-no-dut
-ADDITIONAL_OPTIONS='--additional-config config.additional.using_arg_candidate=False|config.additional.using_distinctive_union_types=False'
+ADDITIONAL_OPTIONS='--extra-config config.additional.using_arg_candidate=False|config.additional.using_distinctive_union_types=False'
 
 SS_MODEL_LEARNING_DIR_PATH=./model-instance-keep/20240112-strongly-supervised-models
 COMMON_WS_MODEL_LEARNING_DIR_PATH=./model-instance/20240112-weakly-supervised-models

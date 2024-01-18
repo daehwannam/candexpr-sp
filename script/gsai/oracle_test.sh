@@ -21,24 +21,24 @@ for BEAM_SIZE in '4'; do
     CHECKPOINT_PATH="${LEARNING_DIR}/full-constraints:best"
     TEST_DIR_PATH="model-test-keep/20231122-oracle/beam-${BEAM_SIZE}/full-constraints"
     ADDITIONAL_CONFIG="${BEAM_CONFIG}"
-    TEST_CMD="python -m domain.kqapro.run --config config.oracle_test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG"
+    TEST_CMD="python -m domain.kqapro.run --config config.oracle_test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --extra-config $ADDITIONAL_CONFIG"
     sbatch $SBATCH_SCRIPT $TEST_CMD
 
     CHECKPOINT_PATH="${LEARNING_DIR}/no-arg-candidate:best"
     TEST_DIR_PATH="model-test-keep/20231122-oracle/beam-${BEAM_SIZE}/no-arg-candidate"
     ADDITIONAL_CONFIG="${BEAM_CONFIG}|config.additional.using_arg_candidate=False"
-    TEST_CMD="python -m domain.kqapro.run --config config.oracle_test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG"
+    TEST_CMD="python -m domain.kqapro.run --config config.oracle_test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --extra-config $ADDITIONAL_CONFIG"
     sbatch $SBATCH_SCRIPT $TEST_CMD
 
     CHECKPOINT_PATH="${LEARNING_DIR}/no-ac-no-dut:best"
     TEST_DIR_PATH="model-test-keep/20231122-oracle/beam-${BEAM_SIZE}/no-ac-no-dut"
     ADDITIONAL_CONFIG="${BEAM_CONFIG}|config.additional.using_arg_candidate=False|config.additional.using_distinctive_union_types=False"
-    TEST_CMD="python -m domain.kqapro.run --config config.oracle_test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG"
+    TEST_CMD="python -m domain.kqapro.run --config config.oracle_test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --extra-config $ADDITIONAL_CONFIG"
     sbatch $SBATCH_SCRIPT $TEST_CMD
 
     CHECKPOINT_PATH="${LEARNING_DIR}/no-constrained-decoding:best"
     TEST_DIR_PATH="model-test-keep/20231122-oracle/beam-${BEAM_SIZE}/no-constrained-decoding"
     ADDITIONAL_CONFIG="${BEAM_CONFIG}|config.additional.constrained_decoding=False"
-    TEST_CMD="python -m domain.kqapro.run --config config.oracle_test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --additional-config $ADDITIONAL_CONFIG"
+    TEST_CMD="python -m domain.kqapro.run --config config.oracle_test_on_val_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir $TEST_DIR_PATH --extra-config $ADDITIONAL_CONFIG"
     sbatch $SBATCH_SCRIPT $TEST_CMD
 done

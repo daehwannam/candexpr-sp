@@ -9,11 +9,11 @@ SS_MODEL_LEARNING_DIR_PATH=./model-instance/strongly-supervised-models
 python -m domain.kqapro.run --using-tqdm false \
        --config config.train_for_multiple_decoding_strategies \
        --model-learning-dir $SS_MODEL_LEARNING_DIR_PATH \
-       --additional-config config.additional.weaksup_pretraining
+       --extra-config config.additional.weaksup_pretraining
 
 # PERCENT=0.1  # between 0 to 100
 # python -m domain.kqapro.run --using-tqdm false \
 #        --config config.train_for_multiple_decoding_strategies \
 #        --model-learning-dir $SS_MODEL_LEARNING_DIR_PATH \
-#        --additional-config config.additional.train_set_portion \
+#        --extra-config config.additional.train_set_portion \
 #        --train-set-percent $PERCENT --epoch-repeat-strategy sqrt

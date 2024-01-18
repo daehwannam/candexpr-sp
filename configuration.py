@@ -249,7 +249,7 @@ _default_config = Environment(
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
-    parser.add_argument('--additional-config', dest='additional_config_modules', help='an additional config module(s) which can overwrite other configurations. When more than one module is passed, the modules are separated by commas.')
+    parser.add_argument('--extra-config', dest='additional_config_modules', help='an additional config module(s) which can overwrite other configurations. When more than one module is passed, the modules are separated by commas.')
     parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of learning')
     parser.add_argument('--model-path', dest='model_path', help='a path to the directory of a checkpoint')
     parser.add_argument('--model-dir-name', dest='model_dir_name', help='the name of the directory of a model')
