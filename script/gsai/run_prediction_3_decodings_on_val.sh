@@ -17,7 +17,7 @@ dir="$BASE_DIR/full-constraints:best"
 python -m domain.kqapro.run --config config.test_on_val_set --model-checkpoint-dir $dir --test-dir-name $dir/test-on-val-set
 
 dir="$BASE_DIR/no-arg-candidate:best"
-python -m domain.kqapro.run --config config.test_on_val_set --model-checkpoint-dir $dir --test-dir-name $dir/test-on-val-set --extra-config config.additional.using_arg_candidate=False
+python -m domain.kqapro.run --config config.test_on_val_set --model-checkpoint-dir $dir --test-dir-name $dir/test-on-val-set --extra-config config.extra.using_arg_candidate=False
 
 dir="$BASE_DIR/no-constrained-decoding:best"
-python -m domain.kqapro.run --config config.test_on_val_set --model-checkpoint-dir $dir --test-dir-name $dir/test-on-val-set --extra-config config.additional.constrained_decoding=False
+python -m domain.kqapro.run --config config.test_on_val_set --model-checkpoint-dir $dir --test-dir-name $dir/test-on-val-set --extra-config config.extra.constrained_decoding=False

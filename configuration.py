@@ -249,7 +249,7 @@ _default_config = Environment(
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
-    parser.add_argument('--extra-config', dest='additional_config_modules', help='an additional config module(s) which can overwrite other configurations. When more than one module is passed, the modules are separated by commas.')
+    parser.add_argument('--extra-config', dest='extra_config_modules', help='an additional config module(s) which can overwrite other configurations. When more than one module is passed, the modules are separated by commas.')
     parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of learning')
     parser.add_argument('--model-path', dest='model_path', help='a path to the directory of a checkpoint')
     parser.add_argument('--model-dir-name', dest='model_dir_name', help='the name of the directory of a model')
@@ -278,15 +278,15 @@ def _get_specific_config_module():
 
 
 @lru_cache(maxsize=None)
-def _get_additional_config_modules():
+def _get_extra_config_modules():
     cmd_arg_dict = _parse_cmd_args()
-    if cmd_arg_dict.get('additional_config_modules') is not None:
-        # module_names = [name.strip() for name in cmd_arg_dict['additional_config_modules'].split(',')]
-        module_names = [name.strip() for name in cmd_arg_dict['additional_config_modules'].split('|')]
-        _additional_config_modules = tuple(map(import_module, module_names))
+    if cmd_arg_dict.get('extra_config_modules') is not None:
+        # module_names = [name.strip() for name in cmd_arg_dict['extra_config_modules'].split(',')]
+        module_names = [name.strip() for name in cmd_arg_dict['extra_config_modules'].split('|')]
+        _extra_config_modules = tuple(map(import_module, module_names))
     else:
-        _additional_config_modules = None
-    return _additional_config_modules
+        _extra_config_modules = None
+    return _extra_config_modules
 
 
 @variable
@@ -295,9 +295,9 @@ def config():
     specific_config_module = _get_specific_config_module()
     specific_config = (dict() if specific_config_module is None else
                        specific_config_module.config)
-    additional_config_modules = _get_additional_config_modules()
-    additional_configs = ([] if additional_config_modules is None else
-                          [module.config for module in additional_config_modules])
+    extra_config_modules = _get_extra_config_modules()
+    extra_configs = ([] if extra_config_modules is None else
+                     [module.config for module in extra_config_modules])
 
     config = Environment(
         chain(
@@ -305,7 +305,7 @@ def config():
                 _default_config.items(),
                 specific_config.items(),
                 cmd_arg_dict.items())),
-            *(config.items() for config in additional_configs)
+            *(config.items() for config in extra_configs)
         ))
     return config
 
@@ -315,13 +315,13 @@ def config_path_dict():
     specific_config_module = _get_specific_config_module()
     specific_config_module_file_path = (None if specific_config_module is None else
                                         specific_config_module.__file__)
-    additional_config_modules = _get_additional_config_modules()
-    additional_config_module_file_paths = ([] if additional_config_modules is None else
-                                           [module.__file__ for module in additional_config_modules])
+    extra_config_modules = _get_extra_config_modules()
+    extra_config_module_file_paths = ([] if extra_config_modules is None else
+                                      [module.__file__ for module in extra_config_modules])
     return dict(
         general=__file__,
         specific=specific_config_module_file_path,
-        additional=additional_config_module_file_paths
+        extra=extra_config_module_file_paths
     )
 
 

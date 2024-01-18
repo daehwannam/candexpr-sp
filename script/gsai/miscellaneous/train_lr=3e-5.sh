@@ -3,4 +3,4 @@
 source /home/dhnam/program/miniconda3/etc/profile.d/conda.sh
 conda activate kqapro
 
-python -m domain.kqapro.run --using-tqdm false --config config.train_strong_sup --extra-config config.additional.lr=3e-5
+python -m domain.kqapro.run --using-tqdm false --config config.train_strong_sup --extra-config config.extra.lr=3e-5

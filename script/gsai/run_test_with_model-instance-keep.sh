@@ -36,23 +36,23 @@ for dir in $DIRS; do
 
         if [ $decoding == 'no-arg-candidate:best' ]; then
             # echo $decoding
-            additional_config='--extra-config config.additional.using_arg_candidate=False'
-            additional_config_b4='--extra-config config.additional.using_arg_candidate=False_and_b=4'
-            # echo $additional_config
+            extra_config='--extra-config config.extra.using_arg_candidate=False'
+            extra_config_b4='--extra-config config.extra.using_arg_candidate=False_and_b=4'
+            # echo $extra_config
         elif [ $decoding == 'no-constrained-decoding:best' ]; then
             # echo $decoding
-            additional_config='--extra-config config.additional.constrained_decoding=False'
-            additional_config_b4='--extra-config config.additional.constrained_decoding=False_and_b=4'
-            # echo $additional_config
+            extra_config='--extra-config config.extra.constrained_decoding=False'
+            extra_config_b4='--extra-config config.extra.constrained_decoding=False_and_b=4'
+            # echo $extra_config
         else
-            additional_config=''
-            additional_config_b4='--extra-config config.additional.num_prediction_beams=4'
+            extra_config=''
+            extra_config_b4='--extra-config config.extra.num_prediction_beams=4'
             # echo $decoding
         fi
         # beam size = 1
-        python -m domain.kqapro.run --config config.test_on_test_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir-name $TEST_DIR_NAME $additional_config
+        python -m domain.kqapro.run --config config.test_on_test_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir-name $TEST_DIR_NAME $extra_config
 
         # beam size = 4
-        python -m domain.kqapro.run --config config.test_on_test_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir-name $TEST_DIR_NAME $additional_config_b4
+        python -m domain.kqapro.run --config config.test_on_test_set --model-checkpoint-dir $CHECKPOINT_PATH --test-dir-name $TEST_DIR_NAME $extra_config_b4
     done
 done
