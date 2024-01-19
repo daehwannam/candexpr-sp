@@ -35,6 +35,7 @@ def run_train(
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
         train_batch_size=config.ph,
+        train_batch_num_seqs=config.ph(None),
         val_batch_size=config.ph,
         learning_rate=config.ph,
         adam_epsilon=config.ph,
@@ -84,13 +85,17 @@ def run_train(
     # model.to(device)
     model.to(config.accelerator.device)
 
-    train_data_loader = make_data_loader(
-        encoded_dataset=encoded_train_set,
-        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
-        pad_token_id=grammar.lf_tokenizer.pad_token_id,
-        batch_size=train_batch_size,
-        shuffle=True,
-    )
+    def make_train_data_loader():
+        return make_data_loader(
+            encoded_dataset=encoded_train_set,
+            decoder_start_token_id=grammar.model_config.decoder_start_token_id,
+            pad_token_id=grammar.lf_tokenizer.pad_token_id,
+            batch_size=train_batch_size,
+            batch_num_seqs=train_batch_num_seqs,
+            shuffle=True,
+        )
+
+    train_data_loader = None if weaksup_learning else make_train_data_loader()
     val_data_loader = make_data_loader(
         encoded_dataset=encoded_val_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
@@ -149,6 +154,9 @@ def run_train(
     for epoch in range(status['last_update_num'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
         model.train()
+
+        if weaksup_learning:
+            train_data_loader = config.accelerator.prepare(make_train_data_loader())
 
         # debug_batch_idx = -1
         loss = torch.tensor(0.)

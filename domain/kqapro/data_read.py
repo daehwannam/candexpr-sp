@@ -3,14 +3,17 @@ import torch
 import itertools
 
 from dhnamlib.pylib.torchlib.dnn import (
-    pad_sequence, SimpleDataset, id_tensor_to_mask, batch_sequence_tensors, EpochRepeatingDataLoader,
+    pad_sequence, id_tensor_to_mask, batch_sequence_tensors,
     except_last_tokens, except_first_tokens
 )
+from dhnamlib.pylib.torchlib.data_processing import (
+    SimpleDataset, VariableSizedBatchSampler, EpochRepeatingDataLoader)
 # from dhnamlib.pylib.iteration import keys2items
-from dhnamlib.pylib.iteration import dicts2pairs, not_none_valued_pairs, merge_dicts, unique
+from dhnamlib.pylib.iteration import dicts2pairs, not_none_valued_pairs, merge_dicts, unique, not_none_valued_dict
 # from dhnamlib.pylib.decoration import construct
 from dhnamlib.pylib.structure import LazyDict, LazyEval
 # from dhnamlib.pylib.function import identity
+from dhnamlib.pylib.statistics import shuffled
 
 
 def make_collate(decoder_start_token_id, pad_token_id):
@@ -106,7 +109,7 @@ def make_collate(decoder_start_token_id, pad_token_id):
 
 def make_data_loader(
         encoded_dataset, encoded_mask_dataset=None, *, decoder_start_token_id, pad_token_id,
-        batch_size, shuffle, num_epoch_repeats=1,
+        batch_size=None, batch_num_seqs=None, shuffle, num_epoch_repeats=1,
 ):
     if encoded_mask_dataset is None:
         _encoded_dataset = encoded_dataset
@@ -115,12 +118,28 @@ def make_data_loader(
         _encoded_dataset = tuple(merge_dicts(examples, merge_fn=unique)
                                  for examples in zip(encoded_dataset, encoded_mask_dataset))
 
-    data_loader = torch.utils.data.DataLoader(
+    assert (batch_size is None) is not (batch_num_seqs is None), \
+        'Only one of batch_size and batch_num_seqs should be None'
+
+    if batch_num_seqs is None:
+        batch_sampler = None
+        _shuffle = shuffle
+    else:
+        data_source = shuffled(encoded_dataset) if shuffle else encoded_dataset
+        batch_sampler = VariableSizedBatchSampler(
+            data_source=data_source,
+            size_fn=lambda example: len(example['action_id_seq_group']),
+            max_size=batch_num_seqs,
+        )
+        _shuffle = None
+
+    data_loader = torch.utils.data.DataLoader(**not_none_valued_pairs(
         SimpleDataset(_encoded_dataset),
         batch_size=batch_size,
-        shuffle=shuffle,
+        shuffle=_shuffle,
+        batch_sampler=batch_sampler,
         collate_fn=make_collate(decoder_start_token_id, pad_token_id),
-    )
+    ))
 
     if num_epoch_repeats == 1:
         return data_loader

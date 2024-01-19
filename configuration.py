@@ -239,7 +239,7 @@ _default_config = Environment(
     xtqdm=LazyEval(_get_xtqdm),
     utqdm=LazyEval(_get_utqdm),
 
-    accelerating=False,
+    # accelerating=False,
     # accelerator=LazyEval(lambda: XAccelerator(split_batches=True, even_batches=False) if config.accelerating else NoAccelerator(config.device)),
     accelerator=LazyEval(_get_accelerator),
 )

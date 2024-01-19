@@ -29,7 +29,8 @@ optim_config = Environment(
 
     # Updated values
     num_train_epochs=8,
-    train_batch_size=8,
+    train_batch_size=None,
+    train_batch_num_seqs=32,
     val_batch_size=64,
     using_scheduler=False,
     learning_rate=2e-5,

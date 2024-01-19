@@ -15,7 +15,8 @@ def _parse_cmd_args():
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
     parser.add_argument('--train-set-percent', dest='train_set_percent', type=float, help='train set percent to be used')
     parser.add_argument('--num-epoch-repeats', dest='num_epoch_repeats', type=float, help='the number of epoch repeats before validation')
-    parser.add_argument('--epoch-repeat-strategy', dest='epoch_repeat_strategy', type=str, choices=['linear', 'sqrt'], help='the way to compute the number of epoch repeats')
+    parser.add_argument('--epoch-repeat-strategy', dest='epoch_repeat_strategy', type=str, choices=['linear', 'sqrt'], default='sqrt',
+                        help='the way to compute the number of epoch repeats')
 
     args, unknown = parser.parse_known_args()
     return args
@@ -29,7 +30,7 @@ def _extract_dataset_portion(dataset, percent, expected_dataset_size=None):
     return dataset[:num_examples]
 
 
-def make_config(percent, shuffled_encoded_train_set_name, num_epoch_repeats=None, epoch_repeat_strategy='linear'):
+def make_config(percent, shuffled_encoded_train_set_name, num_epoch_repeats, epoch_repeat_strategy):
     assert 0 < percent <= 100
 
     if num_epoch_repeats is None:

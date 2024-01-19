@@ -42,7 +42,7 @@ def train(args):
     val_pt = os.path.join(args.input_dir, 'val.pt')
     train_loader = DataLoader(vocab_json, train_pt, args.batch_size, training=True, percent=args.train_set_percent)
     if args.train_set_percent != 100:
-        from dhnamlib.pylib.torchlib.dnn import EpochRepeatingDataLoader
+        from dhnamlib.pylib.torchlib.data_processing import EpochRepeatingDataLoader
         num_epoch_repeats = 100 / args.train_set_percent
         old_train_loader = train_loader
         train_loader = EpochRepeatingDataLoader(train_loader, num_epoch_repeats=num_epoch_repeats)
