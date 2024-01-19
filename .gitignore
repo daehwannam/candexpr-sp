@@ -38,3 +38,6 @@ _tmp_*
 # model-test
 /model-test
 /model-test-keep
+
+# miscellaneous
+/record
