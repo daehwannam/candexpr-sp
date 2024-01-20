@@ -22,6 +22,7 @@ search_config = Environment(
     num_search_beams=8,
 )
 
+_TRAIN_BATCH_SIZE = 16
 
 optim_config = Environment(
     # Imported values
@@ -29,8 +30,8 @@ optim_config = Environment(
 
     # Updated values
     num_train_epochs=8,
-    train_batch_size=None,
-    train_batch_num_seqs=32,
+    train_batch_size=_TRAIN_BATCH_SIZE,
+    train_max_num_batch_seqs=_TRAIN_BATCH_SIZE,
     val_batch_size=64,
     using_scheduler=False,
     learning_rate=2e-5,

@@ -49,6 +49,7 @@ pip install -r requirements.txt
 * Running
 ** Preprocessing
 #+begin_src sh
+set -e
 python -m domain.kqapro.preprocess --goal augmented_train_set
 python -m domain.kqapro.preprocess --goal augmented_val_set
 python -m domain.kqapro.preprocess --goal encoded_train_set

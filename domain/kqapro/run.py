@@ -35,7 +35,6 @@ def run_train(
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
         train_batch_size=config.ph,
-        train_batch_num_seqs=config.ph(None),
         val_batch_size=config.ph,
         learning_rate=config.ph,
         adam_epsilon=config.ph,
@@ -85,17 +84,13 @@ def run_train(
     # model.to(device)
     model.to(config.accelerator.device)
 
-    def make_train_data_loader():
-        return make_data_loader(
-            encoded_dataset=encoded_train_set,
-            decoder_start_token_id=grammar.model_config.decoder_start_token_id,
-            pad_token_id=grammar.lf_tokenizer.pad_token_id,
-            batch_size=train_batch_size,
-            batch_num_seqs=train_batch_num_seqs,
-            shuffle=True,
-        )
-
-    train_data_loader = None if weaksup_learning else make_train_data_loader()
+    train_data_loader = make_data_loader(
+        encoded_dataset=encoded_train_set,
+        decoder_start_token_id=grammar.model_config.decoder_start_token_id,
+        pad_token_id=grammar.lf_tokenizer.pad_token_id,
+        batch_size=train_batch_size,
+        shuffle=True,
+    )
     val_data_loader = make_data_loader(
         encoded_dataset=encoded_val_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
@@ -134,9 +129,6 @@ def run_train(
 
     remaining_patience = patience
 
-    # TODO: use accelerate.local_sgd.LocalSGD
-    # https://huggingface.co/docs/accelerate/usage_guides/local_sgd
-
     def to_ws_key(key):
         """
         Convert a key for strongly supervised learning to that of weakly supervised learning
@@ -155,9 +147,6 @@ def run_train(
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
-        if weaksup_learning:
-            train_data_loader = config.accelerator.prepare(make_train_data_loader())
-
         # debug_batch_idx = -1
         loss = torch.tensor(0.)
         # for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
@@ -169,6 +158,11 @@ def run_train(
 
             # - `model.config.decoder_start_token_id` is the first id of output sequences.
             # - the order or decoder output tokens in a sequence: decoder_start_token_id, bos_token_id, others ...
+
+            raise Exception('Use config.accelerator.no_sync')
+            # with config.accelerator.accumulate_if
+            #     ...
+
             batched_input = dict(
                 input_ids=batch[to_key('utterance_token_ids')].to(config.accelerator.device),
                 attention_mask=batch[to_key('attention_mask')].to(config.accelerator.device),
@@ -182,7 +176,7 @@ def run_train(
 
             if softmax_masking:
                 assert not weaksup_learning
-                softmax_mask, nll_mask = learning.labels_to_masks(grammar, labels, batch['utterance_token_ids'])
+                softmax_mask, nll_mask = learning.labels_to_masks(grammar, labels, batch[to_key('utterance_token_ids')])
             else:
                 softmax_mask = None
                 nll_mask = learning.labels_to_nll_mask(grammar, labels)

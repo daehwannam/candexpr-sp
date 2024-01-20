@@ -6,13 +6,12 @@ from dhnamlib.pylib.torchlib.dnn import (
     pad_sequence, id_tensor_to_mask, batch_sequence_tensors,
     except_last_tokens, except_first_tokens
 )
-from dhnamlib.pylib.torchlib.data_processing import (
-    SimpleDataset, VariableSizedBatchSampler, EpochRepeatingDataLoader)
+from dhnamlib.pylib.torchlib.data_processing import SimpleDataset, EpochRepeatingDataLoader, generate_variable_sized_slices
 # from dhnamlib.pylib.iteration import keys2items
 from dhnamlib.pylib.iteration import dicts2pairs, not_none_valued_pairs, merge_dicts, unique, not_none_valued_dict
 # from dhnamlib.pylib.decoration import construct
 from dhnamlib.pylib.structure import LazyDict, LazyEval
-# from dhnamlib.pylib.function import identity
+from dhnamlib.pylib.function import identity
 from dhnamlib.pylib.statistics import shuffled
 
 
@@ -109,7 +108,7 @@ def make_collate(decoder_start_token_id, pad_token_id):
 
 def make_data_loader(
         encoded_dataset, encoded_mask_dataset=None, *, decoder_start_token_id, pad_token_id,
-        batch_size=None, batch_num_seqs=None, shuffle, num_epoch_repeats=1,
+        batch_size=None, shuffle, num_epoch_repeats=1,
 ):
     if encoded_mask_dataset is None:
         _encoded_dataset = encoded_dataset
@@ -118,26 +117,10 @@ def make_data_loader(
         _encoded_dataset = tuple(merge_dicts(examples, merge_fn=unique)
                                  for examples in zip(encoded_dataset, encoded_mask_dataset))
 
-    assert (batch_size is None) is not (batch_num_seqs is None), \
-        'Only one of batch_size and batch_num_seqs should be None'
-
-    if batch_num_seqs is None:
-        batch_sampler = None
-        _shuffle = shuffle
-    else:
-        data_source = shuffled(encoded_dataset) if shuffle else encoded_dataset
-        batch_sampler = VariableSizedBatchSampler(
-            data_source=data_source,
-            size_fn=lambda example: len(example['action_id_seq_group']),
-            max_size=batch_num_seqs,
-        )
-        _shuffle = None
-
     data_loader = torch.utils.data.DataLoader(**not_none_valued_pairs(
         SimpleDataset(_encoded_dataset),
         batch_size=batch_size,
-        shuffle=_shuffle,
-        batch_sampler=batch_sampler,
+        shuffle=shuffle,
         collate_fn=make_collate(decoder_start_token_id, pad_token_id),
     ))
 
@@ -145,3 +128,27 @@ def make_data_loader(
         return data_loader
     else:
         return EpochRepeatingDataLoader(data_loader, num_epoch_repeats=num_epoch_repeats)
+
+
+def split_into_weaksup_sub_batches(batch_iterator, max_num_batch_seqs):
+    keys = ['ws_utterance_token_ids', 'ws_attention_mask', 'ws_decoder_input_ids', 'ws_labels', 'action_id_seq_group_len']
+
+    for batch in batch_iterator:
+        group_slices = generate_variable_sized_slices(
+            data_source=batch['action_id_seq_group_len'],
+            size_fn=identity,
+            max_size=max_num_batch_seqs
+        )
+        last_idx = len(group_slices) - 1
+
+        for idx, group_slice in enumerate(group_slices):
+            sync_gradients = (idx == last_idx)
+            sub_batch = dict([key, batch[key][group_slice]] for key in keys)
+
+            yield sync_gradients, sub_batch
+
+
+def no_split_into_sub_batches(batch_iterator, max_num_batch_seqs):
+    sync_gradients = True
+    for batch in batch_iterator:
+        yield sync_gradients, batch
