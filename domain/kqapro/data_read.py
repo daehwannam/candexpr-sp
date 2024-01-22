@@ -9,7 +9,7 @@ from dhnamlib.pylib.torchlib.dnn import (
 from dhnamlib.pylib.torchlib.data_processing import SimpleDataset, EpochRepeatingDataLoader, generate_variable_sized_slices
 # from dhnamlib.pylib.iteration import keys2items
 from dhnamlib.pylib.iteration import dicts2pairs, not_none_valued_pairs, merge_dicts, unique, not_none_valued_dict
-# from dhnamlib.pylib.decoration import construct
+from dhnamlib.pylib.decoration import deprecated
 from dhnamlib.pylib.structure import LazyDict, LazyEval
 from dhnamlib.pylib.function import identity
 from dhnamlib.pylib.statistics import shuffled
@@ -130,6 +130,7 @@ def make_data_loader(
         return EpochRepeatingDataLoader(data_loader, num_epoch_repeats=num_epoch_repeats)
 
 
+@deprecated
 def split_into_weaksup_sub_batches(batch_iterator, max_num_batch_seqs):
     keys = ['ws_utterance_token_ids', 'ws_attention_mask', 'ws_decoder_input_ids', 'ws_labels', 'action_id_seq_group_len']
 
@@ -142,13 +143,31 @@ def split_into_weaksup_sub_batches(batch_iterator, max_num_batch_seqs):
         last_idx = len(group_slices) - 1
 
         for idx, group_slice in enumerate(group_slices):
-            sync_gradients = (idx == last_idx)
+            last_in_batch = (idx == last_idx)
             sub_batch = dict([key, batch[key][group_slice]] for key in keys)
 
-            yield sync_gradients, sub_batch
+            yield last_in_batch, sub_batch
 
 
+@deprecated
 def no_split_into_sub_batches(batch_iterator, max_num_batch_seqs):
-    sync_gradients = True
+    last_in_batch = True
     for batch in batch_iterator:
-        yield sync_gradients, batch
+        yield last_in_batch, batch
+
+
+def to_sub_batches(batch, max_num_batch_seqs):
+    keys = ['ws_utterance_token_ids', 'ws_attention_mask', 'ws_decoder_input_ids', 'ws_labels', 'action_id_seq_group_len']
+
+    group_slices = generate_variable_sized_slices(
+        data_source=batch['action_id_seq_group_len'],
+        size_fn=identity,
+        max_size=max_num_batch_seqs
+    )
+    last_idx = len(group_slices) - 1
+
+    for idx, group_slice in enumerate(group_slices):
+        last_in_batch = (idx == last_idx)
+        sub_batch = dict([key, batch[key][group_slice]] for key in keys)
+
+        yield last_in_batch, sub_batch

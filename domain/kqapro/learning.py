@@ -18,6 +18,7 @@ import transformers
 from configuration import config, save_config_info
 
 from .execution import postprocess_prediction, invalid_program, get_counting_context
+from data_read import to_sub_batches
 
 from splogic.formalism import InvalidCandidateActionError
 from utility.trie import SpanTrie
@@ -25,6 +26,7 @@ from utility.trie import SpanTrie
 from dhnamlib.pylib import filesys
 from dhnamlib.pylib.hflib.transforming import logit_rescaling, MaskedLogitsProcessor
 from dhnamlib.pylib import iteration
+from dhnamlib.pylib.iteration import not_none_valued_dict, iterate
 from dhnamlib.pylib.decoration import deprecated, curry
 # from dhnamlib.pylib.decoration import construct
 from dhnamlib.pylib.exception import NotFoundError
@@ -301,7 +303,7 @@ def labels_to_nll_mask(grammar, labels, except_eos=False):
     return nll_mask
 
 
-def compute_nll_loss(grammar, logits, labels, softmax_mask=None, nll_mask=None):
+def compute_nll_loss(logits, labels, softmax_mask=None, nll_mask=None):
     """
     Compute a negative log likelihood loss
     """
@@ -324,7 +326,7 @@ def compute_nll_loss(grammar, logits, labels, softmax_mask=None, nll_mask=None):
     return loss
 
 
-def compute_nlml_loss(grammar, logits, labels, nll_mask, group_lengths):
+def compute_nlml_loss(logits, labels, nll_mask, group_lengths, averaging):
     """
     Compute a negative log marginal likelihood loss, which is known as the maximum marginal likelihood (MML) loss
     """
@@ -346,9 +348,75 @@ def compute_nlml_loss(grammar, logits, labels, nll_mask, group_lengths):
         example_weight[prev_index: next_index] = F.softmax(example_nll[prev_index: next_index], dim=0)
 
     num_examples = len(group_lengths)
-    loss = (example_weight * example_nll).sum(dim=0) / num_examples
+    _loss = (example_weight * example_nll).sum(dim=0)
+    loss = _loss / num_examples if averaging else _loss
 
     return loss
+
+
+def ss_forward_backward(grammar, model, batch, softmax_masking):
+    "Strong-supervision update"
+
+    batched_input = dict(
+        input_ids=batch['utterance_token_ids'].to(config.accelerator.device),
+        attention_mask=batch['attention_mask'].to(config.accelerator.device),
+        decoder_input_ids=batch['decoder_input_ids'].to(config.accelerator.device))
+    batched_output = model(**batched_input)
+
+    logits = batched_output['logits']
+    labels = batch['labels'].to(config.accelerator.device)
+
+    if softmax_masking:
+        softmax_mask, nll_mask = labels_to_masks(grammar, labels, batch['utterance_token_ids'])
+    else:
+        softmax_mask = None
+        nll_mask = labels_to_nll_mask(grammar, labels)
+
+    loss = compute_nll_loss(
+        logits=logits,
+        labels=labels,
+        softmax_mask=softmax_mask,
+        nll_mask=nll_mask,
+    )
+
+    config.accelerator.backward(loss)
+
+    return loss.item()
+
+
+def ws_forward_backward(grammar, model, batch, max_num_action_seqs):
+    "Weak-supervision update"
+
+    batch_size = len(batch['action_id_seq_group_len'])
+
+    batch_loss = 0
+
+    sub_batch_iter = iterate(to_sub_batches(batch, max_num_action_seqs))
+    for sub_batch in sub_batch_iter:
+        with config.accelerator.accumulate_if(model, bool(sub_batch_iter)):
+            batched_input = dict(
+                input_ids=sub_batch['ws_utterance_token_ids'].to(config.accelerator.device),
+                attention_mask=sub_batch['ws_attention_mask'].to(config.accelerator.device),
+                decoder_input_ids=sub_batch['ws_decoder_input_ids'].to(config.accelerator.device))
+            batched_output = model(**batched_input)
+
+            logits = batched_output['logits']
+            labels = sub_batch['ws_labels'].to(config.accelerator.device)
+            nll_mask = labels_to_nll_mask(grammar, labels)
+            group_lengths = sub_batch['action_id_seq_group_len']
+
+            loss = compute_nlml_loss(
+                logits=logits,
+                labels=labels,
+                nll_mask=nll_mask,
+                group_lengths=group_lengths,
+                averaging=False,
+            ) / batch_size
+
+            config.accelerator.backward(loss)
+            batch_loss += loss.item()
+
+    return batch_loss
 
 
 @deprecated

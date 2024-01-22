@@ -36,6 +36,7 @@ def run_train(
         encoded_val_set=config.ph,
         train_batch_size=config.ph,
         val_batch_size=config.ph,
+        train_max_num_action_seqs=config.ph(None),
         learning_rate=config.ph,
         adam_epsilon=config.ph,
         weight_decay=config.ph,
@@ -129,28 +130,17 @@ def run_train(
 
     remaining_patience = patience
 
-    def to_ws_key(key):
-        """
-        Convert a key for strongly supervised learning to that of weakly supervised learning
-        """
-        assert key in {'utterance_token_ids', 'attention_mask', 'decoder_input_ids', 'labels'}
-        return 'ws_' + key
-
-    if weaksup_learning:
-        to_key = to_ws_key
-        compute_loss = learning.compute_nlml_loss
-    else:
-        to_key = identity
-        compute_loss = learning.compute_nll_loss
+    forward_backward = learning.ws_forward_backward if weaksup_learning else learning.ss_forward_backward
 
     for epoch in range(status['last_update_num'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
         # debug_batch_idx = -1
-        loss = torch.tensor(0.)
+        # loss = torch.tensor(0.)
+        loss = 0
         # for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
-        for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss.item(), repr_format='{:7.4f}'):
+        for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
             # if debug_batch_idx > 100:
             #     break
             # else:
@@ -159,40 +149,20 @@ def run_train(
             # - `model.config.decoder_start_token_id` is the first id of output sequences.
             # - the order or decoder output tokens in a sequence: decoder_start_token_id, bos_token_id, others ...
 
-            raise Exception('Use config.accelerator.no_sync')
-            # with config.accelerator.accumulate_if
-            #     ...
-
-            batched_input = dict(
-                input_ids=batch[to_key('utterance_token_ids')].to(config.accelerator.device),
-                attention_mask=batch[to_key('attention_mask')].to(config.accelerator.device),
-                decoder_input_ids=batch[to_key('decoder_input_ids')].to(config.accelerator.device))
-
             optimizer.zero_grad()
-            batched_output = model(**batched_input)
 
-            logits = batched_output['logits']
-            labels = batch[to_key('labels')].to(config.accelerator.device)
-
-            if softmax_masking:
-                assert not weaksup_learning
-                softmax_mask, nll_mask = learning.labels_to_masks(grammar, labels, batch[to_key('utterance_token_ids')])
-            else:
-                softmax_mask = None
-                nll_mask = learning.labels_to_nll_mask(grammar, labels)
-            group_lengths = batch.get('action_id_seq_group_len', None)
-
-            loss = compute_loss(**not_none_valued_dict(
-                grammar=grammar, logits=logits, labels=labels,
-                softmax_mask=softmax_mask,
-                nll_mask=nll_mask,
-                group_lengths=group_lengths,
+            loss = forward_backward(not_none_valued_dict(
+                grammar=grammar,
+                model=model,
+                batch=batch,
+                softmax_masking=None if weaksup_learning else softmax_masking,
+                max_num_action_seqs=train_max_num_action_seqs if weaksup_learning else None,
             ))
 
-            config.accelerator.backward(loss)
+            assert config.accelerator.sync_gradients
             if config.accelerator.sync_gradients:
                 config.accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
-                # torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
             optimizer.step()
             scheduler.step()
 
@@ -364,37 +334,27 @@ def run_train_for_multiple_decoding_strategies(
 
         # debug_batch_cnt = -1
 
-        loss = torch.tensor(0.)
+        # loss = torch.tensor(0.)
+        loss = 0
         # for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
-        for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss.item(), repr_format='{:7.4f}'):
+        for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
             # debug_batch_cnt += 1
             # if debug_batch_cnt > 100:
             #     break
 
-            batched_input = dict(
-                input_ids=batch['utterance_token_ids'].to(config.accelerator.device),
-                attention_mask=batch['attention_mask'].to(config.accelerator.device),
-                decoder_input_ids=batch['decoder_input_ids'].to(config.accelerator.device))
-
             optimizer.zero_grad()
-            batched_output = model(**batched_input)
 
-            logits = batched_output['logits']
-            labels = batch['labels'].to(config.accelerator.device)
-            # labels = batch['labels'].to(device)
+            loss = learning.ss_forward_backward(
+                grammar=grammar,
+                model=model,
+                batch=batch,
+                softmax_masking=softmax_masking,
+            )
 
-            softmax_mask = None
-            nll_mask = learning.labels_to_nll_mask(grammar, labels)
-
-            loss = learning.compute_nll_loss(grammar, logits, labels,
-                                         softmax_mask=softmax_mask,
-                                         nll_mask=nll_mask)
-
-            # loss.backward()
-            config.accelerator.backward(loss)
+            assert config.accelerator.sync_gradients
             if config.accelerator.sync_gradients:
                 config.accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
-                # torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
             optimizer.step()
             scheduler.step()
 
