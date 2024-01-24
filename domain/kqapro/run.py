@@ -85,12 +85,16 @@ def run_train(
     # model.to(device)
     model.to(config.accelerator.device)
 
+    if weaksup_learning:
+        assert train_max_num_action_seqs is not None
+
     train_data_loader = make_data_loader(
         encoded_dataset=encoded_train_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=train_batch_size,
         shuffle=True,
+        max_num_action_seqs=train_max_num_action_seqs,
     )
     val_data_loader = make_data_loader(
         encoded_dataset=encoded_val_set,
@@ -156,7 +160,6 @@ def run_train(
                 model=model,
                 batch=batch,
                 softmax_masking=None if weaksup_learning else softmax_masking,
-                max_num_action_seqs=train_max_num_action_seqs if weaksup_learning else None,
             ))
 
             assert config.accelerator.sync_gradients
