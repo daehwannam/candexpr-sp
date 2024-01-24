@@ -18,7 +18,7 @@ import transformers
 from configuration import config, save_config_info
 
 from .execution import postprocess_prediction, invalid_program, get_counting_context
-from data_read import to_sub_batches
+from .data_read import to_sub_batches
 
 from splogic.formalism import InvalidCandidateActionError
 from utility.trie import SpanTrie
@@ -387,13 +387,14 @@ def ss_forward_backward(grammar, model, batch, softmax_masking):
 def ws_forward_backward(grammar, model, batch, max_num_action_seqs):
     "Weak-supervision update"
 
+    breakpoint()
     batch_size = len(batch['action_id_seq_group_len'])
 
     batch_loss = 0
 
     sub_batch_iter = iterate(to_sub_batches(batch, max_num_action_seqs))
     for sub_batch in sub_batch_iter:
-        with config.accelerator.accumulate_if(model, bool(sub_batch_iter)):
+        with config.accelerator.accumulate_if(model, accumulating=bool(sub_batch_iter)):
             batched_input = dict(
                 input_ids=sub_batch['ws_utterance_token_ids'].to(config.accelerator.device),
                 attention_mask=sub_batch['ws_attention_mask'].to(config.accelerator.device),

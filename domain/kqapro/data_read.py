@@ -117,12 +117,13 @@ def make_data_loader(
         _encoded_dataset = tuple(merge_dicts(examples, merge_fn=unique)
                                  for examples in zip(encoded_dataset, encoded_mask_dataset))
 
-    data_loader = torch.utils.data.DataLoader(**not_none_valued_pairs(
+    data_loader = torch.utils.data.DataLoader(
         SimpleDataset(_encoded_dataset),
-        batch_size=batch_size,
-        shuffle=shuffle,
-        collate_fn=make_collate(decoder_start_token_id, pad_token_id),
-    ))
+        **not_none_valued_dict(
+            batch_size=batch_size,
+            shuffle=shuffle,
+            collate_fn=make_collate(decoder_start_token_id, pad_token_id),
+        ))
 
     if num_epoch_repeats == 1:
         return data_loader
@@ -164,10 +165,7 @@ def to_sub_batches(batch, max_num_batch_seqs):
         size_fn=identity,
         max_size=max_num_batch_seqs
     )
-    last_idx = len(group_slices) - 1
 
     for idx, group_slice in enumerate(group_slices):
-        last_in_batch = (idx == last_idx)
         sub_batch = dict([key, batch[key][group_slice]] for key in keys)
-
-        yield last_in_batch, sub_batch
+        yield sub_batch

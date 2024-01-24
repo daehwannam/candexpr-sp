@@ -145,9 +145,6 @@ EXTRA_OPTIONS='--extra-config config.extra.constrained_decoding=False'
 
 **** Training with question-answer pairs on 4 GPUs
 #+begin_src sh
-# Error fix for "RuntimeError: NCCL communicator was aborted on rank 2.  Original reason for failure was: [Rank 2] Watchdog caught collective operation timeout"
-# - https://github.com/huggingface/accelerate/issues/314#issuecomment-1565259831
-# - https://stackoverflow.com/a/69695109
 export NCCL_P2P_LEVEL=NVL
 
 SS_MODEL_LEARNING_DIR_PATH=./model-instance/strongly-supervised-models

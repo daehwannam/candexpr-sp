@@ -151,7 +151,7 @@ def run_train(
 
             optimizer.zero_grad()
 
-            loss = forward_backward(not_none_valued_dict(
+            loss = forward_backward(**not_none_valued_dict(
                 grammar=grammar,
                 model=model,
                 batch=batch,

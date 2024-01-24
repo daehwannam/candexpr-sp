@@ -5,9 +5,10 @@ from importlib import import_module
 import argparse
 import shutil
 from functools import lru_cache
+
 from accelerate.utils.dataclasses import DistributedType
 
-from dhnamlib.pylib.context import Environment, LazyEval, suppress_stderr, contextless
+from dhnamlib.pylib.context import Environment, LazyEval, suppress_stdout, suppress_stderr, contextless, context_nest
 # from dhnamlib.pylib.decoration import Register
 from dhnamlib.pylib.decoration import variable
 from dhnamlib.pylib.filesys import (
@@ -66,7 +67,10 @@ else:
 
 
 def _make_context():
-    with (contextless if config.using_tqdm else suppress_stderr)():
+    with (
+            contextless() if (config.using_tqdm and config.accelerator.is_local_main_process) else
+            context_nest(suppress_stdout(), suppress_stderr())
+    ):
         return _context_cls(config.kb)
 
 def _make_grammar():
