@@ -70,15 +70,17 @@ def validate(
         xns.all_utterance_token_id_seqs = []
 
     if evaluating:
+        tqdm_fn = config.utqdm
         measure_name = 'oracle_accuracy' if using_oracle else 'accuracy'
-        utqdm_kwargs = dict(
+        tqdm_kwargs = dict(
             unit=measure_name,
             update_fn=pred_collector.get_accuracy_percent,
             repr_format='{:5.2f}',
             init_repr='none'
         )
     else:
-        utqdm_kwargs = dict()
+        tqdm_fn = config.xtqdm
+        tqdm_kwargs = dict()
 
     if collecting_weaksup_examples:
         assert using_oracle
@@ -93,7 +95,7 @@ def validate(
 
     # print('---- Remove debug code ----')
     # debug_batch_idx = -1
-    for batch in config.utqdm(data_loader, **utqdm_kwargs):
+    for batch in tqdm_fn(data_loader, **tqdm_kwargs):
         # if debug_batch_idx > 5:
         #     break
         # else:
@@ -426,12 +428,11 @@ class PredictionCollector:
             self.num_correct = 0
 
     def collect(self, *, predictions, answers=None):
+        self.predictions.extend(predictions)
         if self.evaluating:
+            self.answers.extend(answers)
             self.num_correct += compute_num_correct(
                 predictions, answers, num_return_sequences=self.num_return_sequences)
-
-        self.predictions.extend(predictions)
-        self.answers.extend(answers)
 
     def get_accuracy(self):
         assert len(self.predictions) == len(self.answers) * self.num_return_sequences
