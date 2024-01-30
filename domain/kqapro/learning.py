@@ -687,28 +687,28 @@ class SequencePrefixProcessor:
 
     def action_id_seq_to_state(self, action_id_seq):
         assert isinstance(action_id_seq, tuple)
-        curr_state = None
 
         if action_id_seq in self.state_fifo_dict:
             return self.state_fifo_dict[action_id_seq]
         else:
             if len(action_id_seq) == 0:
                 curr_state = self.grammar.search_state_cls.create()
-            else:
-                if action_id_seq[:-1] in self.state_fifo_dict:
-                    prev_state = self.state_fifo_dict[action_id_seq[:-1]]
-                    if prev_state is self.grammar.search_state_cls.INVALID:
-                        curr_state = self.grammar.search_state_cls.INVALID
-                    else:
-                        next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
+            elif action_id_seq[:-1] not in self.state_fifo_dict:
+                if (self.PAD_TOKEN_ID in action_id_seq) or (self.EOS_TOKEN_ID in action_id_seq):
+                    curr_state = self.grammar.search_state_cls.INVALID
                 else:
                     breakpoint()
-                    raise Exception('cache_size is not enough')
-                    # warnings.warn('cache_size is not enough')
-                    # prev_state = None
-                    # next_action_id_seq = action_id_seq
+                    raise Exception(
+                        'The `cache_size` is not enough. '
+                        'Check `batch_size` is synchronized with that of a DataLoader object')
+                # warnings.warn('cache_size is not enough')
+            else:
+                prev_state = self.state_fifo_dict[action_id_seq[:-1]]
+                if prev_state is self.grammar.search_state_cls.INVALID:
+                    curr_state = self.grammar.search_state_cls.INVALID
+                else:
+                    next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
 
-                if curr_state is None:
                     try:
                         action_seq = tuple(map(self.grammar.id_to_action, next_action_id_seq))
                     except NotFoundError:
