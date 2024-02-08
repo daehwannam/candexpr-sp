@@ -789,9 +789,9 @@ def run_search_train(
         # Search
         search_updating_best = run_search()
 
-        if not search_updating_best:
-            logger.info('Early stopping after search')
-            break
+        # if not search_updating_best:
+        #     logger.info('Early stopping after search')
+        #     break
 
         # Optimization
         optim_updating_best = run_optim()
