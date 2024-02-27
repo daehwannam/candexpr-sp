@@ -687,46 +687,51 @@ class SequencePrefixProcessor:
 
     def action_id_seq_to_state(self, action_id_seq):
         assert isinstance(action_id_seq, tuple)
-        curr_state = None
 
         if action_id_seq in self.state_fifo_dict:
             return self.state_fifo_dict[action_id_seq]
         else:
             if len(action_id_seq) == 0:
                 curr_state = self.grammar.search_state_cls.create()
-            else:
-                if action_id_seq[:-1] in self.state_fifo_dict:
-                    prev_state = self.state_fifo_dict[action_id_seq[:-1]]
-                    if prev_state is self.grammar.search_state_cls.INVALID:
-                        curr_state = self.grammar.search_state_cls.INVALID
-                    else:
-                        next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
-                else:
+            elif action_id_seq[:-1] in self.state_fifo_dict:
+                prev_state = self.state_fifo_dict[action_id_seq[:-1]]
+                if prev_state in [self.grammar.search_state_cls.END, self.grammar.search_state_cls.INVALID]:
                     curr_state = self.grammar.search_state_cls.INVALID
-                    # breakpoint()
-                    # raise Exception('cache_size is not enough')
-                    # # warnings.warn('cache_size is not enough')
-                    # # prev_state = None
-                    # # next_action_id_seq = action_id_seq
-
-                if curr_state is None:
+                else:
+                    next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
                     try:
                         action_seq = tuple(map(self.grammar.id_to_action, next_action_id_seq))
                     except NotFoundError:
                         curr_state = self.grammar.search_state_cls.INVALID
                     else:
-                        try:
-                            if prev_state.tree.is_closed_root():
-                                # This block is entered when using beam search,
-                                # which examines all items in a beam,
-                                # whether the item has a valid or invalid state.
-                                assert self.num_beams > 1
-                                curr_state = self.grammar.search_state_cls.INVALID
-                            else:
+                        if prev_state.tree.is_closed_root():
+                            # This block is entered when using beam search,
+                            # which examines all items in a beam,
+                            # whether the item has a valid or invalid state.
+                            assert self.num_beams > 1
+                            curr_state = self.grammar.search_state_cls.INVALID
+                        else:
+                            try:
                                 curr_state = self.grammar.search_state_cls.get_last_state(
                                     action_seq, initial_state=prev_state, verifying=True)
-                        except InvalidCandidateActionError:
-                            curr_state = self.grammar.search_state_cls.INVALID
+                            except InvalidCandidateActionError:
+                                curr_state = self.grammar.search_state_cls.INVALID
+            else:
+                # breakpoint()
+                # # curr_state = self.grammar.search_state_cls.INVALID
+
+                # # When this block is entered?
+                # #
+                # # `action_id_seq_to_state` in called in `prefix_allowed_and_ids_pair_fn`.
+                # # However, when last_token_id in [self.PAD_TOKEN_ID, self.EOS_TOKEN_ID],
+                # # `action_id_seq_to_state` is not called, then the last states are not saved.
+                # #
+                # # e.g. action_id_seq == (50305, 50282, 443, 50309, 50280, 50286, 726, 459, 3494, 219, 413, 50309, 1, 7)
+                # # where 1 is the id of self.PAD_TOKEN_ID
+
+                raise Exception(
+                    'The `cache_size` is not enough. '
+                    'Check `batch_size` is synchronized with that of a DataLoader object')
 
             self.state_fifo_dict[action_id_seq] = curr_state
             return curr_state
@@ -755,13 +760,19 @@ class SequencePrefixProcessor:
             # when `_prefix_token_id_seq` has only `self.DECODER_START_TOKEN_ID`
             return True, [self.BOS_TOKEN_ID]
         else:
+            decoder_start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
+            assert decoder_start_token_id == self.DECODER_START_TOKEN_ID
+            assert bos_token_id == self.BOS_TOKEN_ID
+
             last_token_id = _prefix_token_id_seq[-1]
             if last_token_id in [self.PAD_TOKEN_ID, self.EOS_TOKEN_ID]:
+                self.state_fifo_dict[tuple(action_id_seq)] = self.grammar.search_state_cls.END
                 return True, [self.PAD_TOKEN_ID]
             else:
-                decoder_start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
-                assert decoder_start_token_id == self.DECODER_START_TOKEN_ID
-                assert bos_token_id == self.BOS_TOKEN_ID
+                # decoder_start_token_id, bos_token_id, *action_id_seq = _prefix_token_id_seq
+                # assert decoder_start_token_id == self.DECODER_START_TOKEN_ID
+                # assert bos_token_id == self.BOS_TOKEN_ID
+
                 with self.grammar.let_dynamic_trie(self.dynamic_tries[batch_id]):
                     curr_state = self.action_id_seq_to_state(tuple(action_id_seq))
 
