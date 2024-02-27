@@ -93,8 +93,8 @@ def validate(
 
     unwrapped_model = config.accelerator.unwrap_model(model)
 
-    tqdm_fn = config.xtqdm  # DEBUG for time measure
-    tqdm_kwargs = dict()    # DEBUG for time measure
+    # tqdm_fn = config.xtqdm  # DEBUG for time measure
+    # tqdm_kwargs = dict()    # DEBUG for time measure
 
     # print('---- Remove debug code ----')
     # debug_batch_idx = -1
@@ -124,7 +124,7 @@ def validate(
             # **generation_kwargs
         )
         all_decoding_time += tm.elapse()
-        continue                # DEBUG for time measure
+        # continue                # DEBUG for time measure
 
         ignoring_errors = config.ignoring_parsing_errors or not (
             constrained_decoding and using_arg_candidate and config.using_distinctive_union_types)
@@ -173,8 +173,8 @@ def validate(
                 batch['utterance_token_ids'].tolist(), grammar.lf_tokenizer.pad_token_id))
 
     # config.logger.info('All decoding time: {} second'.format(all_decoding_time))
-    print('All decoding time: {} second'.format(all_decoding_time))  # DEBUG for time measure
-    import sys; sys.exit(0)      # DEBUG for time measure
+    # print('All decoding time: {} second'.format(all_decoding_time))  # DEBUG for time measure
+    # import sys; sys.exit(0)      # DEBUG for time measure
 
     config.accelerator.wait_for_everyone()
 
@@ -437,12 +437,11 @@ class PredictionCollector:
             self.num_correct = 0
 
     def collect(self, *, predictions, answers=None):
+        self.predictions.extend(predictions)
         if self.evaluating:
+            self.answers.extend(answers)
             self.num_correct += compute_num_correct(
                 predictions, answers, num_return_sequences=self.num_return_sequences)
-
-        self.predictions.extend(predictions)
-        self.answers.extend(answers)
 
     def get_accuracy(self):
         assert len(self.predictions) == len(self.answers) * self.num_return_sequences
