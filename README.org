@@ -167,32 +167,27 @@ accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG \
 - Testing on the validation set make a prediction file and an evaluation result.
 - Testing on the test set makes a prediction file without evaluation.
 
-*** Testing on the validation set with the default model path
+*** Testing on a dataset with the default model path
 #+begin_src sh
+TEST_CONFIG='config.test_on_val_set'  # or 'config.test_on_test_set'
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 # e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
-python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
+python -m domain.kqapro.run --config $TEST_CONFIG --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src
 
-*** Testing on the validation set with a specific model directory name
+*** Testing on a dataset with a specific model directory name
 #+begin_src sh
+TEST_CONFIG='config.test_on_val_set'  # or 'config.test_on_test_set'
 MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
 # e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
 MODEL_DIR_NAME='full-constraints:best/model'
 # Options for MODEL_DIR_NAME: best/model, common:best/model, full-constraints:best/model, no-arg-candidate:best/model, no-ac-no-dut:best/model, no-constrained-decoding:best/model
-python -m domain.kqapro.run --config config.test_on_val_set --model-learning-dir $MODEL_LEARNING_DIR_PATH --model-dir-name $MODEL_DIR_NAME
-#+end_src
-
-*** Testing on the test set with the default model path
-#+begin_src sh
-MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
-# e.g. MODEL_LEARNING_DIR_PATH=model-instance/2023-07-15_10:10:24_916400
-python -m domain.kqapro.run --config config.test_on_test_set --model-learning-dir $MODEL_LEARNING_DIR_PATH
+python -m domain.kqapro.run --config $TEST_CONFIG --model-learning-dir $MODEL_LEARNING_DIR_PATH --model-dir-name $MODEL_DIR_NAME
 #+end_src
 
 *** Testing with specifying a model path and test directory path
 #+begin_src sh
-TEST_CONFIG='config.test_on_test_set'  # or 'config.test_on_val_set'
+TEST_CONFIG='config.test_on_val_set'  # or 'config.test_on_test_set'
 MODEL_PATH='path/to/model'
 TEST_DIR_PATH='path/to/test-result'
 # e.g. TEST_DIR_PATH='./model-test/2023-07-19_01:17:04_094104_full-constraints:best/model'
@@ -202,22 +197,30 @@ python -m domain.kqapro.run --config $TEST_CONFIG --model-path $MODEL_PATH --tes
 
 *** Testing with a specific decoding strategy
 #+begin_src sh
-TEST_CONFIG='config.test_on_test_set'  # or 'config.test_on_val_set'
+TEST_CONFIG='config.test_on_val_set'  # or 'config.test_on_test_set'
 MODEL_PATH='path/to/model'
 COMMON_TEST_CMD="python -m domain.kqapro.run --config config.$TEST_CONFIG --model-path $MODEL_PATH"
 
+BEAM_CONFIG='config.extra.num_prediction_beams=1'
+
 # full constraints
 TEST_DIR_PATH='path/to/test-result:full-constraints'
-$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH
+EXTRA_CONFIG="${BEAM_CONFIG}"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate
 TEST_DIR_PATH='path/to/test-result:no-arg-candidate'
-EXTRA_CONFIG='config.extra.using_arg_candidate=False'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.extra.using_arg_candidate=False"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+
+# without arg-candidate and union types
+TEST_DIR_PATH='path/to/test-result:no-ac-no-dut'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.extra.using_arg_candidate=False|config.extra.using_distinctive_union_types=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without constrained-decoding
 TEST_DIR_PATH='path/to/test-result:no-constrained-decoding'
-EXTRA_CONFIG='config.extra.constrained_decoding=False'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
 
@@ -251,7 +254,7 @@ EXTRA_CONFIG="${BEAM_CONFIG}|config.extra.using_arg_candidate=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate and union types
-TEST_DIR_PATH='path/to/test-result:no-arg-candidate'
+TEST_DIR_PATH='path/to/test-result:no-ac-no-dut'
 EXTRA_CONFIG="${BEAM_CONFIG}|config.extra.using_arg_candidate=False|config.extra.using_distinctive_union_types=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 

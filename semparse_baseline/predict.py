@@ -18,6 +18,7 @@ from kopl.kopl import KoPLEngine
 from kqapro_util.misc import seed_everything
 
 from dhnamlib.pylib.filesys import make_logger
+from dhnamlib.pylib.time import TimeMeasure
 
 from .data import DataLoader
 from .util import register
@@ -62,20 +63,28 @@ def vis(args, kb, model, data, device, tokenizer):
             print(outputs[0])
 
 
-def predict(args, model, data, device, tokenizer, executor, postprocessing_answer: bool):
+def predict(args, model, data, device, tokenizer, executor, postprocessing_answer: bool, num_beams=1, verbose=False):
     model.eval()
     count, correct = 0, 0
     with torch.no_grad():
         all_outputs = []
+        total_decoding_time = 0
+        tm = TimeMeasure()
         for batch in tqdm(data, total=len(data)):
             source_ids = batch[0].to(device)
+            tm.check()
             outputs = model.generate(
                 input_ids=source_ids,
                 max_length = 500,
+                num_beams=num_beams,
             )
+            total_decoding_time += tm.elapse()
 
             all_outputs.extend(outputs.cpu().numpy())
-        
+
+        if verbose:
+            print('Total decoding time: {} second'.format(total_decoding_time))
+
         outputs = [tokenizer.decode(output_id, skip_special_tokens = True, clean_up_tokenization_spaces = True) for output_id in all_outputs]
         with open(os.path.join(args.save_dir, 'predict.txt'), 'w') as f:
 
@@ -109,21 +118,29 @@ def predict(args, model, data, device, tokenizer, executor, postprocessing_answe
                         ans = 'None'
                 f.write(ans + '\n')
                 
-def validate(model, data, device, tokenizer, executor, postprocessing_answer: bool):
+def validate(model, data, device, tokenizer, executor, postprocessing_answer: bool, num_beams=1, verbose=False):
     model.eval()
     count, correct = 0, 0
     with torch.no_grad():
         all_outputs = []
         all_answers = []
+        total_decoding_time = 0
+        tm = TimeMeasure()
         for batch in tqdm(data, total=len(data)):
             source_ids, source_mask, choices, target_ids, answer = [x.to(device) for x in batch]
+            tm.check()
             batch_outputs = model.generate(
                 input_ids=source_ids,
                 max_length = 500,
+                num_beams=num_beams,
             )
+            total_decoding_time += tm.elapse()
 
             all_outputs.extend(batch_outputs.cpu().numpy())
             all_answers.extend(answer.cpu().numpy())
+
+        if verbose:
+            print('Total decoding time: {} second'.format(total_decoding_time))
         
         outputs = [tokenizer.decode(output_id, skip_special_tokens = True, clean_up_tokenization_spaces = True) for output_id in all_outputs]
         given_answer = [data.vocab['answer_idx_to_token'][a] for a in all_answers]
@@ -180,7 +197,7 @@ def train(args):
     engine = KoPLEngine(json.load(open(os.path.join(args.input_dir, 'kb.json'))))
     # validate(model, val_loader, device, tokenizer, engine)
 
-    predict(args, model, val_loader, device, tokenizer, engine, args.postprocessing_answer)
+    predict(args, model, val_loader, device, tokenizer, engine, args.postprocessing_answer, args.num_beams, args.verbose)
 
 
 def main():
@@ -195,6 +212,8 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='random seed')
 
     parser.add_argument('--postprocessing-answer', dest='postprocessing_answer', action='store_true', help='post-processing answers')
+    parser.add_argument('--num_beams', dest='num_beams', default=1, type=int, help='beam size')
+    parser.add_argument('--verbose', dest='verbose', action='store_true', help='post-processing answers')
     
     # validating parameters
     # parser.add_argument('--num_return_sequences', default=1, type=int)

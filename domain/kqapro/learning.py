@@ -702,11 +702,12 @@ class SequencePrefixProcessor:
                     else:
                         next_action_id_seq = action_id_seq[-1:]  # a list with only the last element
                 else:
-                    breakpoint()
-                    raise Exception('cache_size is not enough')
-                    # warnings.warn('cache_size is not enough')
-                    # prev_state = None
-                    # next_action_id_seq = action_id_seq
+                    curr_state = self.grammar.search_state_cls.INVALID
+                    # breakpoint()
+                    # raise Exception('cache_size is not enough')
+                    # # warnings.warn('cache_size is not enough')
+                    # # prev_state = None
+                    # # next_action_id_seq = action_id_seq
 
                 if curr_state is None:
                     try:

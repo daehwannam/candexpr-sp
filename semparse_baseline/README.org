@@ -100,5 +100,16 @@ CHECKPOINT_PATH=./output/bart-program-$DATE/checkpoint-$CKPT_NUM
 python -m $MODULE.predict --input_dir $PROCESSED_PATH --save_dir $PREDICT_LOG_PATH --ckpt $CHECKPOINT_PATH --postprocessing-answer
 #+end_src
 
+** Prediction with decoding time
+#+begin_src sh
+# CKPT_NUM=<number>
+CKPT_NUM=best
+BATCH_SIZE=64
+BEAM_SIZE=1
+CHECKPOINT_PATH=./output/bart-program-$DATE/checkpoint-$CKPT_NUM
+python -m $MODULE.predict --input_dir $PROCESSED_PATH --save_dir $PREDICT_LOG_PATH --ckpt $CHECKPOINT_PATH \
+       --batch_size $BATCH_SIZE --num_beams $BEAM_SIZE --verbose
+#+end_src
+
 * Acknowledgements
 We thank to the authors of [[https://github.com/shijx12/][KQA Pro]] dataset. Our code also exploits the [[https://github.com/shijx12/KQAPro_Baselines][BART seq2seq program parser]] they released.

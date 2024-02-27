@@ -70,15 +70,17 @@ def validate(
         xns.all_utterance_token_id_seqs = []
 
     if evaluating:
+        tqdm_fn = config.utqdm
         measure_name = 'oracle_accuracy' if using_oracle else 'accuracy'
-        utqdm_kwargs = dict(
+        tqdm_kwargs = dict(
             unit=measure_name,
             update_fn=pred_collector.get_accuracy_percent,
             repr_format='{:5.2f}',
             init_repr='none'
         )
     else:
-        utqdm_kwargs = dict()
+        tqdm_fn = config.xtqdm
+        tqdm_kwargs = dict()
 
     if collecting_weaksup_examples:
         assert using_oracle
@@ -91,9 +93,12 @@ def validate(
 
     unwrapped_model = config.accelerator.unwrap_model(model)
 
+    tqdm_fn = config.xtqdm  # DEBUG for time measure
+    tqdm_kwargs = dict()    # DEBUG for time measure
+
     # print('---- Remove debug code ----')
     # debug_batch_idx = -1
-    for batch in config.utqdm(data_loader, **utqdm_kwargs):
+    for batch in tqdm_fn(data_loader, **tqdm_kwargs):
         # if debug_batch_idx > 5:
         #     break
         # else:
@@ -119,6 +124,8 @@ def validate(
             # **generation_kwargs
         )
         all_decoding_time += tm.elapse()
+        continue                # DEBUG for time measure
+
         ignoring_errors = config.ignoring_parsing_errors or not (
             constrained_decoding and using_arg_candidate and config.using_distinctive_union_types)
         last_states = learning.token_id_seqs_to_last_states(
@@ -164,6 +171,10 @@ def validate(
         if collecting_weaksup_examples:
             xns.all_utterance_token_id_seqs.extend(unpad_sequence(
                 batch['utterance_token_ids'].tolist(), grammar.lf_tokenizer.pad_token_id))
+
+    # config.logger.info('All decoding time: {} second'.format(all_decoding_time))
+    print('All decoding time: {} second'.format(all_decoding_time))  # DEBUG for time measure
+    import sys; sys.exit(0)      # DEBUG for time measure
 
     config.accelerator.wait_for_everyone()
 
