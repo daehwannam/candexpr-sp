@@ -16,8 +16,8 @@ from dhnamlib.pylib.decoration import construct
 from .execution import postprocess_prediction
 from .kopl_original import execute_kopl_program
 from . import kopl_transfer
-from . import learning
-from splogic.formalism import InvalidCandidateActionError
+from semparse import learning
+from splogic.base.formalism import InvalidCandidateActionError
 
 
 @config
@@ -42,7 +42,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             answer = example['answer']
 
             with tm:
-                action_seq = kopl_transfer.kopl_to_action_seq(grammar, labeled_kopl_program)
+                action_seq = kopl_transfer.kopl_to_action_seq(grammar, context, labeled_kopl_program)
             kopl_to_action_seq_cumtime += tm.interval
 
             action_seqs.append(action_seq)

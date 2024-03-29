@@ -1,5 +1,5 @@
 import argparse
-from functools import lru_cache
+from functools import cache
 
 import configuration
 
@@ -21,7 +21,7 @@ def _make_grammar():
 using_arg_candidate = True
 
 
-@lru_cache(maxsize=None)
+@cache
 def _get_cmd_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-arg-candidate-for', dest='action_name_without_arg_candidate', help='arg-candidate is disabled for the specified action')

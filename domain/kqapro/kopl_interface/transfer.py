@@ -4,48 +4,20 @@
 import re
 from itertools import chain
 from collections import deque
-from functools import lru_cache
+# from functools import lru_cache
+from functools import cache
 
-from configuration import config
+# from configuration import config
 from utility.trie import TokenTrie
 
 from dhnamlib.pylib.context import block
-from dhnamlib.pylib.hflib.transforming import iter_default_non_special_tokens
 from dhnamlib.pylib.decoration import construct, curry, variable, id_cache
 from dhnamlib.pylib.function import compose
 from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, finditer
 
-from . import kopl_read
-from . import kb_analysis
-from . import learning
-
-
-def iter_nl_token_actions(meta_name_to_meta_action, lf_tokenizer, using_distinctive_union_types):
-    nl_token_meta_action = meta_name_to_meta_action(nl_token_meta_name)
-
-    if using_distinctive_union_types:
-        _get_token_act_type = get_token_act_type
-    else:
-        nl_token_type = tuple(chain(default_nl_token_union_type, ['vp-quantity', 'vp-date', 'vp-year']))
-
-        def _get_token_act_type(token_value):
-            return nl_token_type
-
-    def iter_token_value_act_type_pairs():
-        all_non_special_token_values = tuple(iter_default_non_special_tokens(lf_tokenizer))
-        all_act_types = map(_get_token_act_type, all_non_special_token_values)
-
-        return zip(all_non_special_token_values, all_act_types)
-
-    def iter_token_actions():
-        for token_value, act_type in iter_token_value_act_type_pairs():
-            yield nl_token_meta_action(meta_kwargs=dict(token=token_value),
-                                       act_type=act_type)
-
-    return iter_token_actions()
-
-
-nl_token_meta_name = 'nl-token'
+from . import read as kopl_read
+from . import kb_analysis as kopl_kb_analysis
+from semparse import learning
 
 
 with block:
@@ -103,9 +75,8 @@ with block:
         date='kw-q-time',
         year='kw-q-time')
 
-    @config
-    def iter_act_type_trie_pairs(*, kb=config.ph, lf_tokenizer, end_of_seq, context=config.ph):
-        kb_info = kb_analysis.extract_kb_info(kb)
+    def iter_act_type_trie_pairs(*, lf_tokenizer, end_of_seq, context):
+        kb_info = kopl_kb_analysis.extract_kb_info(context.raw_kb)
         # data_types = set(['string', 'quantity', 'time', 'date', 'year'])
         # time_types = set(['time', 'date', 'year'])
 
@@ -116,7 +87,7 @@ with block:
             units='v-unit'
         )
 
-        trie_dict = kb_analysis.make_trie_dict(kb_info, lf_tokenizer, end_of_seq)
+        trie_dict = kopl_kb_analysis.make_trie_dict(kb_info, lf_tokenizer, end_of_seq)
         trie_dict['units'].add_token_seq([end_of_seq])  # add reduce-only case
 
         # Processing keywords in `key_to_act_type`
@@ -134,7 +105,7 @@ with block:
         for entity_name, entities in context.kb.name_to_id.items():
             if len(entities) > 0:
                 entity_names.add(entity_name)
-        entity_trie = kb_analysis.make_trie(entity_names, lf_tokenizer, end_of_seq)
+        entity_trie = kopl_kb_analysis.make_trie(entity_names, lf_tokenizer, end_of_seq)
         yield 'kw-entity', entity_trie
 
         assert sum(1 for value in trie_dict.values() if isinstance(value, dict)) == 2
@@ -156,11 +127,10 @@ with block:
 
         yield from act_type_to_trie_dict.items()
 
-    @config
     @id_cache
-    def make_kw_to_type_dict(kb=config.ph):
-        kb_info = kb_analysis.extract_kb_info(kb)
-        _kw_to_type_dict = kb_analysis.make_kw_to_type_dict(kb_info)
+    def make_kw_to_type_dict(kb):
+        kb_info = kopl_kb_analysis.extract_kb_info(kb)
+        _kw_to_type_dict = kopl_kb_analysis.make_kw_to_type_dict(kb_info)
 
         @construct(dict)
         def _make_kw_to_type_dict(kw_category, new_type_dict):
@@ -174,56 +144,7 @@ with block:
 
 
 with block:
-    # Conversion bewteen tokens and action names
-    def action_name_to_special_token(action_name):
-        return f'<{action_name}>'
-
-    def special_token_to_action_name(special_token):
-        assert special_token[0] == '<'
-        assert special_token[-1] == '>'
-        return special_token[1:-1]
-
-    _delimiter_after_prefix = ' '
-
-    def _add_prefix(text, prefix):
-        return f'{prefix}{_delimiter_after_prefix}{text}'
-
-    def _remove_prefix(text_with_prefix, prefix):
-        return text_with_prefix[len(prefix) + len(_delimiter_after_prefix):]
-
-    def _add_parentheses(text):
-        return f'({text})'
-
-    def _remove_parentheses(text):
-        assert text[0] == '('
-        assert text[1] == ')'
-        return text[1:-1]
-
-    def nl_token_to_action_name(nl_token):
-        return _add_parentheses(_add_prefix(nl_token, nl_token_meta_name))
-
-    def action_name_to_nl_token(action_name):
-        return _remove_parentheses(_remove_prefix(action_name, nl_token_meta_name))
-
-    def is_nl_token_action_name(action_name):
-        return action_name[0] == '(' and action_name[-1] == ')' \
-            and _remove_parentheses(action_name).startswith(nl_token_meta_name + _delimiter_after_prefix)
-
-    def token_to_action_name(token, special_tokens):
-        if token in special_tokens:
-            return special_token_to_action_name(token)
-        else:
-            return nl_token_to_action_name(token)
-
-    def action_name_to_token(action_name):
-        if is_nl_token_action_name(action_name):
-            return action_name_to_nl_token(action_name)
-        else:
-            return action_name_to_special_token(action_name)
-
-
-with block:
-    def kopl_to_action_seq(grammar, labeled_kopl_program):
+    def kopl_to_action_seq(grammar, context, labeled_kopl_program):
         action_seq = []
         recursive_kopl_form = kopl_read.kopl_to_recursive_form(labeled_kopl_program)
 
@@ -233,8 +154,7 @@ with block:
             prev_kopl_input = None
             for idx, kopl_input in enumerate(form['inputs']):
                 action_seq.extend(_kopl_input_to_action_seq(
-                    grammar, kopl_input, function_action.param_types[idx],
-                    prev_kopl_input=prev_kopl_input))
+                    grammar, context, kopl_input, function_action.param_types[idx], prev_kopl_input))
                 prev_kopl_input = kopl_input
             for sub_form in form['dependencies']:
                 parse(sub_form)
@@ -247,7 +167,7 @@ with block:
             kopl_function = 'QueryName'
         return _get_kopl_function_to_action_dict(grammar)[kopl_function]
 
-    @lru_cache(maxsize=None)
+    @cache
     @construct(compose(dict, distinct_pairs))
     def _get_kopl_function_to_action_dict(grammar):
         # kopl_function_to_action_dict = {}
@@ -258,19 +178,18 @@ with block:
                 if kopl_function is not None:
                     yield kopl_function, action
 
-    @config
-    def _kopl_input_to_action_seq(grammar, kopl_input, act_type, *, context=config.ph, prev_kopl_input):
+    def _kopl_input_to_action_seq(grammar, context, kopl_input, act_type, prev_kopl_input):
         def text_to_nl_token_actions(text):
             return tuple(
                 chain(
-                    map(compose(grammar.name_to_action, nl_token_to_action_name),
+                    map(compose(grammar.name_to_action, grammar.action_name_style.nl_token_to_action_name),
                         grammar.lf_tokenizer.tokenize(text)),
                     [grammar.reduce_action]))
 
         def is_type_of(act_type, super_type):
             return grammar.sub_and_super(act_type, super_type)
 
-        kw_to_type_dict = make_kw_to_type_dict()
+        kw_to_type_dict = make_kw_to_type_dict(grammar.raw_kb)
 
         if is_type_of(act_type, 'keyword'):
             if act_type in ['kw-attr-comparable', 'kw-attribute']:
@@ -318,7 +237,7 @@ with block:
 
         return action_seq
 
-    @lru_cache(maxsize=None)
+    @cache
     def _get_act_type_to_actions_dict(grammar):
         return merge_pairs([action.act_type, action] for action in grammar.base_actions)
 
@@ -328,7 +247,7 @@ with block:
 
 with block:
     def iter_super_to_sub_actions(super_types_dict, is_non_conceptual_type):
-        from splogic.formalism import Action
+        from splogic.base.formalism import Action
 
         super_sub_pair_set = set()
 

@@ -1,23 +1,39 @@
 
 import os
 # import warnings
-import glob
+# import glob
 
 import torch
 
+# from configuration import config, coc
 from configuration import config
 
-from . import learning
-from .data_read import make_data_loader
-from .validation import validate
-from .learning import optim_measures, search_measures
+from splogic.seq2seq import learning as seq2seq_learning
+from splogic.seq2seq.data_read import make_data_loader
+from splogic.seq2seq.validation import validate
+from splogic.seq2seq import filemng
+# from splogic.seq2seq.filemng import optim_measures, search_measures
 
+from splogic.utility.acceleration import accelerator
+from splogic.utility.tqdm import utqdm
+from splogic.utility.logging import logger
+
+# from . import learning
+# from . import filemng
+# from .validation import validate
+# from .filemng import optim_measures, search_measures
+
+# from .data_read import make_data_loader
 
 from dhnamlib.pylib import filesys
 from dhnamlib.pylib.iteration import not_none_valued_dict
 from dhnamlib.pylib.mllib.learning import get_init_status, update_status
-from dhnamlib.pylib.function import identity
+# from dhnamlib.pylib.function import identity
+# from dhnamlib.pylib.lazy import LazyProxy
 from dhnamlib.pylib.hflib.acceleration import broadcast_object
+
+
+# make_data_loader = LazyProxy(lambda: coc.domain.data_read.make_data_loader)
 
 
 MODEL_SYMLINK_NAME = 'model'
@@ -31,7 +47,7 @@ def run_train(
         grammar=config.ph,
         compiler=config.ph,
         # device=config.ph,
-        logger=config.ph,
+        # logger=config.ph,
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
         train_batch_size=config.ph,
@@ -51,39 +67,41 @@ def run_train(
         model_learning_dir_path=config.ph,
         restarting=False,
         context=config.ph,
+        denotation_equal=config.ph,
+        optim_measures=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         saving_optimizer=config.ph,
         weaksup_learning=config.ph(False),
 ):
     if restarting:
-        assert learning.is_finetuned(pretrained_model_name_or_path)
+        assert filemng.is_finetuned(pretrained_model_name_or_path)
 
         if model_learning_dir_path is None:
             model_learning_dir_path = filesys.get_parent_path(pretrained_model_name_or_path)
     else:
         assert model_learning_dir_path is not None
 
-    learning.save_config_info(model_learning_dir_path)
+    filemng.save_config_info(model_learning_dir_path)
 
     last_dir_path = os.path.join(model_learning_dir_path, 'last')
     # mkloc_unless_exist_wlmp(last_dir_path)
-    # make_symlink_wlmp(learning.get_new_checkpoint_path(model_learning_dir_path), last_dir_path)
+    # make_symlink_wlmp(seq2seq_learning.get_new_checkpoint_path(model_learning_dir_path), last_dir_path)
 
     best_dir_path = os.path.join(model_learning_dir_path, 'best')
     # mkloc_unless_exist_wlmp(best_dir_path)
     # copy_symlink_wlmp(last_dir_path, best_dir_path)
 
-    cpm = learning.AcceleratedCheckpointManager(
+    cpm = filemng.AcceleratedCheckpointManager(
         checkpoint_loc_path=os.path.join(model_learning_dir_path, 'checkpoint'),
         symlink_glob_patterns=[os.path.join(model_learning_dir_path, 'last', MODEL_SYMLINK_NAME),
                                os.path.join(model_learning_dir_path, 'best', MODEL_SYMLINK_NAME)])
 
-    model = learning.load_model(
+    model = filemng.load_model(
         pretrained_model_name_or_path,
         num_tokens=len(grammar.lf_tokenizer))
     # model.to(device)
-    model.to(config.accelerator.device)
+    model.to(accelerator.device)
 
     if weaksup_learning:
         assert train_max_num_action_seqs is not None
@@ -104,11 +122,11 @@ def run_train(
         shuffle=False,
     )
 
-    param_groups = learning.get_param_groups(model, learning_rate=learning_rate, weight_decay=weight_decay)
+    param_groups = seq2seq_learning.get_param_groups(model, learning_rate=learning_rate, weight_decay=weight_decay)
 
     optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, eps=adam_epsilon)
 
-    scheduler = learning.make_scheduler(
+    scheduler = seq2seq_learning.make_scheduler(
         optimizer=optimizer,
         using_scheduler=using_scheduler,
         train_data_loader=train_data_loader,
@@ -118,23 +136,23 @@ def run_train(
 
     if restarting:
         # Question: what do optimizer and scheduler save?
-        learning.load_and_update_optimizer(optimizer, pretrained_model_name_or_path)
-        learning.load_and_update_scheduler(scheduler, pretrained_model_name_or_path)
+        filemng.load_and_update_optimizer(optimizer, pretrained_model_name_or_path)
+        filemng.load_and_update_scheduler(scheduler, pretrained_model_name_or_path)
 
-        status = dict(learning.load_status(pretrained_model_name_or_path))
+        status = dict(filemng.load_status(pretrained_model_name_or_path))
     else:
         status = get_init_status(measures=optim_measures, update_unit='epoch')
 
     # The model and optimizer should be passed together to the prepare method
     # https://huggingface.co/docs/accelerate/quicktour#enable-distributed-training-in-your-script
-    model, train_data_loader, optimizer, scheduler = config.accelerator.prepare(
+    model, train_data_loader, optimizer, scheduler = accelerator.prepare(
         model, train_data_loader, optimizer, scheduler)
 
-    val_data_loader = config.accelerator.prepare_val_data_loader(val_data_loader)
+    val_data_loader = accelerator.prepare_val_data_loader(val_data_loader)
 
     remaining_patience = patience
 
-    forward_backward = learning.ws_forward_backward if weaksup_learning else learning.ss_forward_backward
+    forward_backward = seq2seq_learning.ws_forward_backward if weaksup_learning else seq2seq_learning.ss_forward_backward
 
     for epoch in range(status['last_update_num'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
@@ -143,8 +161,8 @@ def run_train(
         # debug_batch_idx = -1
         # loss = torch.tensor(0.)
         loss = 0
-        # for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
-        for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
+        # for batch in coc.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
+        for batch in utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
             # if debug_batch_idx > 100:
             #     break
             # else:
@@ -162,14 +180,14 @@ def run_train(
                 softmax_masking=None if weaksup_learning else softmax_masking,
             ))
 
-            assert config.accelerator.sync_gradients
-            if config.accelerator.sync_gradients:
-                config.accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
+            assert accelerator.sync_gradients
+            if accelerator.sync_gradients:
+                accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
 
             optimizer.step()
             scheduler.step()
 
-        config.accelerator.wait_for_everyone()
+        accelerator.wait_for_everyone()
 
         model.eval()
         # from dhnamlib.pylib.cProfiling import run_context
@@ -186,7 +204,9 @@ def run_train(
             softmax_masking=softmax_masking,
             constrained_decoding=constrained_decoding,
             using_arg_candidate=using_arg_candidate,
-            evaluating=True)
+            evaluating=True,
+            denotation_equal=denotation_equal,
+        )
 
         performance = validation['performance']
 
@@ -195,30 +215,30 @@ def run_train(
         updating_best = update_status(status, performance=performance)
 
         new_checkpoint_dir_path = cpm.get_new_checkpoint_path()
-        with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
-            learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
+        with filemng.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
+            filemng.skip_if_not_wlmp(temp_checkpoint_dir_path)
 
             if saving_optimizer:
-                learning.save_optimizer(optimizer, temp_checkpoint_dir_path)
-            learning.save_scheduler(scheduler, temp_checkpoint_dir_path)
-            learning.save_model(model, temp_checkpoint_dir_path)
+                filemng.save_optimizer(optimizer, temp_checkpoint_dir_path)
+            filemng.save_scheduler(scheduler, temp_checkpoint_dir_path)
+            filemng.save_model(model, temp_checkpoint_dir_path)
 
-        with cpm.cleaning(learning.replace_dir(last_dir_path)) as temp_last_dir_path:
-            learning.skip_if_not_wlmp(temp_last_dir_path)
+        with cpm.cleaning(filemng.replace_dir(last_dir_path)) as temp_last_dir_path:
+            filemng.skip_if_not_wlmp(temp_last_dir_path)
 
-            learning.save_status(status, temp_last_dir_path)
-            learning.save_performance(performance, temp_last_dir_path)
-            learning.save_analysis(validation['analysis'], temp_last_dir_path)
+            filemng.save_status(status, temp_last_dir_path)
+            filemng.save_performance(performance, temp_last_dir_path)
+            filemng.save_analysis(validation['analysis'], temp_last_dir_path)
 
-            learning.make_symlink(
+            filemng.make_symlink(
                 new_checkpoint_dir_path,
                 os.path.join(temp_last_dir_path, MODEL_SYMLINK_NAME))
 
         if updating_best:
-            with cpm.cleaning(learning.replace_dir(best_dir_path)) as temp_best_dir_path:
-                learning.skip_if_not_wlmp(temp_best_dir_path)
+            with cpm.cleaning(filemng.replace_dir(best_dir_path)) as temp_best_dir_path:
+                filemng.skip_if_not_wlmp(temp_best_dir_path)
 
-                learning.copy_dir(last_dir_path, temp_best_dir_path)
+                filemng.copy_dir(last_dir_path, temp_best_dir_path)
 
             remaining_patience = patience
 
@@ -237,7 +257,7 @@ def run_train_for_multiple_decoding_strategies(
         grammar=config.ph,
         compiler=config.ph,
         # device=config.ph,
-        logger=config.ph,
+        # logger=config.ph,
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
         train_batch_size=config.ph,
@@ -256,6 +276,8 @@ def run_train_for_multiple_decoding_strategies(
         model_learning_dir_path=config.ph,
         restarting=False,
         context=config.ph,
+        denotation_equal=config.ph,
+        optim_measures=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         saving_optimizer=config.ph,
@@ -269,7 +291,7 @@ def run_train_for_multiple_decoding_strategies(
     assert model_learning_dir_path is not None
     assert patience == float('inf'), 'the feature of patience is not implemented'
 
-    learning.save_config_info(model_learning_dir_path)
+    filemng.save_config_info(model_learning_dir_path)
 
     common_last_dir_path = os.path.join(model_learning_dir_path, 'common:last')
 
@@ -279,15 +301,15 @@ def run_train_for_multiple_decoding_strategies(
     def get_last_dir_path(decoding_strategy_name):
         return os.path.join(model_learning_dir_path, f'{decoding_strategy_name}:last')
 
-    cpm = learning.AcceleratedCheckpointManager(
+    cpm = filemng.AcceleratedCheckpointManager(
         checkpoint_loc_path=os.path.join(model_learning_dir_path, 'checkpoint'),
         symlink_glob_patterns=[os.path.join(model_learning_dir_path, '*:last', MODEL_SYMLINK_NAME),
                                os.path.join(model_learning_dir_path, '*:best', MODEL_SYMLINK_NAME)])
 
-    model = learning.load_model(
+    model = filemng.load_model(
         pretrained_model_name_or_path,
         num_tokens=len(grammar.lf_tokenizer))
-    model.to(config.accelerator.device)
+    model.to(accelerator.device)
 
     train_data_loader = make_data_loader(
         encoded_dataset=encoded_train_set,
@@ -303,11 +325,11 @@ def run_train_for_multiple_decoding_strategies(
         batch_size=val_batch_size,
         shuffle=False)
 
-    param_groups = learning.get_param_groups(model, learning_rate=learning_rate, weight_decay=weight_decay)
+    param_groups = seq2seq_learning.get_param_groups(model, learning_rate=learning_rate, weight_decay=weight_decay)
 
     optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, eps=adam_epsilon)
 
-    scheduler = learning.make_scheduler(
+    scheduler = seq2seq_learning.make_scheduler(
         optimizer=optimizer,
         using_scheduler=using_scheduler,
         train_data_loader=train_data_loader,
@@ -324,10 +346,10 @@ def run_train_for_multiple_decoding_strategies(
 
     # The model and optimizer should be passed together to the prepare method
     # https://huggingface.co/docs/accelerate/quicktour#enable-distributed-training-in-your-script
-    model, train_data_loader, optimizer, scheduler = config.accelerator.prepare(
+    model, train_data_loader, optimizer, scheduler = accelerator.prepare(
         model, train_data_loader, optimizer, scheduler)
 
-    val_data_loader = config.accelerator.prepare_val_data_loader(val_data_loader)
+    val_data_loader = accelerator.prepare_val_data_loader(val_data_loader)
 
     assert not softmax_masking, 'The feature of softmax_masking is not implemented'
 
@@ -339,29 +361,29 @@ def run_train_for_multiple_decoding_strategies(
 
         # loss = torch.tensor(0.)
         loss = 0
-        # for batch in config.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
-        for batch in config.utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
+        # for batch in coc.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
+        for batch in utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
             # debug_batch_cnt += 1
             # if debug_batch_cnt > 100:
             #     break
 
             optimizer.zero_grad()
 
-            loss = learning.ss_forward_backward(
+            loss = seq2seq_learning.ss_forward_backward(
                 grammar=grammar,
                 model=model,
                 batch=batch,
                 softmax_masking=softmax_masking,
             )
 
-            assert config.accelerator.sync_gradients
-            if config.accelerator.sync_gradients:
-                config.accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
+            assert accelerator.sync_gradients
+            if accelerator.sync_gradients:
+                accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
 
             optimizer.step()
             scheduler.step()
 
-        config.accelerator.wait_for_everyone()
+        accelerator.wait_for_everyone()
 
         model.eval()
         last_model_saved = False
@@ -387,7 +409,10 @@ def run_train_for_multiple_decoding_strategies(
                     softmax_masking=softmax_masking,
                     constrained_decoding=config.constrained_decoding,
                     using_arg_candidate=config.using_arg_candidate,
-                    evaluating=True)
+                    using_distinctive_union_types=config.using_distinctive_union_types,
+                    evaluating=True,
+                    denotation_equal=denotation_equal,
+                )
 
                 performance = validation['performance']
 
@@ -402,39 +427,39 @@ def run_train_for_multiple_decoding_strategies(
 
                     # save a model
                     new_checkpoint_dir_path = cpm.get_new_checkpoint_path()
-                    with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
-                        learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
+                    with filemng.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
+                        filemng.skip_if_not_wlmp(temp_checkpoint_dir_path)
 
                         if saving_optimizer:
-                            learning.save_optimizer(optimizer, temp_checkpoint_dir_path)
-                        learning.save_scheduler(scheduler, temp_checkpoint_dir_path)
-                        learning.save_model(model, temp_checkpoint_dir_path)
+                            filemng.save_optimizer(optimizer, temp_checkpoint_dir_path)
+                        filemng.save_scheduler(scheduler, temp_checkpoint_dir_path)
+                        filemng.save_model(model, temp_checkpoint_dir_path)
 
-                    with cpm.cleaning(learning.replace_dir(common_last_dir_path)) as temp_common_last_dir_path:
-                        learning.skip_if_not_wlmp(temp_common_last_dir_path)
+                    with cpm.cleaning(filemng.replace_dir(common_last_dir_path)) as temp_common_last_dir_path:
+                        filemng.skip_if_not_wlmp(temp_common_last_dir_path)
 
-                        learning.make_symlink(
+                        filemng.make_symlink(
                             new_checkpoint_dir_path,
                             os.path.join(temp_common_last_dir_path, MODEL_SYMLINK_NAME))
 
                 # save for a decoding strategy
                 strategy_last_dir_path = os.path.join(model_learning_dir_path, f'{config.decoding_strategy_name}:last')
-                with cpm.cleaning(learning.replace_dir(strategy_last_dir_path)) as temp_strategy_last_dir_path:
-                    learning.skip_if_not_wlmp(temp_strategy_last_dir_path)
+                with cpm.cleaning(filemng.replace_dir(strategy_last_dir_path)) as temp_strategy_last_dir_path:
+                    filemng.skip_if_not_wlmp(temp_strategy_last_dir_path)
 
-                    learning.save_status(status, temp_strategy_last_dir_path)
-                    learning.save_performance(performance, temp_strategy_last_dir_path)
-                    learning.save_analysis(validation['analysis'], temp_strategy_last_dir_path)
+                    filemng.save_status(status, temp_strategy_last_dir_path)
+                    filemng.save_performance(performance, temp_strategy_last_dir_path)
+                    filemng.save_analysis(validation['analysis'], temp_strategy_last_dir_path)
 
-                    learning.copy_symlink(os.path.join(common_last_dir_path, MODEL_SYMLINK_NAME),
+                    filemng.copy_symlink(os.path.join(common_last_dir_path, MODEL_SYMLINK_NAME),
                                           os.path.join(temp_strategy_last_dir_path, MODEL_SYMLINK_NAME))
 
                 if updating_best:
                     strategy_best_dir_path = os.path.join(model_learning_dir_path, f'{config.decoding_strategy_name}:best')
-                    with cpm.cleaning(learning.replace_dir(strategy_best_dir_path)) as temp_strategy_best_dir_path:
-                        learning.skip_if_not_wlmp(temp_strategy_best_dir_path)
+                    with cpm.cleaning(filemng.replace_dir(strategy_best_dir_path)) as temp_strategy_best_dir_path:
+                        filemng.skip_if_not_wlmp(temp_strategy_best_dir_path)
 
-                        learning.copy_dir(strategy_last_dir_path, temp_strategy_best_dir_path)
+                        filemng.copy_dir(strategy_last_dir_path, temp_strategy_best_dir_path)
 
                     logger.info('Best model is updated')
 
@@ -451,13 +476,14 @@ def run_test(
         grammar=config.ph,
         compiler=config.ph,
         # device=config.ph,
-        logger=config.ph,
+        # logger=config.ph,
         encoded_test_set,
         test_batch_size=config.ph,
         softmax_masking=config.ph,
         constrained_decoding=config.ph,
         using_arg_candidate=config.ph,
         context=config.ph,
+        denotation_equal=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         evaluating,
@@ -470,10 +496,10 @@ def run_test(
         assert os.path.isdir(model_learning_dir_path), f'The learning directory {model_learning_dir_path} does not exist'
         model_path = os.path.join(model_learning_dir_path, model_dir_name, MODEL_SYMLINK_NAME)
         assert os.path.isdir(model_path), f'The checkpoint {model_path} does not exist'
-    model = learning.load_model(
+    model = filemng.load_model(
         model_path,
         num_tokens=len(grammar.lf_tokenizer))
-    model.to(config.accelerator.device)
+    model.to(accelerator.device)
 
     test_data_loader = make_data_loader(
         encoded_dataset=encoded_test_set,
@@ -482,8 +508,8 @@ def run_test(
         batch_size=test_batch_size,
         shuffle=False)
 
-    model = config.accelerator.prepare(model)
-    test_data_loader = config.accelerator.prepare_val_data_loader(test_data_loader)
+    model = accelerator.prepare(model)
+    test_data_loader = accelerator.prepare_val_data_loader(test_data_loader)
 
     model.eval()
     validation = validate(
@@ -497,6 +523,7 @@ def run_test(
         generation_max_length=generation_max_length,
         analyzing=analyzing,
         evaluating=evaluating,
+        denotation_equal=denotation_equal,
         softmax_masking=softmax_masking,
         constrained_decoding=constrained_decoding,
         using_arg_candidate=using_arg_candidate,
@@ -506,15 +533,15 @@ def run_test(
     if evaluating:
         logger.info('Performance: {}'.format(validation['performance']))
 
-    learning.mkloc_unless_exist(test_dir_path)
-    learning.save_config_info(test_dir_path)
+    filemng.mkloc_unless_exist(test_dir_path)
+    filemng.save_config_info(test_dir_path)
 
     if analyzing:
-        learning.save_analysis(validation['analysis'], test_dir_path)
-    learning.save_predictions(validation['predictions'], test_dir_path)
+        filemng.save_analysis(validation['analysis'], test_dir_path)
+    filemng.save_predictions(validation['predictions'], test_dir_path)
     if evaluating:
-        learning.save_performance(validation['performance'], test_dir_path)
-    learning.save_time_info(validation['time_info'], test_dir_path)
+        filemng.save_performance(validation['performance'], test_dir_path)
+    filemng.save_time_info(validation['time_info'], test_dir_path)
 
     logger.info(f'Results are saved in "{test_dir_path}"')
 
@@ -568,7 +595,7 @@ def run_search_train(
         grammar=config.ph,
         compiler=config.ph,
         # # devices=config.ph,
-        logger=config.ph,
+        # logger=config.ph,
         # encoded_train_set=config.ph,
         encoded_val_set=config.ph,
         encoded_weaksup_search_set=config.ph,  # New
@@ -590,6 +617,9 @@ def run_search_train(
         resuming=config.ph(None),         # New
         # # max_num_iterations=None,  # New
         context=config.ph,
+        denotation_equal=config.ph,
+        optim_measures=config.ph,
+        search_measures=config.ph,
         num_prediction_beams=config.ph,
         num_search_beams=config.ph,  # New
         generation_max_length=config.ph,
@@ -608,11 +638,11 @@ def run_search_train(
         f'When resuming == False, {model_learning_dir_path} should not contain any previous result of learning',
     )
 
-    search_cpm = learning.AcceleratedCheckpointManager(
+    search_cpm = filemng.AcceleratedCheckpointManager(
         checkpoint_loc_path=os.path.join(search_dir_path, 'checkpoint'),
         symlink_glob_patterns=[os.path.join(search_dir_path, 'last'),
                                os.path.join(search_dir_path, 'best')])
-    optim_cpm = learning.AcceleratedCheckpointManager(
+    optim_cpm = filemng.AcceleratedCheckpointManager(
         checkpoint_loc_path=os.path.join(optim_dir_path, 'checkpoint'),
         symlink_glob_patterns=[os.path.join(optim_dir_path, 'last'),
                                os.path.join(optim_dir_path, 'best')])
@@ -624,8 +654,8 @@ def run_search_train(
         return get_init_status(measures=optim_measures, update_unit='optimization')
 
     if resuming:
-        search_status = learning.load_status(os.path.join(search_dir_path, 'last'), default=get_init_search_status())
-        optim_status = learning.load_status(os.path.join(optim_dir_path, 'last'), default=get_init_optim_status())
+        search_status = filemng.load_status(os.path.join(search_dir_path, 'last'), default=get_init_search_status())
+        optim_status = filemng.load_status(os.path.join(optim_dir_path, 'last'), default=get_init_optim_status())
 
         assert search_status['last_update_num'] == search_status['best_update_num']
         assert optim_status['last_update_num'] == optim_status['best_update_num']
@@ -637,7 +667,7 @@ def run_search_train(
         optim_status = get_init_optim_status()
         optim_first = False
 
-    weaksup_search_data_loader = config.accelerator.prepare_val_data_loader(make_data_loader(
+    weaksup_search_data_loader = accelerator.prepare_val_data_loader(make_data_loader(
         encoded_dataset=encoded_weaksup_search_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
@@ -652,16 +682,16 @@ def run_search_train(
             return filesys.asserts_exist(pretrained_model_path)
 
     def load_latest_model():
-        model = learning.load_model(get_latest_model_path(), num_tokens=len(grammar.lf_tokenizer))
-        model.to(config.accelerator.device)
-        model = config.accelerator.prepare(model)
+        model = filemng.load_model(get_latest_model_path(), num_tokens=len(grammar.lf_tokenizer))
+        model.to(accelerator.device)
+        model = accelerator.prepare(model)
         return model
 
     def load_latest_encoded_weaksup_set():
-        return learning.load_weaksup_dataset(os.path.join(search_dir_path, 'last'))
+        return filemng.load_weaksup_dataset(os.path.join(search_dir_path, 'last'))
 
     def run_search():
-        config.accelerator.wait_for_everyone()  # before loading model
+        accelerator.wait_for_everyone()  # before loading model
         model = load_latest_model()
         model.eval()
 
@@ -681,6 +711,7 @@ def run_search_train(
             constrained_decoding=constrained_decoding,
             using_arg_candidate=using_arg_candidate,
             evaluating=True,
+            denotation_equal=denotation_equal,
             using_oracle=True,
             collecting_weaksup_examples=True,
             strict_postprocessing=True,
@@ -692,22 +723,22 @@ def run_search_train(
         logger.info(f'Search update number: {search_status["last_update_num"]} / Performance: {str(performance)}')
 
         new_checkpoint_dir_path = search_cpm.get_new_checkpoint_path()
-        with learning.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
-            learning.skip_if_not_wlmp(temp_checkpoint_dir_path)
+        with filemng.prepare_dir(new_checkpoint_dir_path) as temp_checkpoint_dir_path:
+            filemng.skip_if_not_wlmp(temp_checkpoint_dir_path)
 
-            learning.save_status(search_status, temp_checkpoint_dir_path)
-            learning.save_performance(performance, temp_checkpoint_dir_path)
-            learning.save_weaksup_dataset(validation['weaksup_examples'], temp_checkpoint_dir_path)
-            learning.save_time_info(validation['time_info'], temp_checkpoint_dir_path)
-            learning.save_predictions(validation['predictions'], temp_checkpoint_dir_path)
+            filemng.save_status(search_status, temp_checkpoint_dir_path)
+            filemng.save_performance(performance, temp_checkpoint_dir_path)
+            filemng.save_weaksup_dataset(validation['weaksup_examples'], temp_checkpoint_dir_path)
+            filemng.save_time_info(validation['time_info'], temp_checkpoint_dir_path)
+            filemng.save_predictions(validation['predictions'], temp_checkpoint_dir_path)
 
         last_dir_path = os.path.join(search_dir_path, 'last')
-        learning.change_symlink(new_checkpoint_dir_path, last_dir_path)
+        filemng.change_symlink(new_checkpoint_dir_path, last_dir_path)
         search_cpm.clean()
 
         if updating_best:
             best_dir_path = os.path.join(search_dir_path, 'best')
-            learning.copy_symlink(last_dir_path, best_dir_path)
+            filemng.copy_symlink(last_dir_path, best_dir_path)
             search_cpm.clean()
 
             logger.info('Best search result is updated')
@@ -715,14 +746,14 @@ def run_search_train(
         return updating_best
 
     def run_optim():
-        config.accelerator.wait_for_everyone()  # before loading encoded_weaksup_set
+        accelerator.wait_for_everyone()  # before loading encoded_weaksup_set
         encoded_weaksup_set = load_latest_encoded_weaksup_set()
 
         new_checkpoint_dir_path = broadcast_object(optim_cpm.get_new_checkpoint_path())
 
         # checkpoint_loc_path = os.path.join(optim_dir_path, 'checkpoint')
-        # learning.mkloc_unless_exist(checkpoint_loc_path)
-        # temp_checkpoint_dir_path = broadcast_object(learning.mkdtemp(dir=checkpoint_loc_path))
+        # filemng.mkloc_unless_exist(checkpoint_loc_path)
+        # temp_checkpoint_dir_path = broadcast_object(filemng.mkdtemp(dir=checkpoint_loc_path))
 
         logger.info('Optimization starts')
 
@@ -730,7 +761,7 @@ def run_search_train(
             pretrained_model_name_or_path=get_latest_model_path(),
             grammar=grammar,
             compiler=compiler,
-            logger=logger,
+            # logger=logger,
             encoded_train_set=encoded_weaksup_set,
             encoded_val_set=encoded_val_set,
             train_batch_size=train_batch_size,
@@ -756,24 +787,24 @@ def run_search_train(
         )
 
         # new_checkpoint_dir_path = optim_cpm.get_new_checkpoint_path()
-        # learning.rename_dir(temp_checkpoint_dir_path, new_checkpoint_dir_path)
+        # filemng.rename_dir(temp_checkpoint_dir_path, new_checkpoint_dir_path)
 
-        config.accelerator.wait_for_everyone()  # before loading performance
+        accelerator.wait_for_everyone()  # before loading performance
 
-        performance = learning.load_performance(os.path.join(new_checkpoint_dir_path, 'best'))
+        performance = filemng.load_performance(os.path.join(new_checkpoint_dir_path, 'best'))
         updating_best = update_status(optim_status, performance=performance)
 
-        learning.save_status(optim_status, new_checkpoint_dir_path)  # save the status after update
+        filemng.save_status(optim_status, new_checkpoint_dir_path)  # save the status after update
 
         last_dir_path = os.path.join(optim_dir_path, 'last')
-        learning.change_symlink(new_checkpoint_dir_path, last_dir_path)
+        filemng.change_symlink(new_checkpoint_dir_path, last_dir_path)
         optim_cpm.clean()
 
         logger.info(f'Optimization update number: {optim_status["last_update_num"]} / Performance: {str(performance)}')
 
         if updating_best:
             best_dir_path = os.path.join(optim_dir_path, 'best')
-            learning.copy_symlink(last_dir_path, best_dir_path)
+            filemng.copy_symlink(last_dir_path, best_dir_path)
             optim_cpm.clean()
 
             logger.info('Best optimization result is updated')

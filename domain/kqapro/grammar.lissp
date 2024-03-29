@@ -422,7 +422,7 @@
   :expr-dict (mapkv :default $(context.VerifyDate {2} {0} {1})
                     :visual $(verify-date {2} {0} {1})))
 
-(let ((concat-tokens (retrieve '(function concat-tokens)))
+(let ((concat-nl-tokens (retrieve '(function concat-nl-tokens)))
       (concat-parts (retrieve '(function concat-parts)))
       (concat-quantity-unit (retrieve '(function concat-quantity-unit))))
 
@@ -457,7 +457,7 @@
        :arg-filter (if-else (= act-type 'v-string)
                             None
                             (retrieve `(filter ,act-type)))
-       :expr-dict (mapkv :default (if-else (= name 'constant-quantity) concat-tokens concat-parts))))
+       :expr-dict (mapkv :default (if-else (= name 'constant-quantity) concat-nl-tokens concat-parts))))
    '((constant-string    v-string    vp-string  )
      (constant-quantity  v-quantity  vp-quantity)
      (constant-year      v-year      vp-year    )
@@ -474,7 +474,7 @@
     :act-type 'v-unit
     :param-types '(&rest vp-unit)
     :arg-candidate (retrieve '(candidate v-unit))
-    :expr-dict (mapkv :default concat-tokens)))
+    :expr-dict (mapkv :default concat-nl-tokens)))
 
 
 ;;; token-*

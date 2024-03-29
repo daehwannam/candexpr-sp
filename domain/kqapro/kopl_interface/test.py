@@ -4,7 +4,7 @@ from tqdm import tqdm
 from dhnamlib.pylib.filesys import json_load, python_pretty_save
 
 from .execution import postprocess_prediction
-from .kopl_original import execute_kopl_program
+from .original import execute_kopl_program
 
 
 def test_dataset():
@@ -52,17 +52,17 @@ def test_dataset_answers():
 def test_grammar():
     from tqdm import tqdm
 
-    from splogic.grammar import read_grammar
+    from splogic.base.grammar import read_grammar
     from dhnamlib.pylib.filesys import json_load
     from dhnamlib.pylib.time import TimeMeasure
     from .execution import postprocess_prediction
     from .execution import postprocess_denotation
     from .kopl_original import execute_kopl_program
-    from .grammar import KoPLGrammar
+    from .grammar import KQAProGrammar
     from . import kopl_transfer
     from configuration import config
 
-    grammar = read_grammar('./domain/kqapro/grammar.lissp', grammar_cls=KoPLGrammar)
+    grammar = read_grammar('./domain/kqapro/grammar.lissp', grammar_cls=KQAProGrammar)
     compiler = grammar.compiler_cls()
     dataset = json_load('./dataset/kqapro/train.json')
 
@@ -81,7 +81,7 @@ def test_grammar():
 
         try:
             with tm:
-                action_seq = kopl_transfer.kopl_to_action_seq(grammar, labeled_kopl_program)
+                action_seq = kopl_transfer.kopl_to_action_seq(grammar, config.context, labeled_kopl_program)
             kopl_to_action_seq_cumtime += tm.interval
 
             with tm:
@@ -138,13 +138,13 @@ def test_grammar():
 
 
 # def _test():
-#     from splogic.grammar import read_grammar
+#     from splogic.base.grammar import read_grammar
 #     from dhnamlib.pylib.filesys import json_load
 #     from dhnamlib.pylib.time import TimeMeasure
 #     # from dhnamlib.pylib.cProfiling import run_context
 #     # import cProfile
 
-#     grammar = read_grammar('./language/kopl/grammar.lissp', grammar_cls=KoPLGrammar)
+#     grammar = read_grammar('./language/kopl/grammar.lissp', grammar_cls=KQAProGrammar)
 #     compiler = grammar.compiler_cls()
 #     # kb = json_load('./_tmp_data-indented/indented-kb.json')
 #     dataset = json_load('./_tmp_data-indented/indented-train.json')

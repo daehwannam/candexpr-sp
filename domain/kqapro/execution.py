@@ -3,54 +3,26 @@ import re
 import functools
 import types
 
-from splogic.formalism import Compiler
-from splogic.grammar import get_extra_ns
-from splogic.function import make_call_limited
+from splogic.base.execution import LispCompiler, NO_DENOTATION, InstantResult
+from splogic.base.function import make_call_limited
 
 # from kopl.kopl import KoPLEngine
 
-from dhnamlib.pylib.klass import Interface
-from dhnamlib.pylib.decoration import excepting, running, construct
+# from dhnamlib.pylib.klass import Interface
+from dhnamlib.pylib.klass import subclass, override
+from dhnamlib.pylib.decoration import construct, deprecated
 
-from dhnamlib.hissplib.macro import prelude
-from dhnamlib.hissplib.compile import eval_lissp
-from dhnamlib.hissplib.operation import import_operators
-
-from .kopl_context import KoPLContext
+from .kopl_interface.context import KoPLContext
 
 
-prelude()  # used for eval_lissp
-import_operators()  # used for eval_lissp
-
-
-class KoPLCompiler(Compiler):
-    interface = Interface(Compiler)
+@subclass
+class KoPLCompiler(LispCompiler):
+    # interface = Interface(LispCompiler)
 
     def __init__(self):
-        bindings = [['postprocess-denotation', postprocess_denotation]]
-        self.extra_ns = get_extra_ns(bindings)
-
-    @interface.implement
-    def compile_tree(self, tree, tolerant=False):
-        program = eval_lissp(tree.get_expr_str(), extra_ns=self.extra_ns)
-        if tolerant:
-            return excepting(Exception, default_fn=runtime_exception_handler)(program)
-        else:
-            return program
-
-
-NO_DENOTATION = object()
-
-
-def runtime_exception_handler(context):
-    return NO_DENOTATION
-
-
-def invalid_program(context):
-    '''
-    This function is used as the output program of parsing when the final paring states are incomplete.
-    '''
-    return NO_DENOTATION
+        super().__init__(
+            bindings=[['postprocess-denotation', postprocess_denotation]]
+        )
 
 
 def postprocess_denotation(denotation):
@@ -60,6 +32,25 @@ def postprocess_denotation(denotation):
         assert isinstance(denotation, (str, int, float))
         new_denotation = str(denotation)
     return new_denotation
+
+
+@subclass
+class KQAProResult(InstantResult):
+    # interface = Interface(InstantResult)
+
+    strict = False
+
+    def __init__(self, value):
+        super().__init__(self)
+
+    @functools.cache
+    @override
+    def get(self):
+        return postprocess_prediction(self._value, strict=self.strict)
+
+
+class KQAProStrictResult(KQAProResult):
+    strict = True
 
 
 def postprocess_prediction(prediction, strict=False):
@@ -92,9 +83,16 @@ class OverMaxNumIterationsError(Exception):
     pass
 
 
-class CountingKoPLContext(KoPLContext):
+class KQAProContext(KoPLContext):
+    def __init__(self, kb):
+        super().__init__(kb)
+        self.raw_kb = kb
+
+
+class KQAProCountingContext(KQAProContext):
     def __init__(self, context, max_num_iterations=1000000):
         self.kb = context.kb
+        self.raw_kb = context.raw_kb
         self._count = 0
         self._max_num_iterations = max_num_iterations
 
@@ -106,14 +104,15 @@ class CountingKoPLContext(KoPLContext):
                 raise OverMaxNumIterationsError
 
 
-get_counting_context = CountingKoPLContext
+get_counting_context = KQAProCountingContext
 
 
 _kopl_function_regex = re.compile(r"[A-Z]([a-zA-Z]*)")
 
 
+@deprecated
 @construct(types.SimpleNamespace, from_kwargs=True)
-def get_call_limited_context(context: KoPLContext, max_num_calls=100):
+def get_call_limited_context(context: KQAProContext, max_num_calls=100):
     call_limited = make_call_limited(max_num_calls)
     for attribute in dir(context):
         if _kopl_function_regex.match(attribute) is not None:
@@ -122,12 +121,7 @@ def get_call_limited_context(context: KoPLContext, max_num_calls=100):
                 yield attribute, call_limited(obj)
 
 
-class KoPLDebugContext(KoPLContext):
-    pass
-
-
-@running
-def _initialize_debugging_context():
+def _initialize_debugging_context(context: KQAProContext):
     def _debug_decorator(func):
         @functools.wraps(func)
         def new_func(*args, **kwargs):
@@ -144,8 +138,15 @@ def _initialize_debugging_context():
 
     _kopl_function_regex = re.compile(r"[A-Z]([a-zA-Z]*)")
 
-    for attribute in dir(KoPLDebugContext):
+    for attribute in dir(context):
         if _kopl_function_regex.match(attribute) is not None:
-            obj = getattr(KoPLDebugContext, attribute)
+            obj = getattr(context, attribute)
             assert callable(obj)
-            setattr(KoPLDebugContext, attribute, _debug_decorator(obj))
+            setattr(context, attribute, _debug_decorator(obj))
+
+    return context
+
+
+@_initialize_debugging_context
+class KQAProDebugContext(KQAProContext):
+    pass
