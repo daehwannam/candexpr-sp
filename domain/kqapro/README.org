@@ -21,16 +21,6 @@ mkdir -p ./dataset
 ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset/kqapro
 #+end_src
 
-** Pre-trained model (optional)
-#+begin_src sh
-DOWNLOAD_PATH=../download
-PRETRAINED_PATH=../pretrained
-
-wget -O $DOWNLOAD_PATH/bart-base.zip https://cloud.tsinghua.edu.cn/f/3b59ec6c43034cfc8841/?dl=1
-unzip $DOWNLOAD_PATH/bart-base.zip -d $PRETRAINED_PATH
-ln -s $(realpath $PRETRAINED_PATH) ./pretrained
-#+end_src
-
 ** Environment
 #+begin_src sh
 ENV_NAME=kqapro
@@ -66,29 +56,29 @@ python -m domain.kqapro.preprocess --goal encoded_weaksup_search_set
 ** Training with logical forms
 *** Training with the default options
 #+begin_src sh
-python -m domain.kqapro.run --config config.kqapro.train_default
+python -m run --domain kqapro --config config.kqapro.train_default
 #+end_src
 
 *** Training for multiple decoding strategies
 #+begin_src sh
-python -m domain.kqapro.run --config config.kqapro.train_for_multiple_decoding_strategies
+python -m run --domain kqapro --config config.kqapro.train_for_multiple_decoding_strategies
 #+end_src
 
 *** Training for multiple decoding strategies with a portion of the train set
 #+begin_src sh
 PERCENT=5  # between 0 to 100
-python -m domain.kqapro.run --config config.kqapro.train_for_multiple_decoding_strategies --extra-config config.kqapro.extra.train_set_portion --train-set-percent $PERCENT
+python -m run --domain kqapro --config config.kqapro.train_for_multiple_decoding_strategies --extra-config config.kqapro.extra.train_set_portion --train-set-percent $PERCENT
 #+end_src
 
 *** Training for multiple decoding strategies with a portion of the train set where inferencing_subtypes=False
 #+begin_src sh
 PERCENT=5  # between 0 to 100
-python -m domain.kqapro.run --config config.kqapro.train_for_multiple_decoding_strategies --extra-config config.kqapro.extra.train_set_portion_no_inferencing_subtypes --train-set-percent $PERCENT
+python -m run --domain kqapro --config config.kqapro.train_for_multiple_decoding_strategies --extra-config config.kqapro.extra.train_set_portion_no_inferencing_subtypes --train-set-percent $PERCENT
 #+end_src
 
-*** Training for multiple decoding strategies with batch_size=128
+*** Training for multiple decoding strategies with batch_size=32
 #+begin_src sh
-python -m domain.kqapro.run --config config.kqapro.train_for_multiple_decoding_strategies --extra-config config.kqapro.batch.size=128
+python -m run --domain kqapro --config config.kqapro.train_for_multiple_decoding_strategies --extra-config config.kqapro.batch.size=32
 #+end_src
 
 ** Training with denotations
@@ -100,7 +90,7 @@ SS_MODEL_LEARNING_DIR_PATH=./model-instance/kqapro/strongly-supervised-models
 
 **** Training with a small subset of the trainin set
 #+begin_src sh
-python -m domain.kqapro.run --config config.kqapro.train_for_multiple_decoding_strategies \
+python -m run --domain kqapro --config config.kqapro.train_for_multiple_decoding_strategies \
        --model-learning-dir $SS_MODEL_LEARNING_DIR_PATH \
        --extra-config config.kqapro.extra.weaksup_pretraining
 #+end_src
@@ -151,7 +141,7 @@ WS_MODEL_LEARNING_DIR_PATH=$COMMON_WS_MODEL_LEARNING_DIR_PATH/$DECODING
 
 accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG \
            --main_process_port $(shuf -i 49152-65535 -n 1) \
-           -m domain.kqapro.run --using-tqdm false \
+           -m run --domain kqapro --using-tqdm false \
            --config config.kqapro.search_train \
            --model-learning-dir $WS_MODEL_LEARNING_DIR_PATH \
            --pretrained-model-path $PRETRAINED_MODEL_PATH \
@@ -163,23 +153,23 @@ accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG \
 - Testing on the validation set make a prediction file and an evaluation result.
 - Testing on the test set makes a prediction file without evaluation.
 
-*** Testing on a dataset with the default model path
-#+begin_src sh
-TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_set'
-MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
-# e.g. MODEL_LEARNING_DIR_PATH=model-instance/kqapro/2023-07-15_10:10:24_916400
-python -m domain.kqapro.run --config $TEST_CONFIG --model-learning-dir $MODEL_LEARNING_DIR_PATH
-#+end_src
+# *** Testing on a dataset with the default model path
+# #+begin_src sh
+# TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_set'
+# MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
+# # e.g. MODEL_LEARNING_DIR_PATH=model-instance/kqapro/2023-07-15_10:10:24_916400
+# python -m run --domain kqapro --config $TEST_CONFIG --model-learning-dir $MODEL_LEARNING_DIR_PATH
+# #+end_src
 
-*** Testing on a dataset with a specific model directory name
-#+begin_src sh
-TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_set'
-MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
-# e.g. MODEL_LEARNING_DIR_PATH=model-instance/kqapro/2023-07-15_10:10:24_916400
-MODEL_DIR_NAME='full-constraints:best/model'
-# Options for MODEL_DIR_NAME: best/model, common:best/model, full-constraints:best/model, no-arg-candidate:best/model, no-ac-no-dut:best/model, no-constrained-decoding:best/model
-python -m domain.kqapro.run --config $TEST_CONFIG --model-learning-dir $MODEL_LEARNING_DIR_PATH --model-dir-name $MODEL_DIR_NAME
-#+end_src
+# *** Testing on a dataset with a specific model directory name
+# #+begin_src sh
+# TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_set'
+# MODEL_LEARNING_DIR_PATH='path/to/model/learning/dir'
+# # e.g. MODEL_LEARNING_DIR_PATH=model-instance/kqapro/2023-07-15_10:10:24_916400
+# MODEL_DIR_NAME='full-constraints:best/model'
+# # Options for MODEL_DIR_NAME: best/model, common:best/model, full-constraints:best/model, no-arg-candidate:best/model, no-ac-no-dut:best/model, no-constrained-decoding:best/model
+# python -m run --domain kqapro --config $TEST_CONFIG --model-learning-dir $MODEL_LEARNING_DIR_PATH --model-dir-name $MODEL_DIR_NAME
+# #+end_src
 
 *** Testing with specifying a model path and test directory path
 #+begin_src sh
@@ -188,14 +178,14 @@ MODEL_PATH='path/to/model'
 TEST_DIR_PATH='path/to/test-result'
 # e.g. TEST_DIR_PATH='./model-test/kqapro/2023-07-19_01:17:04_094104_full-constraints:best/model'
 
-python -m domain.kqapro.run --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
+python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
 #+end_src
 
 *** Testing with a specific decoding strategy
 #+begin_src sh
 TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_set'
 MODEL_PATH='path/to/model'
-COMMON_TEST_CMD="python -m domain.kqapro.run --config config.kqapro.$TEST_CONFIG --model-path $MODEL_PATH"
+COMMON_TEST_CMD="python -m run --domain kqapro --config config.kqapro.$TEST_CONFIG --model-path $MODEL_PATH"
 
 BEAM_CONFIG='config.kqapro.extra.num_prediction_beams=1'
 
@@ -228,14 +218,14 @@ TEST_DIR_PATH='path/to/test-result'
 # e.g. TEST_DIR_PATH='./model-test/kqapro/2023-07-19_01:17:04_094104_full-constraints:best/model'
 ACTION_NAME=keyword-concept     # or keyword-entity, keyword-relation, ...
 
-python -m domain.kqapro.run --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH --extra-config config.kqapro.extra.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
+python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH --extra-config config.kqapro.extra.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
 #+end_src
 
 *** Testing with oracle on the validation set
 #+begin_src sh
 TEST_CONFIG='config.kqapro.oracle_test_on_val_set'
 MODEL_PATH='path/to/model'
-COMMON_TEST_CMD="python -m domain.kqapro.run --config config.kqapro.$TEST_CONFIG --model-path $MODEL_PATH"
+COMMON_TEST_CMD="python -m run --domain kqapro --config config.kqapro.$TEST_CONFIG --model-path $MODEL_PATH"
 
 BEAM_CONFIG='config.kqapro.extra.num_prediction_beams=4'
 

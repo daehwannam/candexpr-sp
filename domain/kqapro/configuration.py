@@ -5,11 +5,16 @@ from dhnamlib.pylib.filesys import json_load, jsonl_load
 from splogic.base.grammar import read_grammar
 from splogic.utility.acceleration import accelerator
 from splogic.seq2seq import filemng
+from splogic.base.execution import InstantExecutor
+from splogic.seq2seq.dynamic_bind import UtteranceSpanTrieDynamicBinder, NoDynamicBinder
 
-from configuration import config as global_config
+# from configuration import config as global_config
+import configuration
 # from configuration import coc
 
-from .execution import KQAProContext, KQAProDebugContext
+from .execution import (
+    KQAProContext, KQAProDebugContext, KQAProCountingContext,
+    KQAProExecResult, KQAProStricExectResult)
 from .validation import KQAProDenotationEqual
 
 
@@ -36,6 +41,7 @@ _encoded_weaksup_pretraining_set_file_path = './processed/kqapro/encoded_weaksup
 _encoded_weaksup_search_set_file_path = './processed/kqapro/encoded_weaksup_search.jsonl'
 
 # _KQAPRO_TRAN_SET_SIZE = 94376
+_USING_SPANS_AS_ENTITIES = False
 
 
 _grammar_file_path = './domain/kqapro/grammar.lissp'
@@ -45,15 +51,20 @@ _pretrained_model_name_or_path = 'facebook/bart-base'
 
 def _make_context():
     with (
-            contextless() if (global_config.using_tqdm and accelerator.is_local_main_process) else
+            contextless() if (configuration.config.using_tqdm and accelerator.is_local_main_process) else
             context_nest(suppress_stdout(), suppress_stderr())
     ):
-        _context_cls = KQAProDebugContext if global_config.debug else KQAProContext
-        return _context_cls(global_config.kb)
+        _context_cls = KQAProDebugContext if configuration.config.debug else KQAProContext
+        return _context_cls(configuration.config.kb)
 
 def _make_grammar():
     from .grammar import KQAProGrammar
-    return read_grammar(_grammar_file_path, grammar_cls=KQAProGrammar)
+    return read_grammar(
+        _grammar_file_path,
+        grammar_cls=KQAProGrammar,
+        grammar_kwargs=dict(
+            pretrained_model_name_or_path=config.pretrained_model_name_or_path
+        ))
 
 
 ALL_RUN_MODES = [
@@ -75,7 +86,10 @@ config = Environment(
     # context=LazyEval(lambda: _context_cls(apply_recursively(config.kb))),
     # context=LazyEval(lambda: _context_cls(config.kb)),
     context=LazyEval(_make_context),
+    test_executor=InstantExecutor(result_cls=KQAProExecResult, context_wrapper=KQAProCountingContext),
+    search_executor=InstantExecutor(result_cls=KQAProStricExectResult, context_wrapper=KQAProCountingContext),
     denotation_equal=KQAProDenotationEqual(),
+    dynamic_binder=UtteranceSpanTrieDynamicBinder() if _USING_SPANS_AS_ENTITIES else NoDynamicBinder(),
     max_num_program_iterations=200000,
     optim_measures=filemng.optim_measures,
     search_measures=filemng.search_measures,

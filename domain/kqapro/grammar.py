@@ -6,16 +6,23 @@ from dhnamlib.pylib.klass import subclass, implement, override
 from dhnamlib.pylib.context import Environment
 from dhnamlib.pylib.debug import NIE
 from dhnamlib.hissplib.expression import repr_as_hash_str
-from dhnamlib.pylib.lazy import DaynamicLazyProxy
+from dhnamlib.pylib.lazy import DynamicLazyProxy
+from splogic.utility.trie import NoTrie
 
 from splogic.seq2seq.grammar import Seq2SeqGrammar
 from splogic.utility.trie import MergedTrie
+from splogic.seq2seq.transfer import ActionNameStyle, StrictTypeProcessing
 
 from configuration import config
 
 from .execution import KoPLCompiler
 from .kopl_interface import kb_analysis as kopl_kb_analysis
 from .kopl_interface import transfer as kopl_transfer
+from .transfer import KQAProTokenProcessing
+
+
+_DEFAULT_NL_TOKEN_META_NAME = 'nl-token'
+_DEFAULT_NL_TOKEN_META_ARG_NAME = 'token'
 
 
 @subclass
@@ -32,14 +39,14 @@ class KQAProGrammar(Seq2SeqGrammar):
             #
             using_distinctive_union_types=config.ph(True),
             #
-            using_spans_as_entities=config.ph(False),
+            # using_spans_as_entities=config.ph(False),
             pretrained_model_name_or_path=config.ph
     ):
         # dynamic_scope = Environment(allowing_duplicate_candidate_ids=True)
-        dynamic_scope = Environment()
-        token_processing = NIE()
-        action_name_style = NIE()
-        strict_type_processing = NIE()
+        dynamic_scope = Environment(utterance_span_trie=NoTrie())
+        token_processing = KQAProTokenProcessing()
+        action_name_style = ActionNameStyle(_DEFAULT_NL_TOKEN_META_NAME)
+        strict_type_processing = StrictTypeProcessing()
 
         super().__init__(
             formalism=formalism, super_types_dict=super_types_dict, actions=actions, start_action=start_action,
@@ -50,16 +57,22 @@ class KQAProGrammar(Seq2SeqGrammar):
             dynamic_scope=dynamic_scope,
             #
             using_distinctive_union_types=using_distinctive_union_types,
+            #
             token_processing=token_processing,
             action_name_style=action_name_style,
             strict_type_processing=strict_type_processing,
+            #
+            pretrained_model_name_or_path=pretrained_model_name_or_path,
+            #
+            nl_token_meta_name=_DEFAULT_NL_TOKEN_META_NAME,
+            nl_token_meta_arg_name=_DEFAULT_NL_TOKEN_META_ARG_NAME,
         )
 
     @config
     @cache
     @override
     def get_search_state_cls(self, using_arg_candidate=config.ph, using_arg_filter=config.ph):
-        super().get_search_state_cls(
+        return super().get_search_state_cls(
             using_arg_candidate=using_arg_candidate,
             using_arg_filter=using_arg_filter
         )
@@ -101,8 +114,9 @@ class KQAProGrammar(Seq2SeqGrammar):
         ):
             if act_type == 'kw-entity':
                 trie.ignoring_errors = True
-                arg_candidate = MergedTrie([trie, DaynamicLazyProxy(lambda: self.dynamic_scope.utterance_span_trie)],
-                                           allowing_duplicates=True)
+                arg_candidate = self.make_trie_arg_candidate(MergedTrie(
+                    [trie, DynamicLazyProxy(lambda: self.dynamic_scope.utterance_span_trie)],
+                    allowing_duplicates=True))
             else:
                 arg_candidate = self.make_trie_arg_candidate(trie)
             register(f'(candidate {act_type})', arg_candidate)

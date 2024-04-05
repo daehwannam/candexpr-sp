@@ -6,13 +6,14 @@ from dhnamlib.pylib.context import LazyEval
 from dhnamlib.pylib.iteration import distinct_pairs
 from dhnamlib.pylib.structure import AttrDict
 
+from domain.kqapro import configuration as kqapro_configuration
+
 from .train_general import config as _config_general
-import configuration
 
 
 def _make_grammar_with_no_dut():
-    with configuration.config.let(using_distinctive_union_types=False):
-        return configuration._make_grammar()
+    with kqapro_configuration.config.let(using_distinctive_union_types=False):
+        return kqapro_configuration._make_grammar()
 
 
 _config_specific = Environment(

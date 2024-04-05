@@ -6,18 +6,23 @@ from tqdm import tqdm
 import torch
 import random
 
-from configuration import config, _make_grammar
+from meta_configuration import set_default_domain_name
+set_default_domain_name('kqapro')  # Call `set_default_domain_name` before the `configuration` module is loaded.
+from configuration import config
+from .configuration import _make_grammar
 
 from dhnamlib.pylib.filesys import jsonl_save, pickle_save, mkpdirs_unless_exist
 from dhnamlib.pylib.time import TimeMeasure
 from dhnamlib.pylib.iteration import apply_recursively
 from dhnamlib.pylib.decoration import construct
 
-from .execution import postprocess_prediction
-from .kopl_original import execute_kopl_program
-from . import kopl_transfer
-from semparse import learning
+from splogic.seq2seq import learning
+from splogic.seq2seq.dynamic_bind import UtteranceSpanTrieDynamicBinder
 from splogic.base.formalism import InvalidCandidateActionError
+
+from .execution import postprocess_prediction
+from .kopl_interface.original import execute_kopl_program
+# from .kopl_interface import transfer
 
 
 @config
@@ -37,12 +42,18 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
     num_incompatible_action_seqs = 0
 
     with TimeMeasure() as total_tm:
+        # debug_cnt = 0
         for example_idx, example in tqdm(enumerate(raw_dataset), total=len(raw_dataset)):
+
+            # debug_cnt += 1
+            # if debug_cnt < 48273:
+            #     continue
+
             labeled_kopl_program = example['program']
             answer = example['answer']
 
             with tm:
-                action_seq = kopl_transfer.kopl_to_action_seq(grammar, context, labeled_kopl_program)
+                action_seq = grammar.token_processing.labeled_logical_form_to_action_seq(grammar, context, labeled_kopl_program)
             kopl_to_action_seq_cumtime += tm.interval
 
             action_seqs.append(action_seq)
@@ -50,22 +61,23 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             if not verifying:
                 continue
 
+            dynamic_binder = UtteranceSpanTrieDynamicBinder()
+
             with tm:
                 if verifying_grammar:
-                    utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
-                    dynamic_trie = learning._utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
-                    with grammar.let_dynamic_trie(dynamic_trie, using_spans_as_entities=False):
-                        # last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
-                        try:
+                    try:
+                        last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
+                    except InvalidCandidateActionError as error:
+                        extraction_info = dict(compatible_with_grammar=False,
+                                               action_extraction_error_msg=error.args[0])
+                        num_incompatible_action_seqs += 1
+
+                        utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
+                        dynamic_binding = dynamic_binder.bind(grammar, dict(utterance_token_ids=utterance_token_id_seq))
+                        with grammar.dynamic_scope.let(**dynamic_binding):
                             last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
-                        except InvalidCandidateActionError as error:
-                            extraction_info = dict(compatible_with_grammar=False,
-                                                   action_extraction_error_msg=error.args[0])
-                            num_incompatible_action_seqs += 1
-                            with grammar.let_dynamic_trie(dynamic_trie, using_spans_as_entities=True):
-                                last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
-                        else:
-                            extraction_info = dict(compatible_with_grammar=True)
+                    else:
+                        extraction_info = dict(compatible_with_grammar=True)
                 else:
                     last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
                     extraction_info = dict()
@@ -77,7 +89,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             compile_tree_cumtime += tm.interval
 
             with tm:
-                denotation = program(config.context)
+                denotation = program(context)
             program_cumtime += tm.interval
 
             with tm:
@@ -85,12 +97,12 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             postprocess_prediction_cumtime += tm.interval
 
             if verifying:
-                denotation_by_kopl = execute_kopl_program(config.context, labeled_kopl_program)
+                denotation_by_kopl = execute_kopl_program(context, labeled_kopl_program)
                 assert denotation == denotation_by_kopl
 
             if False and verbose >= 2:
                 if answer != prediction:
-                    denotation_by_kopl = execute_kopl_program(config.context, labeled_kopl_program)
+                    denotation_by_kopl = execute_kopl_program(context, labeled_kopl_program)
                     if denotation == denotation_by_kopl:
                         prediction_by_kopl = postprocess_prediction(denotation_by_kopl)
                         assert prediction == prediction_by_kopl
@@ -252,13 +264,18 @@ def preprocess_for_shuffled_dataset(
 @construct(list)
 def augment_dataset_with_strict_grammar(augmented_dataset, grammar):
     assert grammar.inferencing_subtypes is False
+    dynamic_binder = UtteranceSpanTrieDynamicBinder()
     for example in tqdm(augmented_dataset):
-        new_example = dict(example)
-        action_seq = kopl_transfer.get_strictly_typed_action_seq(
+        utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
+        dynamic_binding = dynamic_binder(grammar, dict(utterance_token_ids=utterance_token_id_seq))
+        # utterance_span_trie = learning.utterance_token_id_seq_to_span_trie(grammar, utterance_token_id_seq)
+        action_seq = grammar.strict_type_processing.get_strictly_typed_action_seq(
             grammar,
             action_name_seq=example['action_name_seq'],
-            question=example['question'])
+            dynamic_binding=dynamic_binding)
         action_name_seq = [action.name for action in action_seq]
+
+        new_example = dict(example)
         new_example['action_name_seq'] = action_name_seq  # update 'action_name_seq'
         yield new_example
 

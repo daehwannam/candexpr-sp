@@ -3,7 +3,7 @@ import re
 import functools
 import types
 
-from splogic.base.execution import LispCompiler, NO_DENOTATION, InstantResult
+from splogic.base.execution import LispCompiler, NO_DENOTATION, InstantExecResult
 from splogic.base.function import make_call_limited
 
 # from kopl.kopl import KoPLEngine
@@ -35,21 +35,22 @@ def postprocess_denotation(denotation):
 
 
 @subclass
-class KQAProResult(InstantResult):
-    # interface = Interface(InstantResult)
+class KQAProExecResult(InstantExecResult):
+    # interface = Interface(InstantExecResult)
 
     strict = False
 
-    def __init__(self, value):
-        super().__init__(self)
+    def __init__(self, values):
+        super().__init__(values)
 
     @functools.cache
     @override
     def get(self):
-        return postprocess_prediction(self._value, strict=self.strict)
+        return tuple(postprocess_prediction(value, strict=self.strict)
+                     for value in super().get())
 
 
-class KQAProStrictResult(KQAProResult):
+class KQAProStricExectResult(KQAProExecResult):
     strict = True
 
 
@@ -72,6 +73,7 @@ def postprocess_prediction(prediction, strict=False):
             new_prediction = default_prediction
     else:
         new_prediction = prediction
+
     return new_prediction
 
 

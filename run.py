@@ -6,7 +6,7 @@ import os
 import torch
 
 # from configuration import config, coc
-from configuration import config
+from configuration import config, save_config_info
 
 from splogic.seq2seq import learning as seq2seq_learning
 from splogic.seq2seq.data_read import make_data_loader
@@ -46,6 +46,8 @@ def run_train(
         pretrained_model_name_or_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
+        test_executor=config.ph,
+        dynamic_binder=config.ph,
         # device=config.ph,
         # logger=config.ph,
         encoded_train_set=config.ph,
@@ -64,6 +66,7 @@ def run_train(
         softmax_masking=config.ph,
         constrained_decoding=config.ph,
         using_arg_candidate=config.ph,
+        using_distinctive_union_types=config.ph,
         model_learning_dir_path=config.ph,
         restarting=False,
         context=config.ph,
@@ -82,7 +85,7 @@ def run_train(
     else:
         assert model_learning_dir_path is not None
 
-    filemng.save_config_info(model_learning_dir_path)
+    save_config_info(model_learning_dir_path)
 
     last_dir_path = os.path.join(model_learning_dir_path, 'last')
     # mkloc_unless_exist_wlmp(last_dir_path)
@@ -195,6 +198,8 @@ def run_train(
         validation = validate(
             grammar=grammar,
             compiler=compiler,
+            executor=test_executor,
+            dynamic_binder=dynamic_binder,
             model=model,
             context=context,
             data_loader=val_data_loader,
@@ -204,6 +209,7 @@ def run_train(
             softmax_masking=softmax_masking,
             constrained_decoding=constrained_decoding,
             using_arg_candidate=using_arg_candidate,
+            using_distinctive_union_types=using_distinctive_union_types,
             evaluating=True,
             denotation_equal=denotation_equal,
         )
@@ -256,6 +262,8 @@ def run_train_for_multiple_decoding_strategies(
         pretrained_model_name_or_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
+        test_executor=config.ph,
+        dynamic_binder=config.ph,
         # device=config.ph,
         # logger=config.ph,
         encoded_train_set=config.ph,
@@ -291,7 +299,7 @@ def run_train_for_multiple_decoding_strategies(
     assert model_learning_dir_path is not None
     assert patience == float('inf'), 'the feature of patience is not implemented'
 
-    filemng.save_config_info(model_learning_dir_path)
+    save_config_info(model_learning_dir_path)
 
     common_last_dir_path = os.path.join(model_learning_dir_path, 'common:last')
 
@@ -357,15 +365,15 @@ def run_train_for_multiple_decoding_strategies(
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
-        # debug_batch_cnt = -1
+        debug_batch_cnt = -1
 
         # loss = torch.tensor(0.)
         loss = 0
         # for batch in coc.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
         for batch in utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
-            # debug_batch_cnt += 1
-            # if debug_batch_cnt > 100:
-            #     break
+            debug_batch_cnt += 1
+            if debug_batch_cnt > 100:
+                break
 
             optimizer.zero_grad()
 
@@ -400,6 +408,8 @@ def run_train_for_multiple_decoding_strategies(
                 validation = validate(
                     grammar=_grammar,
                     compiler=compiler,
+                    executor=test_executor,
+                    dynamic_binder=dynamic_binder,
                     model=model,
                     context=context,
                     data_loader=val_data_loader,
@@ -452,7 +462,7 @@ def run_train_for_multiple_decoding_strategies(
                     filemng.save_analysis(validation['analysis'], temp_strategy_last_dir_path)
 
                     filemng.copy_symlink(os.path.join(common_last_dir_path, MODEL_SYMLINK_NAME),
-                                          os.path.join(temp_strategy_last_dir_path, MODEL_SYMLINK_NAME))
+                                         os.path.join(temp_strategy_last_dir_path, MODEL_SYMLINK_NAME))
 
                 if updating_best:
                     strategy_best_dir_path = os.path.join(model_learning_dir_path, f'{config.decoding_strategy_name}:best')
@@ -469,12 +479,14 @@ def run_train_for_multiple_decoding_strategies(
 @config
 def run_test(
         *,
-        model_learning_dir_path=config.ph(None),
+        # model_learning_dir_path=config.ph(None),
         model_path=config.ph(None),
-        model_dir_name=config.ph('best'),
+        # model_dir_name=config.ph('best'),
         test_dir_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
+        test_executor=config.ph,
+        dynamic_binder=config.ph,
         # device=config.ph,
         # logger=config.ph,
         encoded_test_set,
@@ -482,6 +494,7 @@ def run_test(
         softmax_masking=config.ph,
         constrained_decoding=config.ph,
         using_arg_candidate=config.ph,
+        using_distinctive_union_types=config.ph,
         context=config.ph,
         denotation_equal=config.ph,
         num_prediction_beams=config.ph,
@@ -490,12 +503,12 @@ def run_test(
         analyzing=True,
         using_oracle=False,
 ):
-    if model_path is None:
-        # Check the default checkpoint path
-        assert model_learning_dir_path is not None
-        assert os.path.isdir(model_learning_dir_path), f'The learning directory {model_learning_dir_path} does not exist'
-        model_path = os.path.join(model_learning_dir_path, model_dir_name, MODEL_SYMLINK_NAME)
-        assert os.path.isdir(model_path), f'The checkpoint {model_path} does not exist'
+    # if model_path is None:
+    #     # Check the default checkpoint path
+    #     assert model_learning_dir_path is not None
+    #     assert os.path.isdir(model_learning_dir_path), f'The learning directory {model_learning_dir_path} does not exist'
+    #     model_path = os.path.join(model_learning_dir_path, model_dir_name, MODEL_SYMLINK_NAME)
+    #     assert os.path.isdir(model_path), f'The checkpoint {model_path} does not exist. Specify `model_path`.'
     model = filemng.load_model(
         model_path,
         num_tokens=len(grammar.lf_tokenizer))
@@ -515,6 +528,8 @@ def run_test(
     validation = validate(
         grammar=grammar,
         compiler=compiler,
+        executor=test_executor,
+        dynamic_binder=dynamic_binder,
         model=model,
         context=context,
         data_loader=test_data_loader,
@@ -527,6 +542,7 @@ def run_test(
         softmax_masking=softmax_masking,
         constrained_decoding=constrained_decoding,
         using_arg_candidate=using_arg_candidate,
+        using_distinctive_union_types=using_distinctive_union_types,
         using_oracle=using_oracle,
     )
 
@@ -534,7 +550,7 @@ def run_test(
         logger.info('Performance: {}'.format(validation['performance']))
 
     filemng.mkloc_unless_exist(test_dir_path)
-    filemng.save_config_info(test_dir_path)
+    save_config_info(test_dir_path)
 
     if analyzing:
         filemng.save_analysis(validation['analysis'], test_dir_path)
@@ -594,6 +610,8 @@ def run_search_train(
         pretrained_model_path=config.ph,
         grammar=config.ph,
         compiler=config.ph,
+        search_executor=config.ph,
+        dynamic_binder=config.ph,
         # # devices=config.ph,
         # logger=config.ph,
         # encoded_train_set=config.ph,
@@ -613,6 +631,7 @@ def run_search_train(
         softmax_masking=config.ph,
         constrained_decoding=config.ph,
         using_arg_candidate=config.ph,
+        using_distinctive_union_types=config.ph,
         model_learning_dir_path=config.ph,
         resuming=config.ph(None),         # New
         # # max_num_iterations=None,  # New
@@ -700,6 +719,8 @@ def run_search_train(
         validation = validate(
             grammar=grammar,
             compiler=compiler,
+            executor=search_executor,
+            dynamic_binder=dynamic_binder,
             model=model,
             context=context,
             data_loader=weaksup_search_data_loader,
@@ -710,11 +731,12 @@ def run_search_train(
             softmax_masking=softmax_masking,
             constrained_decoding=constrained_decoding,
             using_arg_candidate=using_arg_candidate,
+            using_distinctive_union_types=using_distinctive_union_types,
             evaluating=True,
             denotation_equal=denotation_equal,
             using_oracle=True,
             collecting_weaksup_examples=True,
-            strict_postprocessing=True,
+            # strict_postprocessing=True,
         )
 
         performance = validation['performance']
@@ -777,6 +799,7 @@ def run_search_train(
             softmax_masking=softmax_masking,
             constrained_decoding=constrained_decoding,
             using_arg_candidate=using_arg_candidate,
+            using_distinctive_union_types=using_distinctive_union_types,
             model_learning_dir_path=new_checkpoint_dir_path,
             restarting=False,
             context=context,

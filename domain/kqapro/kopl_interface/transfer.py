@@ -8,16 +8,16 @@ from collections import deque
 from functools import cache
 
 # from configuration import config
-from utility.trie import TokenTrie
+from splogic.utility.trie import SequenceTrie
+from splogic.seq2seq import learning
 
 from dhnamlib.pylib.context import block
-from dhnamlib.pylib.decoration import construct, curry, variable, id_cache
+from dhnamlib.pylib.decoration import construct, curry, variable, id_cache, deprecated
 from dhnamlib.pylib.function import compose
 from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, finditer
 
 from . import read as kopl_read
 from . import kb_analysis as kopl_kb_analysis
-from semparse import learning
 
 
 with block:
@@ -113,7 +113,7 @@ with block:
         # Processing keywords for attributes and qualifiers
         def merge_tries(tries):
             if len(tries) > 1:
-                return TokenTrie.merge(tries)
+                return SequenceTrie.merge(tries)
             else:
                 return unique(tries)
 
@@ -189,7 +189,7 @@ with block:
         def is_type_of(act_type, super_type):
             return grammar.sub_and_super(act_type, super_type)
 
-        kw_to_type_dict = make_kw_to_type_dict(grammar.raw_kb)
+        kw_to_type_dict = make_kw_to_type_dict(context.raw_kb)
 
         if is_type_of(act_type, 'keyword'):
             if act_type in ['kw-attr-comparable', 'kw-attribute']:
@@ -246,6 +246,7 @@ with block:
 
 
 with block:
+    @deprecated
     def iter_super_to_sub_actions(super_types_dict, is_non_conceptual_type):
         from splogic.base.formalism import Action
 
@@ -270,6 +271,7 @@ with block:
                          param_types=[sub_type],
                          expr_dict=dict(default='{0}'))
 
+    @deprecated
     def get_strictly_typed_action_seq(grammar, action_name_seq, question):
         assert grammar.inferencing_subtypes is False
 
@@ -301,8 +303,8 @@ with block:
             expected_action = input_action_seq[num_processed_actions]
             num_processed_actions += 1
             utterance_token_id_seq = grammar.utterance_tokenizer(question)['input_ids']
-            dynamic_trie = learning._utterance_token_id_seq_to_dynamic_trie(grammar, utterance_token_id_seq)
-            with grammar.let_dynamic_trie(dynamic_trie, using_spans_as_entities=True):
+            utterance_span_trie = learning.utterance_token_id_seq_to_span_trie(grammar, utterance_token_id_seq)
+            with grammar.dynamic_scope.let(utterance_span_trie=utterance_span_trie):
                 candidate_action_ids = state.get_candidate_action_ids()
             if expected_action.id in candidate_action_ids:
                 output_action_seq.append(expected_action)

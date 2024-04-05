@@ -2,7 +2,7 @@
 import re
 from datetime import date
 from collections import defaultdict
-from utility.trie import TokenTrie
+from splogic.utility.trie import SequenceTrie
 # from itertools import chain
 # from tqdm import tqdm
 
@@ -76,7 +76,7 @@ def extract_kb_info(kb):
 
 
 def make_trie(kw_set, lf_tokenizer, end_of_seq):
-    trie = TokenTrie(tokenizer=lf_tokenizer, end_of_seq=end_of_seq)
+    trie = SequenceTrie(tokenizer=lf_tokenizer, end_of_seq=end_of_seq)
     for kw in kw_set:
         trie.add_text(kw)
     return trie

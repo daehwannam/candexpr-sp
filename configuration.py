@@ -13,8 +13,9 @@ from dhnamlib.pylib.context import Environment, LazyEval
 from dhnamlib.pylib.lazy import LazyProxy
 # from dhnamlib.pylib.decoration import Register
 from dhnamlib.pylib.decoration import variable  # , deprecated
+from dhnamlib.pylib.filesys import json_skip_types
 from dhnamlib.pylib.filesys import (
-    json_save, json_skip_types,
+    json_save, InvalidObjectSkippingJSONEncoder,
     mkpdirs_unless_exist, make_logger, NoLogger, mkloc_unless_exist, get_new_path_with_number)
 # from dhnamlib.pylib.filesys import pickle_load
 # from dhnamlib.pylib.iteration import apply_recursively
@@ -32,11 +33,10 @@ from splogic.utility.acceleration import set_accelerator_initializer, accelerato
 from splogic.utility.tqdm import set_tqdm_use_initializer
 from splogic.utility.logging import set_logger_initializer
 
+from meta_configuration import get_default_domain_name, NO_DOMAIN_NAME
+
 
 _DEBUG = False
-
-_NO_DOMAIN = object()
-
 
 # @cache
 # def _get_domain():
@@ -44,7 +44,7 @@ _NO_DOMAIN = object()
 def domain():
 
     cmd_arg_dict = _parse_cmd_args()
-    if cmd_arg_dict['domain_name'] is _NO_DOMAIN:
+    if cmd_arg_dict['domain_name'] is NO_DOMAIN_NAME:
         domain = AttrDict(configuration=AttrDict(config=dict()))
     else:
         domain = ModuleAccessor('domain.{}'.format(cmd_arg_dict['domain_name']))
@@ -97,7 +97,7 @@ def _get_device():
 
 
 def _is_valid_run_mode(run_mode):
-    return run_mode in domain.configuration.RUN_MODES
+    return run_mode in domain.configuration.ALL_RUN_MODES
 
 
 def _is_training_run_mode(run_mode):
@@ -120,12 +120,12 @@ def _get_git_hash():
 @cache
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
-    parser.add_argument('--domain', dest='domain_name', help='a domain name', choices=['kqapro'], default=_NO_DOMAIN)
+    parser.add_argument('--domain', dest='domain_name', help='a domain name', choices=['kqapro'], default=get_default_domain_name())
     parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
     parser.add_argument('--extra-config', dest='extra_config_modules', help='an additional config module(s) which can overwrite other configurations. When more than one module is passed, the modules are separated by commas.')
     parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of learning')
     parser.add_argument('--model-path', dest='model_path', help='a path to the directory of a checkpoint')
-    parser.add_argument('--model-dir-name', dest='model_dir_name', help='the name of the directory of a model')
+    # parser.add_argument('--model-dir-name', dest='model_dir_name', help='the name of the directory of a model')
     # parser.add_argument('--run_mode', dest='run_mode', help='an execution run_mode', choices=['train', 'test'])
     parser.add_argument('--using-tqdm', dest='using_tqdm', type=parse_bool, default=True, help='whether using tqdm')
 
@@ -225,7 +225,7 @@ def save_config_info(dir_path):
         starting_num=1, no_first_num=True
     )
     mkloc_unless_exist(config_info_path)
-    json_save(json_dict, os.path.join(config_info_path, 'config.json'), cls=json_skip_types(LazyEval))
+    json_save(json_dict, os.path.join(config_info_path, 'config.json'), cls=InvalidObjectSkippingJSONEncoder)
     json_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
     shutil.copytree('./config', os.path.join(config_info_path, 'config'))
     shutil.copyfile('./configuration.py', os.path.join(config_info_path, 'configuration.py'))
