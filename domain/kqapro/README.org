@@ -195,7 +195,7 @@ BEAM_CONFIG='config.kqapro.extra.num_prediction_beams=1'
 # full constraints
 TEST_DIR_PATH='model-test/kqapro/result:full-constraints'
 EXTRA_CONFIG="${BEAM_CONFIG}"
-p$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate
 TEST_DIR_PATH='model-test/kqapro/result:no-arg-candidate'
