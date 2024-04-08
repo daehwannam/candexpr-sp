@@ -157,10 +157,12 @@ def run_train(
 
     forward_backward = seq2seq_learning.ws_forward_backward if weaksup_learning else seq2seq_learning.ss_forward_backward
 
+    # for epoch in range(status['last_update_num'] + 1, 3):  # DEBUG
     for epoch in range(status['last_update_num'] + 1, num_train_epochs + 1):
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
+        # print('---- Remove debug code ----')
         # debug_batch_idx = -1
         # loss = torch.tensor(0.)
         loss = 0
