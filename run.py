@@ -365,15 +365,15 @@ def run_train_for_multiple_decoding_strategies(
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
-        debug_batch_cnt = -1
+        # debug_batch_cnt = -1
 
         # loss = torch.tensor(0.)
         loss = 0
         # for batch in coc.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
         for batch in utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
-            debug_batch_cnt += 1
-            if debug_batch_cnt > 100:
-                break
+            # debug_batch_cnt += 1
+            # if debug_batch_cnt > 100:
+            #     break
 
             optimizer.zero_grad()
 
