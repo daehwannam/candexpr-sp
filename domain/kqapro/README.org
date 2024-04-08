@@ -56,8 +56,11 @@ python -m domain.kqapro.preprocess --goal encoded_weaksup_search_set
 ** Training with logical forms
 *** Training with the default options
 #+begin_src sh
-python -m run --domain kqapro --config config.kqapro.train_default
+MODEL_LEARNING_DIR_PATH=./model-instance/kqapro/learning
+python -m run --domain kqapro --config config.kqapro.train_default --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src
+
+if ~--model-learning-dir~ option is not specified, a directory is automatically created in =./model-instance/kqapro=.
 
 *** Training for multiple decoding strategies
 #+begin_src sh
@@ -175,7 +178,7 @@ accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG \
 #+begin_src sh
 TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_set'
 MODEL_PATH='path/to/model'
-TEST_DIR_PATH='path/to/test-result'
+TEST_DIR_PATH='model-test/kqapro/result'
 # e.g. TEST_DIR_PATH='./model-test/kqapro/2023-07-19_01:17:04_094104_full-constraints:best/model'
 
 python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
@@ -185,27 +188,27 @@ python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH --t
 #+begin_src sh
 TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_set'
 MODEL_PATH='path/to/model'
-COMMON_TEST_CMD="python -m run --domain kqapro --config config.kqapro.$TEST_CONFIG --model-path $MODEL_PATH"
+COMMON_TEST_CMD="python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH"
 
 BEAM_CONFIG='config.kqapro.extra.num_prediction_beams=1'
 
 # full constraints
-TEST_DIR_PATH='path/to/test-result:full-constraints'
+TEST_DIR_PATH='model-test/kqapro/result:full-constraints'
 EXTRA_CONFIG="${BEAM_CONFIG}"
-$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+p$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate
-TEST_DIR_PATH='path/to/test-result:no-arg-candidate'
+TEST_DIR_PATH='model-test/kqapro/result:no-arg-candidate'
 EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.using_arg_candidate=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate and union types
-TEST_DIR_PATH='path/to/test-result:no-ac-no-dut'
+TEST_DIR_PATH='model-test/kqapro/result:no-ac-no-dut'
 EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.using_arg_candidate=False|config.kqapro.extra.using_distinctive_union_types=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without constrained-decoding
-TEST_DIR_PATH='path/to/test-result:no-constrained-decoding'
+TEST_DIR_PATH='model-test/kqapro/result:no-constrained-decoding'
 EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
@@ -214,38 +217,42 @@ $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+begin_src sh
 TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_set'
 MODEL_PATH='path/to/model'
-TEST_DIR_PATH='path/to/test-result'
+TEST_DIR_PATH='model-test/kqapro/result:no-keyword-concept'
 # e.g. TEST_DIR_PATH='./model-test/kqapro/2023-07-19_01:17:04_094104_full-constraints:best/model'
 ACTION_NAME=keyword-concept     # or keyword-entity, keyword-relation, ...
 
 python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH --extra-config config.kqapro.extra.no_arg_candidate --no-arg-candidate-for $ACTION_NAME
 #+end_src
 
+Example of ~MODEL_PATH~
+- =./model-instance-keep/kqapro/multiple_decoding_strategies/full-constraints:best/model/=
+- =./model-instance/kqapro/weakly-supervised-models/full-constraints/optim/best/best/model=
+
 *** Testing with oracle on the validation set
 #+begin_src sh
 TEST_CONFIG='config.kqapro.oracle_test_on_val_set'
 MODEL_PATH='path/to/model'
-COMMON_TEST_CMD="python -m run --domain kqapro --config config.kqapro.$TEST_CONFIG --model-path $MODEL_PATH"
+COMMON_TEST_CMD="python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH"
 
 BEAM_CONFIG='config.kqapro.extra.num_prediction_beams=4'
 
 # full constraints
-TEST_DIR_PATH='path/to/test-result:full-constraints'
+TEST_DIR_PATH='model-test/kqapro/result:full-constraints'
 EXTRA_CONFIG="${BEAM_CONFIG}"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate
-TEST_DIR_PATH='path/to/test-result:no-arg-candidate'
+TEST_DIR_PATH='model-test/kqapro/result:no-arg-candidate'
 EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.using_arg_candidate=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate and union types
-TEST_DIR_PATH='path/to/test-result:no-ac-no-dut'
+TEST_DIR_PATH='model-test/kqapro/result:no-ac-no-dut'
 EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.using_arg_candidate=False|config.kqapro.extra.using_distinctive_union_types=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without constrained-decoding
-TEST_DIR_PATH='path/to/test-result:no-constrained-decoding'
+TEST_DIR_PATH='model-test/kqapro/result:no-constrained-decoding'
 EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src

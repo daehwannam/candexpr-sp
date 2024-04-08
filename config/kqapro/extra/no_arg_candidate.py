@@ -1,7 +1,7 @@
 import argparse
 from functools import cache
 
-import configuration
+from domain.kqapro import configuration
 
 from dhnamlib.pylib.context import Environment
 from dhnamlib.pylib.context import LazyEval
