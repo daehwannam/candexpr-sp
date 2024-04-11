@@ -24,23 +24,25 @@ _config_specific = Environment(
             decoding_strategy_name='full-constraints',
             constrained_decoding=True,
             using_arg_candidate=True,
+            using_distinctive_union_types=True,
         ),
         AttrDict(
             decoding_strategy_name='no-arg-candidate',
             constrained_decoding=True,
             using_arg_candidate=False,
+            using_distinctive_union_types=True,
         ),
         AttrDict(
             decoding_strategy_name='no-ac-no-dut',
             constrained_decoding=True,
             using_arg_candidate=False,
-            grammar_lazy_obj=LazyEval(_make_grammar_with_no_dut),
+            using_distinctive_union_types=False,
         ),
         AttrDict(
             decoding_strategy_name='no-constrained-decoding',
             constrained_decoding=False,
             using_arg_candidate=False,
-            grammar_lazy_obj=LazyEval(_make_grammar_with_no_dut),
+            using_distinctive_union_types=False,
         ),
     ]
 )
