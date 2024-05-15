@@ -1,0 +1,349 @@
+;;; -*- mode: emacs-lisp -*-
+
+
+;;; This code is written in Lissp, a dialect of Lisp, which is provided by Hissp.
+;;; - Hissp documentation: https://hissp.readthedocs.io
+;;; - Hissp github: https://hissp.readthedocs.io
+;;;
+;;; We slightly modify the syntax of Lissp:
+;;; - The syntax of `let' expression is similar to that of Common Lisp or Emacs Lisp.
+;;; - A backquote (`) is used to expand S-expressions rather than to define macros.
+;;; - The $ character is used to convert S-expressions to strings.
+
+
+;;; Types
+;;;
+;;; `define-types' defines types in a hierarchy.
+;;;
+;;; The types that have "conceptual" as comments are not used for `act-type' or `param-types'.
+;;; The conceptual types are only used for categorizing types.
+
+;;; TODO: modify types
+(define-types
+  '(:type                               ; conceptual
+    ent-type
+    (:relation
+     relation-reversed
+     relation-entity
+     relation-bool
+     relation-numeric)
+    (:object-*
+     (:object-list
+      entity-list)
+     (:object
+      entity
+      number
+      (:num-component                   ; conceptual
+       quantity
+       unit)
+      date
+      (:date-component
+       year
+       month
+       day)))
+    (:operator                          ; conceptual
+     op-comparison
+     op-superative
+     op-aggregation
+     )
+    size))
+
+(define-types
+  '(:part
+    part-ent-type
+    part-relation-entity
+    part-relation-bool
+    part-relation-numeric
+    part-entity
+    part-quantity
+    part-unit
+    part-year
+    part-month
+    part-day
+))
+
+;;; TODO: modify types
+(define-types
+  '(:result
+    object-list
+    size
+    ))
+
+
+;;; Actions
+;;;
+;;; `define-action' defines an action.
+;;; `define-meta-action' defines a meta-action. `nl-token', which is "nlt" in the paper, is the only meta-action in this grammar.
+;;;
+;;; About the inputs of `define-action':
+;;; - `act-type' means the "return type" in the paper.
+;;; - `param-types' means the "parameter types" in the paper.
+;;; - `expr-dict' means the the "logical form template" in the paper.
+;;;   - `default' is an executable expression
+;;;   - `visual' is a simplified expression.
+;;; - `arg-candidate' means the "candidate expressions" in the paper.
+
+(define-action
+  :name 'program
+  :act-type 'result
+  :param-types '(result)
+  :expr-dict (mapkv :default $( call SW.listValue {0} )
+                    :visual "{0}")
+  :starting True)
+
+(define-action
+  :name 'get-all-instances
+  :act-type 'entity-list
+  :param-types '(ent-type)
+  :expr-dict (mapkv :default $( call SW.getProperty {0} ( string ! type ) )
+                    :visual $(get-all-instances {0})))
+
+(define-action
+  :name 'get-domain
+  :act-type 'entity-list
+  :param-types '(relation)
+  :expr-dict (mapkv :default $( call SW.domain ( string {0} ) )
+                    :visual $(get-domain {0})))
+
+(define-action
+  :name 'reverse
+  :act-type 'relation-reversed
+  :param-types '(relation)
+  :expr-dict (mapkv :default $( call SW.reverse {0} )
+                    :visual $(reverse {0})))
+
+(define-action
+  :name 'get-property
+  :act-type 'object-list
+  :param-types '(relation object-*)
+  :expr-dict (mapkv :default $( call SW.getProperty {1} ( string {0} ) )
+                    :visual $(get-property {1} {0})))
+
+;; (define-action
+;;   :name 'forward
+;;   :act-type 'object-list
+;;   :param-types '(relation object-*)
+;;   :expr-dict (mapkv :default $( call SW.getProperty {1} ( string {0} ) )
+;;                     :visual $(forward {1} {0})))
+
+;; (define-action
+;;   :name 'backward
+;;   :act-type 'object-list
+;;   :param-types '(relation object-*)
+;;   :expr-dict (mapkv :default $( call SW.getProperty {1} ( call SW.reverse ( string {0} ) ) )
+;;                     :visual $(backward {1} {0})))
+
+(define-action
+  :name 'concat
+  :act-type 'object-list
+  :param-types '(object object)
+  :expr-dict (mapkv :default $( call SW.concat {0} {1} )
+                    :visual $(concat {0} {1})))
+
+(define-action
+  :name 'filter-bool
+  :act-type 'object-list
+  :param-types '(relation-bool object-list)
+  :expr-dict (mapkv :default $( call SW.filter {1} {0})
+                    :visual $(filter {1} {0})))
+
+(define-action
+  :name 'filter-comp
+  :act-type 'object-list
+  :param-types '(relation-numeric op-comparison object-* object-list)
+  :expr-dict (mapkv :default $( call SW.filter {3} {0} {1} {2} )
+                    :visual $(filter {3} {0} {1} {2})))
+
+(define-action
+  :name 'superlative
+  :act-type 'object-list
+  :param-types '(relation-numeric op-superative object-list)
+  :expr-dict (mapkv :default $( call SW.superlative {2} {1} {0} )
+                    :visual $(superlative {2} {1} {0})))
+
+(define-action
+  :name 'count-superlative
+  :act-type 'object-list
+  :param-types '(relation op-superative object-list &optional object-list)
+  :expr-dict (mapkv :default $( call SW.countSuperlative {2} {1} {0} {3} )
+                    :visual $(superlative {2} {1} {0} {3})))
+
+(define-action
+  :name 'count-comparative
+  :act-type 'object-list
+  :param-types '(relation op-comparison number object-list &optional object-list)
+  :expr-dict (mapkv :default $( call SW.countComparative {3} {0} {1} {2} {4})
+                    :visual $(superlative {3} {0} {1} {2} {4})))
+
+(define-action
+  :name 'aggregate
+  :act-type 'object-list
+  :param-types '(op-aggregation object-list)
+  :expr-dict (mapkv :default $( call SW.aggregate {0} {1})
+                    :visual $(aggregate {0} {1})))
+
+(define-action
+  :name 'get-size
+  :act-type 'size
+  :param-types '(object-list)
+  :expr-dict (mapkv :default $( call .size {0} )
+                    :visual $(.size {0})))
+
+(starloop
+ (lambda (name act-type param-type)
+   (define-action
+     :name name
+     :act-type act-type
+     :param-types `(,param-type &rest ,param-type)
+     :arg-candidate (retrieve `(candidate ,act-type))
+     :expr-dict (mapkv :default (retrieve `(default-expr-fn ,act-type))
+                       :visual (retrieve `(visual-expr-fn ,act-type)))))
+ '((keyword-ent-type          ent-type          part-ent-type         )
+   (keyword-relation-entity   relation-entity   part-relation-entity  )
+   (keyword-relation-bool     relation-bool     part-relation-bool    )
+   (keyword-relation-numeric  relation-numeric  part-relation-numeric )
+   (keyword-entity            entity            part-entity           )
+   (constant-month            month             part-month            )
+   (constant-day              day               part-day              )
+   (constant-unit             unit              part-unit             )))
+
+(starloop
+ (lambda (name act-type param-type)
+   (define-action
+     :name name
+     :act-type act-type
+     :param-types `(,param-type &rest ,param-type)
+     ;; :arg-candidate (retrieve `(candidate ,act-type))
+     :expr-dict (mapkv :default (retrieve `(default-expr-fn ,act-type))
+                       :visual (retrieve `(visual-expr-fn ,act-type)))))
+ '((constant-quantity         quantity          part-quantity         )
+   (constant-year             year              part-year             )))
+
+;;; number, date,  op-comparison, op-superative, op-aggregation
+
+(define-action
+  :name 'constant-number
+  :act-type 'number
+  :param-types '(quantity &optional unit)
+  :expr-dict (mapkv :default (retrieve '(default-expr-fn number))
+                    :visual (retrieve '(visual-expr-fn number))))
+
+(define-action
+  :name 'constant-date
+  :act-type 'date
+  :param-types '(year &optional month day)
+  :expr-dict (mapkv :default (retrieve '(default-expr-fn date))
+                    :visual (retrieve '(visual-expr-fn date))))
+
+(define-action
+  :name 'constant-default-year
+  :act-type 'year
+  :param-types '()
+  :expr-dict (mapkv :default "2015"
+                    :visual "xxxx"))
+
+(starloop
+ (lambda (name op-expr)
+   (define-action
+     :name name
+     :act-type 'op-comparison
+     :param-types '()
+     :expr-dict (mapkv :default (.format "( string {} )" op-expr)
+                       :visual op-expr)))
+ '((op-eq  "=" )
+   (op-lt  "<" )
+   (op-gt  ">" )
+   (op-le  "<=")
+   (op-ge  ">=")))
+
+(define-action
+  :name 'op-ne
+  :act-type 'op-comparison
+  :param-types '()
+  :expr-dict (mapkv :default $( string ! = )
+                    :visual "!="))
+(starloop
+ (lambda (name act-type op-expr)
+   (define-action
+     :name name
+     :act-type act-type
+     :param-types '()
+     :expr-dict (mapkv :default (.format "( string {} )" op-expr)
+                       :visual (.format "'{}" op-expr))))
+ '((op-min  op-superative   "min")
+   (op-max  op-superative   "max")
+   (op-avg  op-aggregation  "avg")
+   (op-sum  op-aggregation  "sum")))
+
+;;; token-*
+
+(define-meta-action
+  :meta-name 'nl-token
+  :meta-params '(token)
+  :name-fn (retrieve '(name nl-token))
+  :expr-dict-fn (lambda (token)
+                  (mapkv :default token))
+  :param-types '())
+
+
+
+;;; Transfering
+;;;
+;;; - singleton
+;;;   - singleton is always used with SW.getProperty and ( string ! type ).
+;;;      e.g. ( call SW.getProperty en.player ( string ! type ) )
+;;;   - The combination is used to get all object of a relation.
+;;;   - output: get-all-objects
+;;; - domain
+;;;   - output: get-all-subjects
+;;; - SW.getProperty
+;;;   - output: get-objects, get-subjects
+;;; - ensureNumericEntity and ensureNumericProperty
+;;;   - they are unnecessary
+
+
+;;; Functions of the form of (call SW.{name} ...)
+;;;
+;;; listValue(Object obj)
+;;; singleton(Value value)
+;;; domain(String relation)
+;;; reverse(String relation)
+;;; concat(Value v1, Value v2)
+;;; concat(List<Value> l1, List<Value> l2)
+;;; ensureNumericProperty(String relation)
+;;; ensureNumericEntity(Value value)
+;;; ensureNumericEntity(List<Value> list)
+;;; filter(List<Value> entities, String relation)
+;;; filter(List<Value> entities, String relation, String compare, Value refValue)
+;;; filter(List<Value> entities, String relation, String compare, List<Value> refValues)
+;;; superlative(List<Value> entities, String mode, String relation)
+;;; countSuperlative(List<Value> entities, String mode, String relation)
+;;; countSuperlative(List<Value> entities, String mode, String relation, List<Value> restrictors)
+;;; countComparative(List<Value> entities, String relation, String mode, NumberValue thresholdValue)
+;;; countComparative(List<Value> entities, String relation, String mode, NumberValue thresholdValue, List<Value> restrictors)
+;;; aggregate(String mode, List<Value> values)
+;;; getProperty(Value inObject, String relation)
+;;; getProperty(List<Value> inObjects, String relation)
+
+;;; Constant
+;;;
+;;; (string content)
+;;; (number quantity &optional unit) ;; e.g. ( number 2 ), ( number 3 en.inch )
+;;; (date year month day) --> date, year
+;;; (time hour minute) --> hour --> number with a.m. p.m.
+;;; default-year = 2015
+;;;
+;;; relation
+
+;;; Special forms
+;;;
+;;; ((lambda s ...) {arg})
+;;; (var s)
+;;; (call .size ...)
+
+
+
+;;; TODO
+;;; - count arguments of some functions
+;;;   - filter, countSuperlative, countComparative,
+;;; - names of units for "number"

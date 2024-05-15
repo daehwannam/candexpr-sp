@@ -18,7 +18,7 @@ from dhnamlib.pylib.filesys import (
     json_save, InvalidObjectSkippingJSONEncoder,
     mkpdirs_unless_exist, make_logger, NoLogger, mkloc_unless_exist, get_new_path_with_number)
 # from dhnamlib.pylib.filesys import pickle_load
-# from dhnamlib.pylib.iteration import apply_recursively
+# from dhnamlib.pylib.iteration import rcopy
 from dhnamlib.pylib.iteration import distinct_pairs, not_none_valued_pairs
 from dhnamlib.pylib.text import parse_bool
 # from dhnamlib.pylib.package import import_from_module

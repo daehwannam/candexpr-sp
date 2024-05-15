@@ -83,7 +83,7 @@ config = Environment(
     # domain='kqapro',
 
     kb=LazyEval(lambda: json_load(_kb_file_path)),
-    # context=LazyEval(lambda: _context_cls(apply_recursively(config.kb))),
+    # context=LazyEval(lambda: _context_cls(rcopy(config.kb))),
     # context=LazyEval(lambda: _context_cls(config.kb)),
     context=LazyEval(_make_context),
     test_executor=InstantExecutor(result_cls=KQAProExecResult, context_wrapper=KQAProCountingContext),

@@ -7,7 +7,7 @@ from splogic.utility.trie import SequenceTrie
 # from tqdm import tqdm
 
 # from dhnamlib.pylib.decoration import fcache
-from dhnamlib.pylib.type import creatable
+from dhnamlib.pylib.typeutil import creatable
 from dhnamlib.pylib.iteration import unique, distinct_pairs
 from dhnamlib.pylib.decoration import construct, id_cache
 from dhnamlib.pylib.function import compose

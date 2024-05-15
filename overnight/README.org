@@ -1,0 +1,11 @@
+
+* Reference
+We follow:
+- [[https://github.com/rhythmcao/semantic-parsing-dual][pull_dependency.sh]]
+- [[https://github.com/Flitternie/GraphQ_IR][pull_dependency_overnight.sh]]
+
+The overnight data is from:
+- https://worksheets.codalab.org/rest/bundles/0x34b628718e514100aa75731bbdef457f/contents/blob/
+
+The code for evaluation is modified from:
+- https://worksheets.codalab.org/rest/bundles/0x05625395eb1243ce9c2c75849a87f906/contents/blob/

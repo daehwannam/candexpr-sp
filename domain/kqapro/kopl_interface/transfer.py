@@ -1,7 +1,6 @@
 
 "Transferring from KoPL to Actions"
 
-import re
 from itertools import chain
 from collections import deque
 # from functools import lru_cache
@@ -10,6 +9,7 @@ from functools import cache
 # from configuration import config
 from splogic.utility.trie import SequenceTrie
 from splogic.seq2seq import learning
+from splogic.seq2seq.token_pattern import is_bart_digit_seq_token
 
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.decoration import construct, curry, variable, id_cache, deprecated
@@ -23,9 +23,7 @@ from . import kb_analysis as kopl_kb_analysis
 with block:
     # Processing token actions
     def is_digit_seq_token(token_value):
-        return digit_seq_token_regex.match(token_value)
-
-    digit_seq_token_regex = re.compile(r'^Ġ?[0-9]+$')
+        return is_bart_digit_seq_token(token_value)
 
     def is_special_quantity_token(token_value):
         # Actually ['Ġ+', '+'] are not used to represent quantity in kqapro dataset

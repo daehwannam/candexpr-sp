@@ -34,4 +34,7 @@ class KQAProTokenProcessing(TokenProcessing):
     @staticmethod
     @implement
     def labeled_logical_form_to_action_seq(grammar, context, labeled_logical_form):
-        return kopl_transfer.kopl_to_action_seq(grammar, context, labeled_logical_form)
+        return kopl_transfer.kopl_to_action_seq(
+            grammar=grammar,
+            context=context,
+            labeled_kopl_program=labeled_logical_form)

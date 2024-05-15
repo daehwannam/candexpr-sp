@@ -1,0 +1,49 @@
+
+* Base directory
+All commands should be run in the project root.
+
+#+begin_src sh
+if [ ! -d '.git' ] || [ ! -d '.submodules' ] || [ ! -d 'domain' ]; then
+    echo 'The current directory is NOT the project root.'
+fi
+#+end_src
+
+* Setup
+** Executtion environment
+#+begin_src sh
+DOWNLOAD_PATH=../download
+DATA_PATH=../data
+
+DATA_LINK=https://worksheets.codalab.org/rest/bundles/0x34b628718e514100aa75731bbdef457f/contents/blob/
+EVALUATOR_LINK=https://worksheets.codalab.org/rest/bundles/0x05625395eb1243ce9c2c75849a87f906/contents/blob/
+
+wget $DATA_LINK -O $DOWNLOAD_PATH/overnight_data.tar.gz
+wget $EVALUATOR_LINK -O $DOWNLOAD_PATH/overnight_evaluator.tar.gz  # The original name is "evaluator.tar.gz". Its size is 728M.
+
+mkdir $DATA_PATH/overnight
+tar -xf $DOWNLOAD_PATH/overnight_data.tar.gz -C $DATA_PATH/overnight
+tar -xf $DOWNLOAD_PATH/overnight_evaluator.tar.gz -C $DATA_PATH/overnight
+
+mkdir -p ./dataset
+ln -s $(realpath $DATA_PATH/overnight/data/overnight/data) ./dataset/overnight
+ln -s $(realpath $DATA_PATH/overnight/data/overnight/evaluator) ./overnight/evaluator
+
+ln -s $DATA_PATH/overnight/data/overnight/evaluator/sempre/module-classes.txt .
+# edu.stanford.nlp.sempre.Master.getOptionsParser requires the 'module-classes.txt' file
+
+#+end_src
+
+The setup code is borrowed from:
+- [[https://github.com/rhythmcao/semantic-parsing-dual][pull_dependency.sh]]
+- [[https://github.com/Flitternie/GraphQ_IR][pull_dependency_overnight.sh]]
+
+** Code reference
+#+begin_src sh
+git clone https://github.com/percyliang/sempre.git
+#+end_src
+
+* Run
+** Example
+#+begin_src bash
+python -m domain.overnight.example
+#+end_src

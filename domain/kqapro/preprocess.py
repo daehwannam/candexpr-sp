@@ -13,7 +13,7 @@ from .configuration import _make_grammar
 
 from dhnamlib.pylib.filesys import jsonl_save, pickle_save, mkpdirs_unless_exist
 from dhnamlib.pylib.time import TimeMeasure
-from dhnamlib.pylib.iteration import apply_recursively
+from dhnamlib.pylib.iteration import rcopy
 from dhnamlib.pylib.decoration import construct
 
 from splogic.seq2seq import learning
@@ -53,7 +53,9 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             answer = example['answer']
 
             with tm:
-                action_seq = grammar.token_processing.labeled_logical_form_to_action_seq(grammar, context, labeled_kopl_program)
+                action_seq = grammar.token_processing.labeled_logical_form_to_action_seq(
+                    labeled_kopl_program,
+                    grammar=grammar, context=context)
             kopl_to_action_seq_cumtime += tm.interval
 
             action_seqs.append(action_seq)
@@ -145,7 +147,7 @@ def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_
         action_seqs, extraction_info_list = extract_action_seqs(raw_dataset, verbose=0, verifying=True)
         assert len(raw_dataset) == len(action_seqs) == len(extraction_info_list)
     print('Augmenting the dataset')
-    augmented_dataset = apply_recursively(raw_dataset)
+    augmented_dataset = rcopy(raw_dataset)
     for example_idx, example in tqdm(enumerate(augmented_dataset), total=len(augmented_dataset)):
         example['example_id'] = example_idx
         if adding_action_name_seq:

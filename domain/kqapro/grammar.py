@@ -90,6 +90,8 @@ class KQAProGrammar(Seq2SeqGrammar):
 
         @register('(function concat-quantity-unit)')
         def concat_quantity_unit(quantity, unit):
+            # Since Lissp's raw string cannot express double quote("),
+            # hash string should be used.
             return repr_as_hash_str(f'{quantity} {unit}'.rstrip())
 
         def get_act_type(typ):

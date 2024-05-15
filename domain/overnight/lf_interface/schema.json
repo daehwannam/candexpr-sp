@@ -1,0 +1,180 @@
+{
+    "blocks": {
+        "entity": [
+            "en.block.block1", "en.block.block2",
+            "en.shape.pyramid", "en.shape.cube",
+            "en.color.red", "en.color.green"
+        ],
+        "relation_entity": [
+            "shape", "color", "left", "right", "above", "below"
+        ],
+        "relation_number": [
+            "length", "width", "height"
+        ],
+        "relation_bool": [
+            "is_special"
+        ],
+        "number_units": [
+            "en.inch"
+        ]
+    },
+    "calendar": {
+        "entity": [
+            "en.meeting.weekly_standup", "en.meeting.annual_review",
+            "en.person.alice", "en.person.bob",
+            "en.location.greenberg_cafe", "en.location.central_office"
+        ],
+        "relation_entity": [
+            "attendee", "location"
+        ],
+        "relation_number": [
+            "length"
+        ],
+        "relation_date": [
+            "date"
+        ],
+        "relation_time": [
+            "start_time", "end_time"
+        ],
+        "relation_bool": [
+            "is_important"
+        ],
+        "number_units": [
+            "en.hour"
+        ]
+    },
+    "restaurants": {
+        "entity": [
+            "en.restaurant.thai_cafe", "en.restaurant.pizzeria_juno",
+            "en.neighborhood.tribeca", "en.neighborhood.midtown_west", "en.neighborhood.chelsea",
+            "en.cuisine.thai", "en.cuisine.french", "en.cuisine.italian",
+            "en.food.breakfast", "en.food.lunch", "en.food.dinner"
+        ],
+        "relation_entity": [
+            "neighborhood", "cuisine", "meals"
+        ],
+        "relation_number": [
+            "star_rating", "price_rating", "num_reviews"
+        ],
+        "relation_bool": [
+            "reserve", "credit", "outdoor", "takeout", "delivery", "waiter", "kids", "groups"
+        ],
+        "number_units": [
+            "en.star", "en.dollar_sign", "en.review"
+        ]
+    },
+    "housing": {
+        "entity": [
+            "en.housing_unit.123_sesame_street", "en.housing_unit.900_mission_ave",
+            "en.housing.apartment", "en.housing.condo", "en.housing.house", "en.housing.flat",
+            "en.neighborhood.tribeca", "en.neighborhood.midtown_west", "en.neighborhood.chelsea"
+        ],
+        "relation_entity": [
+            "neighborhood", "housing_type"
+        ],
+        "relation_number": [
+            "rent", "size"
+        ],
+        "relation_date": [
+            "posting_date"
+        ],
+        "relation_bool": [
+            "allows_cats", "allows_dogs", "has_private_bath", "has_private_room"
+        ],
+        "number_units": [
+            "en.dollar", "en.square_feet"
+        ]
+    },
+    "publications": {
+        "entity": [
+            "en.article.multivariate_data_analysis",
+            "en.person.efron", "en.person.lakoff",
+            "en.venue.computational_linguistics", "en.venue.annals_of_statistics"
+        ],
+        "relation_entity": [
+            "author", "venue", "cites"
+        ],
+        "relation_date": [
+            "publication_date"
+        ],
+        "relation_bool": [
+            "won_award"
+        ]
+    },
+    "socialnetwork": {
+        "entity": [
+            "en.person.alice", "en.person.bob",
+            "en.gender.male", "en.gender.female",
+            "en.relationship_status.single", "en.relationship_status.married",
+            "en.city.new_york", "en.city.beijing",
+            "en.university.brown", "en.university.berkeley", "en.university.ucla",
+            "en.field.computer_science", "en.field.economics", "en.field.history",
+            "en.company.google", "en.company.mckinsey", "en.company.toyota",
+            "en.job_title.ceo", "en.job_title.software_engineer", "en.job_title.program_manager"
+        ],
+        "relation_entity": [
+            "gender", "relationship_status", "birthplace", "friend",
+            "student", "university", "field_of_study",
+            "employee", "employer", "job_title"
+        ],
+        "relation_number": [
+            "height"
+        ],
+        "relation_date": [
+            "birthdate",
+            "education_start_date", "education_end_date",
+            "employment_start_date", "employment_end_date"
+        ],
+        "relation_bool": [
+            "logged_in"
+        ],
+        "number_units": [
+            "en.cm"
+        ],
+        "extra_type": [
+            "en.education", "en.employment"
+        ]
+    },
+    "basketball": {
+        "entity": [
+            "en.player.kobe_bryant", "en.player.lebron_james",
+            "en.team.lakers", "en.team.cavaliers",
+            "en.position.point_guard", "en.position.forward"
+        ],
+        "relation_entity": [
+            "player", "position", "team"
+        ],
+        "relation_number": [
+            "num_points", "num_assists", "num_steals", "num_turnovers", "num_rebounds", "num_blocks", "num_fouls", "num_games_played"
+        ],
+        "relation_date": [
+            "season"
+        ],
+        "number_units": [
+            "point", "assist", "steal", "turnover", "rebound", "block", "foul", "game"
+        ],
+        "extra_type": [
+            "en.stats"
+        ]
+    },
+    "recipes": {
+        "entity": [
+            "en.recipe.rice_pudding", "en.recipe.quiche",
+            "en.cuisine.chinese", "en.cuisine.french",
+            "en.ingredient.milk", "en.ingredient.spinach",
+            "en.meal.lunch", "en.meal.dinner"
+        ],
+        "relation_entity": [
+            "cuisine", "requires", "meal"
+        ],
+        "relation_number": [
+            "preparation_time", "cooking_time"
+        ],
+        "relation_date": [
+            "posting_date"
+        ],
+        "number_units": [
+            "en.minute"
+        ]
+    }
+}

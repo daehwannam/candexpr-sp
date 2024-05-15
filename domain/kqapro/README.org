@@ -3,7 +3,7 @@
 All commands should be run in the project root.
 
 #+begin_src sh
-if [ ! -d '.git' ] || [ ! -d '.submodules' ]; then
+if [ ! -d '.git' ] || [ ! -d '.submodules' ] || [ ! -d 'domain' ]; then
     echo 'The current directory is NOT the project root.'
 fi
 #+end_src
@@ -24,7 +24,7 @@ ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset/kqapro
 ** Environment
 #+begin_src sh
 ENV_NAME=kqapro
-conda create -y -n $ENV_NAME python=3
+conda create -y -n $ENV_NAME python=3.10.9
 conda activate $ENV_NAME
 
 # pytorch for CUDA 11.6
