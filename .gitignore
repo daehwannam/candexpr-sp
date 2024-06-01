@@ -29,7 +29,7 @@ _tmp_*
 /baseline-processed
 
 # pre-processed data
-/processed
+/preprocessed
 
 # model-instance
 /model-instance

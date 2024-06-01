@@ -14,7 +14,7 @@
         "relation_bool": [
             "is_special"
         ],
-        "number_units": [
+        "number_unit": [
             "en.inch"
         ]
     },
@@ -39,7 +39,7 @@
         "relation_bool": [
             "is_important"
         ],
-        "number_units": [
+        "number_unit": [
             "en.hour"
         ]
     },
@@ -59,7 +59,7 @@
         "relation_bool": [
             "reserve", "credit", "outdoor", "takeout", "delivery", "waiter", "kids", "groups"
         ],
-        "number_units": [
+        "number_unit": [
             "en.star", "en.dollar_sign", "en.review"
         ]
     },
@@ -81,7 +81,7 @@
         "relation_bool": [
             "allows_cats", "allows_dogs", "has_private_bath", "has_private_room"
         ],
-        "number_units": [
+        "number_unit": [
             "en.dollar", "en.square_feet"
         ]
     },
@@ -106,7 +106,7 @@
             "en.person.alice", "en.person.bob",
             "en.gender.male", "en.gender.female",
             "en.relationship_status.single", "en.relationship_status.married",
-            "en.city.new_york", "en.city.beijing",
+            "en.city.new_york", "en.city.bejing",
             "en.university.brown", "en.university.berkeley", "en.university.ucla",
             "en.field.computer_science", "en.field.economics", "en.field.history",
             "en.company.google", "en.company.mckinsey", "en.company.toyota",
@@ -128,7 +128,7 @@
         "relation_bool": [
             "logged_in"
         ],
-        "number_units": [
+        "number_unit": [
             "en.cm"
         ],
         "extra_type": [
@@ -150,7 +150,7 @@
         "relation_date": [
             "season"
         ],
-        "number_units": [
+        "number_unit": [
             "point", "assist", "steal", "turnover", "rebound", "block", "foul", "game"
         ],
         "extra_type": [
@@ -173,7 +173,7 @@
         "relation_date": [
             "posting_date"
         ],
-        "number_units": [
+        "number_unit": [
             "en.minute"
         ]
     }

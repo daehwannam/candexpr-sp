@@ -1,12 +1,18 @@
 
+from functools import cache
+
 from dhnamlib.pylib.context import Environment, LazyEval, suppress_stdout, suppress_stderr, contextless, context_nest
 from dhnamlib.pylib.filesys import json_load, jsonl_load
+from dhnamlib.pylib.klass import subclass, implement
 
 from splogic.base.grammar import read_grammar
 from splogic.utility.acceleration import accelerator
 from splogic.seq2seq import filemng
-from splogic.base.execution import InstantExecutor
+from splogic.base.execution import InstantExecutor, SingletonContextCreater
 from splogic.seq2seq.dynamic_bind import UtteranceSpanTrieDynamicBinder, NoDynamicBinder
+from splogic.seq2seq.validation import Validator, ResultCollector
+from splogic.seq2seq.data_read import make_data_loader
+from .execution import KoPLCompiler
 
 # from configuration import config as global_config
 import configuration
@@ -14,7 +20,7 @@ import configuration
 
 from .execution import (
     KQAProContext, KQAProDebugContext, KQAProCountingContext,
-    KQAProExecResult, KQAProStricExectResult)
+    KQAProExecResult, KQAProStricExecResult)
 from .validation import KQAProDenotationEqual
 
 
@@ -23,22 +29,22 @@ _train_set_file_path = './dataset/kqapro/train.json'
 _val_set_file_path = './dataset/kqapro/val.json'
 _test_set_file_path = './dataset/kqapro/test.json'
 
-_augmented_train_set_file_path = './processed/kqapro/augmented_train.jsonl'
-_augmented_val_set_file_path = './processed/kqapro/augmented_val.jsonl'
-_encoded_train_set_file_path = './processed/kqapro/encoded_train.jsonl'
-_encoded_val_set_file_path = './processed/kqapro/encoded_val.jsonl'
-_encoded_test_set_file_path = './processed/kqapro/encoded_test.jsonl'
-_shuffled_augmented_train_set_file_path = './processed/kqapro/shuffled_augmented_train.jsonl'
-_shuffled_encoded_train_set_file_path = './processed/kqapro/shuffled_encoded_train.jsonl'
-# _encoded_train_mask_dataset_file_path = './processed/kqapro/encoded_train_mask.jsonl'
-_augmented_strict_train_set_file_path = './processed/kqapro/augmented_strict_train.jsonl'
-_augmented_strict_val_set_file_path = './processed/kqapro/augmented_strict_val.jsonl'
-_encoded_strict_train_set_file_path = './processed/kqapro/encoded_strict_train.jsonl'
-_encoded_strict_val_set_file_path = './processed/kqapro/encoded_strict_val.jsonl'
-_shuffled_augmented_strict_train_set_file_path = './processed/kqapro/shuffled_augmented_strict_train.jsonl'
-_shuffled_encoded_strict_train_set_file_path = './processed/kqapro/shuffled_encoded_strict_train.jsonl'
-_encoded_weaksup_pretraining_set_file_path = './processed/kqapro/encoded_weaksup_pretraining.jsonl'
-_encoded_weaksup_search_set_file_path = './processed/kqapro/encoded_weaksup_search.jsonl'
+_augmented_train_set_file_path = './preprocessed/kqapro/augmented_train.jsonl'
+_augmented_val_set_file_path = './preprocessed/kqapro/augmented_val.jsonl'
+_encoded_train_set_file_path = './preprocessed/kqapro/encoded_train.jsonl'
+_encoded_val_set_file_path = './preprocessed/kqapro/encoded_val.jsonl'
+_encoded_test_set_file_path = './preprocessed/kqapro/encoded_test.jsonl'
+_shuffled_augmented_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_train.jsonl'
+_shuffled_encoded_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_train.jsonl'
+# _encoded_train_mask_dataset_file_path = './preprocessed/kqapro/encoded_train_mask.jsonl'
+_augmented_strict_train_set_file_path = './preprocessed/kqapro/augmented_strict_train.jsonl'
+_augmented_strict_val_set_file_path = './preprocessed/kqapro/augmented_strict_val.jsonl'
+_encoded_strict_train_set_file_path = './preprocessed/kqapro/encoded_strict_train.jsonl'
+_encoded_strict_val_set_file_path = './preprocessed/kqapro/encoded_strict_val.jsonl'
+_shuffled_augmented_strict_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_strict_train.jsonl'
+_shuffled_encoded_strict_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_strict_train.jsonl'
+_encoded_weaksup_pretraining_set_file_path = './preprocessed/kqapro/encoded_weaksup_pretraining.jsonl'
+_encoded_weaksup_search_set_file_path = './preprocessed/kqapro/encoded_weaksup_search.jsonl'
 
 # _KQAPRO_TRAN_SET_SIZE = 94376
 _USING_SPANS_AS_ENTITIES = False
@@ -49,6 +55,7 @@ _grammar_file_path = './domain/kqapro/grammar.lissp'
 _pretrained_model_name_or_path = 'facebook/bart-base'
 
 
+@cache
 def _make_context():
     with (
             contextless() if (configuration.config.using_tqdm and accelerator.is_local_main_process) else
@@ -56,6 +63,7 @@ def _make_context():
     ):
         _context_cls = KQAProDebugContext if configuration.config.debug else KQAProContext
         return _context_cls(configuration.config.kb)
+
 
 def _make_grammar():
     from .grammar import KQAProGrammar
@@ -67,15 +75,18 @@ def _make_grammar():
         ))
 
 
-ALL_RUN_MODES = [
-    'train-default', 'train-for-multiple-decoding-strategies', 'test-on-val-set', 'test-on-test-set',
-    'oracle-test-on-val-set', 'search-train'
-    # 'retrain', 'finetune',
-]
-
-TRAINING_RUN_MODES = [
-    'train-default', 'train-for-multiple-decoding-strategies', 'search-train'
-]
+def _make_validator(strict):
+    return Validator(
+        compiler=KoPLCompiler(),
+        context_creator=SingletonContextCreater(_make_context),
+        executor=InstantExecutor(
+            result_cls=KQAProStricExecResult if strict else KQAProExecResult,
+            context_wrapper=KQAProCountingContext),
+        dynamic_binder=UtteranceSpanTrieDynamicBinder() if _USING_SPANS_AS_ENTITIES else NoDynamicBinder(),
+        denotation_equal=KQAProDenotationEqual(),
+        result_collector_cls=ResultCollector,
+        extra_analysis_keys=[],
+    )
 
 
 config = Environment(
@@ -85,14 +96,16 @@ config = Environment(
     kb=LazyEval(lambda: json_load(_kb_file_path)),
     # context=LazyEval(lambda: _context_cls(rcopy(config.kb))),
     # context=LazyEval(lambda: _context_cls(config.kb)),
-    context=LazyEval(_make_context),
-    test_executor=InstantExecutor(result_cls=KQAProExecResult, context_wrapper=KQAProCountingContext),
-    search_executor=InstantExecutor(result_cls=KQAProStricExectResult, context_wrapper=KQAProCountingContext),
-    denotation_equal=KQAProDenotationEqual(),
-    dynamic_binder=UtteranceSpanTrieDynamicBinder() if _USING_SPANS_AS_ENTITIES else NoDynamicBinder(),
+    global_context=LazyEval(_make_context),
+    # context_creator=SingletonContextCreater(_make_context),
+    # test_executor=InstantExecutor(result_cls=KQAProExecResult, context_wrapper=KQAProCountingContext),
+    # search_executor=InstantExecutor(result_cls=KQAProStricExecResult, context_wrapper=KQAProCountingContext),
+    # denotation_equal=KQAProDenotationEqual(),
+    # dynamic_binder=UtteranceSpanTrieDynamicBinder() if _USING_SPANS_AS_ENTITIES else NoDynamicBinder(),
     max_num_program_iterations=200000,
     optim_measures=filemng.optim_measures,
     search_measures=filemng.search_measures,
+    # result_collector_cls=ResultCollector,
 
     raw_train_set=LazyEval(lambda: json_load(_train_set_file_path)),
     raw_val_set=LazyEval(lambda: json_load(_val_set_file_path)),
@@ -116,10 +129,14 @@ config = Environment(
     encoded_weaksup_search_set=LazyEval(lambda: jsonl_load(_encoded_weaksup_search_set_file_path)),
 
     grammar=LazyEval(_make_grammar),
-    compiler=LazyEval(lambda: config.grammar.compiler_cls()),
+    test_validator=LazyEval(lambda: _make_validator(strict=False)),
+    search_validator=LazyEval(lambda: _make_validator(strict=True)),
+    # compiler=LazyEval(lambda: config.grammar.compiler_cls()),
     using_arg_candidate=True,
     using_arg_filter=False,
-    
+    make_data_loader_fn=make_data_loader,
+    save_analysis_fn=filemng.save_analysis,
+
     pretrained_model_name_or_path=_pretrained_model_name_or_path,
 
     augmented_train_set_file_path=_augmented_train_set_file_path,

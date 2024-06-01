@@ -1,4 +1,3 @@
-
 import os
 
 from dhnamlib.pylib.context import Environment
@@ -9,7 +8,7 @@ from configuration import has_model_learning_dir_path
 from utility.time import initial_date_str
 
 
-_DOMAIN_NAME = 'kqapro'
+_DOMAIN_NAME = 'overnight'
 _MODEL_LEARNING_DIR_ROOT_PATH = f'./model-instance/{_DOMAIN_NAME}'
 
 
@@ -37,18 +36,3 @@ config = Environment(not_none_valued_pairs(dict(
     saving_optimizer=False,
     patience=float('inf'),
 ).items()))
-
-# model_instance_dir_path = './model-instance'
-
-
-# config = Environment(
-#     mode='train',
-#     model_learning_dir_path='./model-instance',
-#     finetuned_model_path=os.path.join(model_instance_dir_path, )
-
-#     learning_rate=3e-5,
-#     weight_decay=1e-5,
-#     batch_size=16,
-#     num_train_epochs=25,
-#     # num_warmup_steps=...,
-# )

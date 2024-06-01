@@ -5,6 +5,7 @@ from dhnamlib.pylib.filesys import json_load, python_pretty_save
 
 from .execution import postprocess_prediction
 from .original import execute_kopl_program
+from ..execution import KoPLCompiler
 
 
 def test_dataset():
@@ -63,7 +64,7 @@ def test_grammar():
     from configuration import config
 
     grammar = read_grammar('./domain/kqapro/grammar.lissp', grammar_cls=KQAProGrammar)
-    compiler = grammar.compiler_cls()
+    compiler = KoPLCompiler()
     dataset = json_load('./dataset/kqapro/train.json')
 
     # action_seq = kopl_transfer.kopl_to_action_seq(grammar, dataset[0]['program'])

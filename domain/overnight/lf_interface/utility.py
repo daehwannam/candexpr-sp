@@ -1,5 +1,7 @@
 
 def from_12_to_24(hour, am_or_pm):
+    # if not (1 <= hour <= 12):
+    #     breakpoint()
     assert 1 <= hour <= 12
     assert am_or_pm in ['am', 'pm']
 

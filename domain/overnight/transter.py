@@ -17,9 +17,9 @@ class OvernightTokenProcessing(TokenProcessing):
 
     default_nl_token_union_type = (
         'part-ent-type',
-        'part-property-entity',
-        'part-property-bool',
-        'part-property-numeric',
+        'part-relation-entity',
+        'part-relation-bool',
+        'part-relation-numeric',
         'part-entity',
         # 'part-quantity',
         'part-unit',

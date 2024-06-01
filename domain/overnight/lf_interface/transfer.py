@@ -1,6 +1,7 @@
 
 import os
 import json
+from itertools import chain
 
 from transformers import BartTokenizer
 
@@ -295,12 +296,15 @@ class ExprMapper:
             for full_ent_type_expr in schema.get('extra_type', []):
                 brief_ent_type_expr = full_ent_type_expr.split('.')[-1]
                 self.ent_type_mapper[domain][brief_ent_type_expr] = full_ent_type_expr
-            for full_unit_expr in schema.get('number_units', []):
+            for full_unit_expr in schema.get('number_unit', []):
                 if full_unit_expr.startswith('en.'):
                     brief_unit_expr = full_unit_expr.split('.')[-1]
                 else:
                     brief_unit_expr = full_unit_expr
                 self.unit_mapper[domain][brief_unit_expr] = full_unit_expr
+
+        self.unit_mapper['calendar']['am'] = 'am'
+        self.unit_mapper['calendar']['pm'] = 'pm'
 
     @staticmethod
     def remove_space(text):
@@ -316,28 +320,35 @@ class ExprMapper:
         return self.unit_mapper[domain][self.remove_space(unit_expr)]
 
     @staticmethod
-    def get_month(domain, mont_expr):
+    def get_month(mont_expr):
         return str(month_to_num(mont_expr))
 
     @staticmethod
     def get_time(hour_expr, unit_expr):
-        hour = from_12_to_24(int(hour_expr), unit_expr)
-        return str(hour)
+        try:
+            hour = from_12_to_24(int(hour_expr), unit_expr)
+        except AssertionError:
+            return 0
+        else:
+            return str(hour)
 
 
 def make_trie_info(lf_tokenizer, end_of_seq):
     def make_trie():
         return SequenceTrie(tokenizer=lf_tokenizer, end_of_seq=end_of_seq)
 
+    def add_text(trie, text):
+        trie.add_text(text.replace('_', ' '))
+
     trie_info = {}
 
     month_trie = make_trie()
-    for full_month_expr in map(str, range(1, 13)):
-        month_trie.add_text(full_month_expr)
+    for full_month_expr in map(num_to_month, range(1, 13)):
+        add_text(month_trie, full_month_expr)
 
     day_trie = make_trie()
     for full_day_expr in map(str, range(1, 32)):
-        day_trie.add_text(full_day_expr)
+        add_text(day_trie, full_day_expr)
 
     for domain, schema in SCHEMA_INFO.items():
         trie_info[domain] = {}
@@ -346,31 +357,35 @@ def make_trie_info(lf_tokenizer, end_of_seq):
         entity_trie = make_trie()
         for full_entity_expr in schema['entity']:
             en, brief_ent_type_expr, brief_entity_expr = full_entity_expr.split('.')
-            ent_type_trie.add_text(brief_ent_type_expr)
-            entity_trie.add_text(brief_entity_expr)
+            add_text(ent_type_trie, brief_ent_type_expr)
+            add_text(entity_trie, brief_entity_expr)
         for full_ent_type_expr in schema.get('extra_type', []):
             brief_ent_type_expr = full_ent_type_expr.split('.')[-1]
-            ent_type_trie.add_text(brief_ent_type_expr)
-        trie_info[domain]['keyword-ent-type'] = ent_type_trie
-        trie_info[domain]['keyword-entity'] = entity_trie
+            add_text(ent_type_trie, brief_ent_type_expr)
+        trie_info[domain]['ent-type'] = ent_type_trie
+        trie_info[domain]['entity'] = entity_trie
 
         relation_entity_trie = make_trie()
         for full_relation_entity_expr in schema['relation_entity']:
-            relation_entity_trie.add_text(full_relation_entity_expr)
-        trie_info[domain]['keyword-relation-entity'] = relation_entity_trie
+            add_text(relation_entity_trie, full_relation_entity_expr)
+        trie_info[domain]['relation-entity'] = relation_entity_trie
 
         relation_bool_trie = make_trie()
         for full_relation_bool_expr in schema.get('relation_bool', []):
-            relation_bool_trie.add_text(full_relation_bool_expr)
-        trie_info[domain]['keyword-relation-bool'] = relation_bool_trie
+            add_text(relation_bool_trie, full_relation_bool_expr)
+        trie_info[domain]['relation-bool'] = relation_bool_trie
 
         relation_numeric_trie = make_trie()
-        for full_relation_numeric_expr in schema.get('relation_numeric', []):
-            relation_numeric_trie.add_text(full_relation_numeric_expr)
-        trie_info[domain]['keyword-relation-numeric'] = relation_numeric_trie
+        for full_relation_numeric_expr in chain(
+                schema.get('relation_number', []),
+                schema.get('relation_date', []),
+                schema.get('relation_time', []),
+        ):
+            add_text(relation_numeric_trie, full_relation_numeric_expr)
+        trie_info[domain]['relation-numeric'] = relation_numeric_trie
 
-        trie_info[domain]['constant-month'] = month_trie
-        trie_info[domain]['constant-day'] = day_trie
+        trie_info[domain]['month'] = month_trie
+        trie_info[domain]['day'] = day_trie
 
         unit_trie = make_trie()
         for full_unit_expr in schema.get('number_unit', []):
@@ -378,11 +393,11 @@ def make_trie_info(lf_tokenizer, end_of_seq):
                 brief_unit_expr = full_unit_expr.split('.')[-1]
             else:
                 brief_unit_expr = full_unit_expr
-            unit_trie.add_text(brief_unit_expr)
+            add_text(unit_trie, brief_unit_expr)
         if domain == 'calendar':
-            unit_trie.add_text('am')
-            unit_trie.add_text('pm')
-        trie_info[domain]['constant-unit'] = unit_trie
+            add_text(unit_trie, 'am')
+            add_text(unit_trie, 'pm')
+        trie_info[domain]['unit'] = unit_trie
 
     return trie_info
 

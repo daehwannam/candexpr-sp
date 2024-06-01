@@ -42,8 +42,20 @@ The setup code is borrowed from:
 git clone https://github.com/percyliang/sempre.git
 #+end_src
 
-* Run
-** Example
-#+begin_src bash
-python -m domain.overnight.example
+* Running
+** Preprocessing
+#+begin_src sh
+set -e
+python -m domain.overnight.preprocess --goal augmented_train_set
+python -m domain.overnight.preprocess --goal augmented_test_set
+python -m domain.overnight.preprocess --goal encoded_train_set
+python -m domain.overnight.preprocess --goal encoded_test_set
+python -m domain.overnight.preprocess --goal shuffled_encoded_train_set
+#+end_src
+
+** Training
+*** Training with all domains
+#+begin_src sh
+MODEL_LEARNING_DIR_PATH=./model-instance/overnight/learning
+python -m run --domain overnight --config config.overnight.train_all --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src

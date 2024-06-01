@@ -20,14 +20,14 @@ from splogic.seq2seq import learning
 from splogic.seq2seq.dynamic_bind import UtteranceSpanTrieDynamicBinder
 from splogic.base.formalism import InvalidCandidateActionError
 
-from .execution import postprocess_prediction
+from .execution import postprocess_prediction, KoPLCompiler
 from .kopl_interface.original import execute_kopl_program
 # from .kopl_interface import transfer
 
 
 @config
-def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbose=1, verifying=True, verifying_grammar=True):
-    compiler = grammar.compiler_cls()
+def extract_action_seqs(raw_dataset, grammar=config.ph, global_context=config.ph, verbose=1, verifying=True, verifying_grammar=True):
+    compiler = KoPLCompiler()
 
     tm = TimeMeasure()
 
@@ -55,7 +55,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             with tm:
                 action_seq = grammar.token_processing.labeled_logical_form_to_action_seq(
                     labeled_kopl_program,
-                    grammar=grammar, context=context)
+                    grammar=grammar, global_context=global_context)
             kopl_to_action_seq_cumtime += tm.interval
 
             action_seqs.append(action_seq)
@@ -75,7 +75,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
                         num_incompatible_action_seqs += 1
 
                         utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
-                        dynamic_binding = dynamic_binder.bind(grammar, dict(utterance_token_ids=utterance_token_id_seq))
+                        dynamic_binding = dynamic_binder.bind_example(dict(utterance_token_ids=utterance_token_id_seq), grammar=grammar)
                         with grammar.dynamic_scope.let(**dynamic_binding):
                             last_state = grammar.search_state_cls.get_last_state(action_seq, verifying=verifying)
                     else:
@@ -91,7 +91,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             compile_tree_cumtime += tm.interval
 
             with tm:
-                denotation = program(context)
+                denotation = program(global_context)
             program_cumtime += tm.interval
 
             with tm:
@@ -99,12 +99,12 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, context=config.ph, verbo
             postprocess_prediction_cumtime += tm.interval
 
             if verifying:
-                denotation_by_kopl = execute_kopl_program(context, labeled_kopl_program)
+                denotation_by_kopl = execute_kopl_program(global_context, labeled_kopl_program)
                 assert denotation == denotation_by_kopl
 
             if False and verbose >= 2:
                 if answer != prediction:
-                    denotation_by_kopl = execute_kopl_program(context, labeled_kopl_program)
+                    denotation_by_kopl = execute_kopl_program(global_context, labeled_kopl_program)
                     if denotation == denotation_by_kopl:
                         prediction_by_kopl = postprocess_prediction(denotation_by_kopl)
                         assert prediction == prediction_by_kopl
@@ -141,7 +141,7 @@ def name_seq_to_action_seq(grammar, action_name_seq):
     return list(map(grammar.name_to_action, action_name_seq))
 
 
-def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_program=False, context=None):
+def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_program=False, global_context=None):
     if adding_action_name_seq:
         print('Extracting action sequences from a dataset')
         action_seqs, extraction_info_list = extract_action_seqs(raw_dataset, verbose=0, verifying=True)
@@ -158,8 +158,8 @@ def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_
             extraction_info = extraction_info_list[example_idx]
             example.update(**extraction_info)
         if adding_answer_by_program:
-            assert context is not None
-            answer_by_program = postprocess_prediction(execute_kopl_program(context, example['program']))
+            assert global_context is not None
+            answer_by_program = postprocess_prediction(execute_kopl_program(global_context, example['program']))
             example['answer_by_program'] = answer_by_program
     return augmented_dataset
 
@@ -171,13 +171,13 @@ def preprocess_for_augmented_dataset(
         augmented_dataset_file_path,
         adding_action_name_seq,
         adding_answer_by_program,
-        context=config.ph):
+        global_context=config.ph):
 
     augmented_dataset = augment_dataset(
         raw_dataset=raw_dataset,
         adding_action_name_seq=adding_action_name_seq,
         adding_answer_by_program=adding_answer_by_program,
-        context=context)
+        global_context=global_context)
     mkpdirs_unless_exist(augmented_dataset_file_path)
     jsonl_save(augmented_dataset, augmented_dataset_file_path)
     print(f'The augmented dataset was saved as {augmented_dataset_file_path}')

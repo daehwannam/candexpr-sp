@@ -15,7 +15,7 @@ from splogic.seq2seq.transfer import ActionNameStyle, StrictTypeProcessing
 
 from configuration import config
 
-from .execution import KoPLCompiler
+# from .execution import KoPLCompiler
 from .kopl_interface import kb_analysis as kopl_kb_analysis
 from .kopl_interface import transfer as kopl_transfer
 from .transfer import KQAProTokenProcessing
@@ -77,13 +77,13 @@ class KQAProGrammar(Seq2SeqGrammar):
             using_arg_filter=using_arg_filter
         )
 
-    @implement
-    def get_compiler_cls(self):
-        return KoPLCompiler
+    # @implement
+    # def get_compiler_cls(self):
+    #     return KoPLCompiler
 
     @config
     @implement
-    def register_specific(self, register, context=config.ph):
+    def register_specific(self, register, global_context=config.ph):
         @register('(function concat-parts)')
         def concat_parts(*tokens):
             return repr_as_hash_str(self.join_nl_tokens(tokens))
@@ -112,7 +112,7 @@ class KQAProGrammar(Seq2SeqGrammar):
                      self.make_arg_filter(is_valid_prefix, make_is_valid_expr(typ)))
 
         for act_type, trie in kopl_transfer.iter_act_type_trie_pairs(
-                lf_tokenizer=self.lf_tokenizer, end_of_seq=self.reduce_token, context=context
+                lf_tokenizer=self.lf_tokenizer, end_of_seq=self.reduce_token, context=global_context
         ):
             if act_type == 'kw-entity':
                 trie.ignoring_errors = True

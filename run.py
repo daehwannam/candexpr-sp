@@ -9,8 +9,8 @@ import torch
 from configuration import config, save_config_info
 
 from splogic.seq2seq import learning as seq2seq_learning
-from splogic.seq2seq.data_read import make_data_loader
-from splogic.seq2seq.validation import validate
+# from splogic.seq2seq.data_read import make_data_loader
+# from splogic.seq2seq.validation import validate
 from splogic.seq2seq import filemng
 # from splogic.seq2seq.filemng import optim_measures, search_measures
 
@@ -45,11 +45,12 @@ MODEL_SYMLINK_NAME = 'model'
 def run_train(
         pretrained_model_name_or_path=config.ph,
         grammar=config.ph,
-        compiler=config.ph,
-        test_executor=config.ph,
-        dynamic_binder=config.ph,
+        # compiler=config.ph,
+        # test_executor=config.ph,
+        # dynamic_binder=config.ph,
         # device=config.ph,
         # logger=config.ph,
+        test_validator=config.ph,
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
         train_batch_size=config.ph,
@@ -69,13 +70,17 @@ def run_train(
         using_distinctive_union_types=config.ph,
         model_learning_dir_path=config.ph,
         restarting=False,
-        context=config.ph,
-        denotation_equal=config.ph,
+        # context_creator=config.ph,
+        # denotation_equal=config.ph,
+        # result_collector_cls=config.ph,
         optim_measures=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         saving_optimizer=config.ph,
         weaksup_learning=config.ph(False),
+        make_data_loader_fn=config.ph,
+        save_analysis_fn=config.ph,
+        save_extra_performance_fn=config.ph(filemng.save_extra_performance),
 ):
     if restarting:
         assert filemng.is_finetuned(pretrained_model_name_or_path)
@@ -109,7 +114,7 @@ def run_train(
     if weaksup_learning:
         assert train_max_num_action_seqs is not None
 
-    train_data_loader = make_data_loader(
+    train_data_loader = make_data_loader_fn(
         encoded_dataset=encoded_train_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
@@ -117,7 +122,7 @@ def run_train(
         shuffle=True,
         max_num_action_seqs=train_max_num_action_seqs,
     )
-    val_data_loader = make_data_loader(
+    val_data_loader = make_data_loader_fn(
         encoded_dataset=encoded_val_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
@@ -196,14 +201,29 @@ def run_train(
 
         model.eval()
         # from dhnamlib.pylib.cProfiling import run_context
-        # run_context('''validation = validate( grammar=grammar, compiler=compiler, model=model, context=context, data_loader=val_data_loader, batch_size=val_batch_size, num_beams=num_prediction_beams, generation_max_length=generation_max_length)''', sort='cumtime')
-        validation = validate(
+        # run_context('''validation = validate( grammar=grammar, compiler=compiler, model=model, context_creator=context_creator, data_loader=val_data_loader, batch_size=val_batch_size, num_beams=num_prediction_beams, generation_max_length=generation_max_length)''', sort='cumtime')
+        # validation = validate(
+        #     grammar=grammar,
+        #     compiler=compiler,
+        #     executor=test_executor,
+        #     dynamic_binder=dynamic_binder,
+        #     model=model,
+        #     context_creator=context_creator,
+        #     data_loader=val_data_loader,
+        #     batch_size=val_batch_size,
+        #     num_beams=num_prediction_beams,
+        #     generation_max_length=generation_max_length,
+        #     softmax_masking=softmax_masking,
+        #     constrained_decoding=constrained_decoding,
+        #     using_arg_candidate=using_arg_candidate,
+        #     using_distinctive_union_types=using_distinctive_union_types,
+        #     evaluating=True,
+        #     denotation_equal=denotation_equal,
+        #     result_collector_cls=result_collector_cls,
+        # )
+        validation = test_validator.validate(
             grammar=grammar,
-            compiler=compiler,
-            executor=test_executor,
-            dynamic_binder=dynamic_binder,
             model=model,
-            context=context,
             data_loader=val_data_loader,
             batch_size=val_batch_size,
             num_beams=num_prediction_beams,
@@ -213,7 +233,6 @@ def run_train(
             using_arg_candidate=using_arg_candidate,
             using_distinctive_union_types=using_distinctive_union_types,
             evaluating=True,
-            denotation_equal=denotation_equal,
         )
 
         performance = validation['performance']
@@ -236,7 +255,8 @@ def run_train(
 
             filemng.save_status(status, temp_last_dir_path)
             filemng.save_performance(performance, temp_last_dir_path)
-            filemng.save_analysis(validation['analysis'], temp_last_dir_path)
+            save_extra_performance_fn(validation['extra_performance'], temp_last_dir_path)
+            save_analysis_fn(validation['analysis'], temp_last_dir_path)
 
             filemng.make_symlink(
                 new_checkpoint_dir_path,
@@ -263,11 +283,12 @@ def run_train(
 def run_train_for_multiple_decoding_strategies(
         pretrained_model_name_or_path=config.ph,
         grammar=config.ph,
-        compiler=config.ph,
-        test_executor=config.ph,
-        dynamic_binder=config.ph,
+        # compiler=config.ph,
+        # test_executor=config.ph,
+        # dynamic_binder=config.ph,
         # device=config.ph,
         # logger=config.ph,
+        test_validator=config.ph,
         encoded_train_set=config.ph,
         encoded_val_set=config.ph,
         train_batch_size=config.ph,
@@ -285,8 +306,9 @@ def run_train_for_multiple_decoding_strategies(
         # using_arg_candidate=config.ph,
         model_learning_dir_path=config.ph,
         restarting=False,
-        context=config.ph,
-        denotation_equal=config.ph,
+        # context_creator=config.ph,
+        # denotation_equal=config.ph,
+        # result_collector_cls=config.ph,
         optim_measures=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
@@ -297,6 +319,10 @@ def run_train_for_multiple_decoding_strategies(
 
         # Argument for limited size of training data
         num_epoch_repeats=config.ph(1),
+
+        make_data_loader_fn=config.ph,
+        save_analysis_fn=config.ph,
+        save_extra_performance_fn=config.ph(filemng.save_extra_performance),
 ):
     assert model_learning_dir_path is not None
     assert patience == float('inf'), 'the feature of patience is not implemented'
@@ -321,14 +347,14 @@ def run_train_for_multiple_decoding_strategies(
         num_tokens=len(grammar.lf_tokenizer))
     model.to(accelerator.device)
 
-    train_data_loader = make_data_loader(
+    train_data_loader = make_data_loader_fn(
         encoded_dataset=encoded_train_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=train_batch_size,
         shuffle=True,
         num_epoch_repeats=num_epoch_repeats)
-    val_data_loader = make_data_loader(
+    val_data_loader = make_data_loader_fn(
         encoded_dataset=encoded_val_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
@@ -407,13 +433,9 @@ def run_train_for_multiple_decoding_strategies(
                 else:
                     _grammar = grammar
 
-                validation = validate(
+                validation = test_validator.validate(
                     grammar=_grammar,
-                    compiler=compiler,
-                    executor=test_executor,
-                    dynamic_binder=dynamic_binder,
                     model=model,
-                    context=context,
                     data_loader=val_data_loader,
                     batch_size=val_batch_size,
                     num_beams=num_prediction_beams,
@@ -423,7 +445,6 @@ def run_train_for_multiple_decoding_strategies(
                     using_arg_candidate=config.using_arg_candidate,
                     using_distinctive_union_types=config.using_distinctive_union_types,
                     evaluating=True,
-                    denotation_equal=denotation_equal,
                 )
 
                 performance = validation['performance']
@@ -461,7 +482,8 @@ def run_train_for_multiple_decoding_strategies(
 
                     filemng.save_status(status, temp_strategy_last_dir_path)
                     filemng.save_performance(performance, temp_strategy_last_dir_path)
-                    filemng.save_analysis(validation['analysis'], temp_strategy_last_dir_path)
+                    save_extra_performance_fn(validation['extra_performance'], temp_strategy_last_dir_path)
+                    save_analysis_fn(validation['analysis'], temp_strategy_last_dir_path)
 
                     filemng.copy_symlink(os.path.join(common_last_dir_path, MODEL_SYMLINK_NAME),
                                          os.path.join(temp_strategy_last_dir_path, MODEL_SYMLINK_NAME))
@@ -486,24 +508,29 @@ def run_test(
         # model_dir_name=config.ph('best'),
         test_dir_path=config.ph,
         grammar=config.ph,
-        compiler=config.ph,
-        test_executor=config.ph,
-        dynamic_binder=config.ph,
+        # compiler=config.ph,
+        # test_executor=config.ph,
+        # dynamic_binder=config.ph,
         # device=config.ph,
         # logger=config.ph,
+        test_validator=config.ph,
         encoded_test_set,
         test_batch_size=config.ph,
         softmax_masking=config.ph,
         constrained_decoding=config.ph,
         using_arg_candidate=config.ph,
         using_distinctive_union_types=config.ph,
-        context=config.ph,
-        denotation_equal=config.ph,
+        # context_creator=config.ph,
+        # denotation_equal=config.ph,
+        # result_collector_cls=config.ph,
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         evaluating,
         analyzing=True,
         using_oracle=False,
+        make_data_loader_fn=config.ph,
+        save_analysis_fn=config.ph,
+        save_extra_performance_fn=config.ph(filemng.save_extra_performance),
 ):
     # if model_path is None:
     #     # Check the default checkpoint path
@@ -516,7 +543,7 @@ def run_test(
         num_tokens=len(grammar.lf_tokenizer))
     model.to(accelerator.device)
 
-    test_data_loader = make_data_loader(
+    test_data_loader = make_data_loader_fn(
         encoded_dataset=encoded_test_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
@@ -527,20 +554,15 @@ def run_test(
     test_data_loader = accelerator.prepare_val_data_loader(test_data_loader)
 
     model.eval()
-    validation = validate(
+    validation = test_validator.validate(
         grammar=grammar,
-        compiler=compiler,
-        executor=test_executor,
-        dynamic_binder=dynamic_binder,
         model=model,
-        context=context,
         data_loader=test_data_loader,
         batch_size=test_batch_size,
         num_beams=num_prediction_beams,
         generation_max_length=generation_max_length,
         analyzing=analyzing,
         evaluating=evaluating,
-        denotation_equal=denotation_equal,
         softmax_masking=softmax_masking,
         constrained_decoding=constrained_decoding,
         using_arg_candidate=using_arg_candidate,
@@ -555,10 +577,11 @@ def run_test(
     save_config_info(test_dir_path)
 
     if analyzing:
-        filemng.save_analysis(validation['analysis'], test_dir_path)
+        save_analysis_fn(validation['analysis'], test_dir_path)
     filemng.save_predictions(validation['predictions'], test_dir_path)
     if evaluating:
         filemng.save_performance(validation['performance'], test_dir_path)
+        save_extra_performance_fn(validation['extra_performance'], test_dir_path)
     filemng.save_time_info(validation['time_info'], test_dir_path)
 
     logger.info(f'Results are saved in "{test_dir_path}"')
@@ -579,7 +602,7 @@ def run_oracle_test(
         # softmax_masking=config.ph,
         # constrained_decoding=config.ph,
         # using_arg_candidate=config.ph,
-        # context=config.ph,
+        # context_creator=config.ph,
         # num_prediction_beams=config.ph,
         # generation_max_length=config.ph,
         evaluating,
@@ -598,7 +621,7 @@ def run_oracle_test(
         # softmax_masking=softmax_masking,
         # constrained_decoding=constrained_decoding,
         # using_arg_candidate=using_arg_candidate,
-        # context=context,
+        # context_creator=context_creator,
         # num_prediction_beams=num_prediction_beams,
         # generation_max_length=generation_max_length,
         evaluating=evaluating,
@@ -611,12 +634,14 @@ def run_oracle_test(
 def run_search_train(
         pretrained_model_path=config.ph,
         grammar=config.ph,
-        compiler=config.ph,
-        search_executor=config.ph,
-        dynamic_binder=config.ph,
+        # compiler=config.ph,
+        # search_executor=config.ph,
+        # dynamic_binder=config.ph,
         # # devices=config.ph,
         # logger=config.ph,
         # encoded_train_set=config.ph,
+        search_validator=config.ph,
+        test_validator=config.ph,
         encoded_val_set=config.ph,
         encoded_weaksup_search_set=config.ph,  # New
         train_batch_size=config.ph,
@@ -637,8 +662,9 @@ def run_search_train(
         model_learning_dir_path=config.ph,
         resuming=config.ph(None),         # New
         # # max_num_iterations=None,  # New
-        context=config.ph,
-        denotation_equal=config.ph,
+        # context_creator=config.ph,
+        # denotation_equal=config.ph,
+        # result_collector_cls=config.ph,
         optim_measures=config.ph,
         search_measures=config.ph,
         num_prediction_beams=config.ph,
@@ -646,6 +672,8 @@ def run_search_train(
         generation_max_length=config.ph,
         # # saving_optimizer=config.ph,
         max_search_optim_loops=config.ph(float('inf')),  # New
+        make_data_loader_fn=config.ph,
+        save_extra_performance_fn=config.ph(filemng.save_extra_performance),
 ):
     if resuming:
         logger.info(f'Learning resumes with the directory "{model_learning_dir_path}"')
@@ -688,7 +716,7 @@ def run_search_train(
         optim_status = get_init_optim_status()
         optim_first = False
 
-    weaksup_search_data_loader = accelerator.prepare_val_data_loader(make_data_loader(
+    weaksup_search_data_loader = accelerator.prepare_val_data_loader(make_data_loader_fn(
         encoded_dataset=encoded_weaksup_search_set,
         decoder_start_token_id=grammar.model_config.decoder_start_token_id,
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
@@ -718,13 +746,9 @@ def run_search_train(
 
         logger.info('Search starts')
 
-        validation = validate(
+        validation = search_validator.validate(
             grammar=grammar,
-            compiler=compiler,
-            executor=search_executor,
-            dynamic_binder=dynamic_binder,
             model=model,
-            context=context,
             data_loader=weaksup_search_data_loader,
             batch_size=search_batch_size,
             num_beams=num_search_beams,
@@ -735,7 +759,6 @@ def run_search_train(
             using_arg_candidate=using_arg_candidate,
             using_distinctive_union_types=using_distinctive_union_types,
             evaluating=True,
-            denotation_equal=denotation_equal,
             using_oracle=True,
             collecting_weaksup_examples=True,
             # strict_postprocessing=True,
@@ -752,6 +775,7 @@ def run_search_train(
 
             filemng.save_status(search_status, temp_checkpoint_dir_path)
             filemng.save_performance(performance, temp_checkpoint_dir_path)
+            save_extra_performance_fn(validation['extra_performance'], temp_checkpoint_dir_path)
             filemng.save_weaksup_dataset(validation['weaksup_examples'], temp_checkpoint_dir_path)
             filemng.save_time_info(validation['time_info'], temp_checkpoint_dir_path)
             filemng.save_predictions(validation['predictions'], temp_checkpoint_dir_path)
@@ -784,8 +808,8 @@ def run_search_train(
         run_train(
             pretrained_model_name_or_path=get_latest_model_path(),
             grammar=grammar,
-            compiler=compiler,
             # logger=logger,
+            test_validator=test_validator,
             encoded_train_set=encoded_weaksup_set,
             encoded_val_set=encoded_val_set,
             train_batch_size=train_batch_size,
@@ -804,7 +828,6 @@ def run_search_train(
             using_distinctive_union_types=using_distinctive_union_types,
             model_learning_dir_path=new_checkpoint_dir_path,
             restarting=False,
-            context=context,
             num_prediction_beams=num_prediction_beams,
             generation_max_length=generation_max_length,
             saving_optimizer=False,

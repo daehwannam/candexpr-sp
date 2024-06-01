@@ -9,11 +9,10 @@ from dhnamlib.pylib.debug import NIE
 from dhnamlib.pylib.lazy import DynamicLazyProxy
 from splogic.utility.trie import NoTrie
 
-from splogic.base.execution import ExprCompiler
+# from splogic.base.execution import ExprCompiler
 from splogic.seq2seq.grammar import Seq2SeqGrammar
 from splogic.seq2seq.transfer import ActionNameStyle, StrictTypeProcessing
-from splogic.seq2seq.dynamic_bind import DynamicBinder
-from splogic.utility.trie import MergedTrie
+# from splogic.utility.trie import MergedTrie
 
 from configuration import config
 
@@ -77,64 +76,75 @@ class OvernightGrammar(Seq2SeqGrammar):
             using_arg_filter=using_arg_filter
         )
 
-    @implement
-    def get_compiler_cls(self):
-        return ExprCompiler
+    # @implement
+    # def get_compiler_cls(self):
+    #     return ExprCompiler
 
-    @config
     @implement
-    def register_specific(self, register, context=config.ph):
+    def register_specific(self, register):
         expr_mapper = ExprMapper()
 
-        @register('(default-expr-fn keyword-ent-type)')
+        def default_join_tokens(tokens):
+            return self.join_nl_tokens(tokens).replace(' ', '_')
+
+        def default_concat_tokens(*tokens):
+            return default_join_tokens(tokens)
+
+        def visual_join_tokens(tokens):
+            return self.join_nl_tokens(tokens).replace(' ', '-')
+
+        def visual_concat_tokens(*tokens):
+            return visual_join_tokens(tokens)
+
+        @register('(default-expr-fn ent-type)')
         def get_default_expr_of_ent_type(*tokens):
-            return expr_mapper.get_ent_type(self.join_nl_tokens(tokens))
+            return expr_mapper.get_ent_type(self.dynamic_scope.domain, default_join_tokens(tokens))
 
-        @register('(visual-expr-fn keyword-ent-type)')
+        @register('(visual-expr-fn ent-type)')
         def get_visual_expr_of_ent_type(*tokens):
-            return 'type:{}'.format(self.join_nl_tokens(tokens))
+            return 'type:{}'.format(visual_join_tokens(tokens))
 
-        @register('(default-expr-fn keyword-relation-entity)')
-        @register('(default-expr-fn keyword-relation-bool)')
-        @register('(default-expr-fn keyword-relation-numeric)')
+        @register('(default-expr-fn relation-entity)')
+        @register('(default-expr-fn relation-bool)')
+        @register('(default-expr-fn relation-numeric)')
         def get_default_expr_of_relation(*tokens):
-            return '( string {} )'.format(self.join_nl_tokens(tokens))
+            return '( string {} )'.format(default_join_tokens(tokens))
 
-        @register('(visual-expr-fn keyword-relation-entity)')
-        @register('(visual-expr-fn keyword-relation-bool)')
-        @register('(visual-expr-fn keyword-relation-numeric)')
+        @register('(visual-expr-fn relation-entity)')
+        @register('(visual-expr-fn relation-bool)')
+        @register('(visual-expr-fn relation-numeric)')
         def get_visual_expr_of_relation(*tokens):
-            return 'relation:{}'.format(self.join_nl_tokens(tokens))
+            return 'relation:{}'.format(visual_join_tokens(tokens))
 
-        @register('(default-expr-fn keyword-entity)')
+        @register('(default-expr-fn entity)')
         def get_default_expr_of_entity(*tokens):
-            return expr_mapper.get_entity(self.join_nl_tokens(tokens))
+            return expr_mapper.get_entity(self.dynamic_scope.domain, default_join_tokens(tokens))
 
-        @register('(visual-expr-fn keyword-entity)')
+        @register('(visual-expr-fn entity)')
         def get_visual_expr_of_entity(*tokens):
-            return 'entity:{}'.format(self.join_nl_tokens(tokens))
+            return 'entity:{}'.format(visual_join_tokens(tokens))
 
-        @register('(default-expr-fn constant-month)')
-        @register('(visual-expr-fn constant-month)')
+        @register('(default-expr-fn month)')
+        @register('(visual-expr-fn month)')
         def get_default_expr_of_month(*tokens):
             return expr_mapper.get_month(self.join_nl_tokens(tokens))
 
-        @register('(default-expr-fn constant-unit)')
+        @register('(default-expr-fn unit)')
         def get_default_expr_of_unit(*tokens):
-            return expr_mapper.get_unit(self.join_nl_tokens(tokens))
+            return expr_mapper.get_unit(self.dynamic_scope.domain, default_join_tokens(tokens))
 
-        @register('(visual-expr-fn constant-unit)')
+        @register('(visual-expr-fn unit)')
         def get_visual_expr_of_unit(*tokens):
-            return self.join_nl_tokens(tokens).replace(' ', '-')
+            return visual_join_tokens(tokens).replace(' ', '-')
 
-        register('(default-expr-fn constant-quantity)', self.concat_nl_tokens)
-        register('(visual-expr-fn constant-quantity)', self.concat_nl_tokens)
-        register('(default-expr-fn constant-year)', self.concat_nl_tokens)
-        register('(visual-expr-fn constant-year)', self.concat_nl_tokens)
-        register('(default-expr-fn constant-day)', self.concat_nl_tokens)
-        register('(visual-expr-fn constant-day)', self.concat_nl_tokens)
+        register('(default-expr-fn quantity)', self.concat_nl_tokens)
+        register('(visual-expr-fn quantity)', self.concat_nl_tokens)
+        register('(default-expr-fn year)', self.concat_nl_tokens)
+        register('(visual-expr-fn year)', self.concat_nl_tokens)
+        register('(default-expr-fn day)', self.concat_nl_tokens)
+        register('(visual-expr-fn day)', self.concat_nl_tokens)
 
-        @register('(default-expr-fn constant-number)')
+        @register('(default-expr-fn number)')
         def get_default_expr_of_number(quantity_expr, unit_expr):
             if unit_expr in ['am', 'pm']:
                 return '( time {} 0 )'.format(expr_mapper.get_time(quantity_expr, unit_expr))
@@ -144,22 +154,22 @@ class OvernightGrammar(Seq2SeqGrammar):
                 else:
                     return '( number {} {} )'.format(quantity_expr, unit_expr)
 
-        @register('(visual-expr-fn constant-number)')
+        @register('(visual-expr-fn number)')
         def get_visual_expr_of_number(quantity_expr, unit_expr):
             return '{}-{}'.format(quantity_expr, unit_expr)
 
-        @register('(default-expr-fn constant-date)')
-        def get_default_expr_of_date(year_expr, month_expr, day_expr):
+        @register('(default-expr-fn date)')
+        def get_default_expr_of_date(year_expr, month_expr, day_expr=None):
             if month_expr == '':
-                assert day_expr == ''
+                assert day_expr is None
                 return '( date {} {} {} )'.format(year_expr, '-1', '-1')
             else:
                 return '( date {} {} {} )'.format(year_expr, month_expr, day_expr)
 
-        @register('(visual-expr-fn constant-date)')
-        def get_visual_expr_of_date(year_expr, month_expr, day_expr):
+        @register('(visual-expr-fn date)')
+        def get_visual_expr_of_date(year_expr, month_expr, day_expr=None):
             if month_expr == '':
-                assert day_expr == ''
+                assert day_expr is None
                 return '-'.join((year_expr, 'xx', 'xx'))
             else:
                 if len(month_expr) == 1:
@@ -168,24 +178,25 @@ class OvernightGrammar(Seq2SeqGrammar):
                     day_expr = '0' + day_expr
                 return '-'.join((year_expr, month_expr, day_expr))
 
+        def make_trie_constructor(trie_info, dynamic_scope, act_type):
+            return lambda: trie_info[dynamic_scope.domain][act_type]
+
         trie_info = make_trie_info(lf_tokenizer=self.lf_tokenizer, end_of_seq=self.reduce_token)
         for act_type in ACT_TYPES_FOR_ARG_CANDIDATES:
+            # arg_candidate = self.make_trie_arg_candidate(
+            #     DynamicLazyProxy(lambda: trie_info[self.dynamic_scope.domain][act_type]))
+            # arg_candidate = self.make_trie_arg_candidate(
+            #     DynamicLazyProxy(TrieConstructor(trie_info, self.dynamic_scope, act_type)))
             arg_candidate = self.make_trie_arg_candidate(
-                DynamicLazyProxy(lambda: trie_info[self.dynamic_scope.domain][act_type]))
+                DynamicLazyProxy(make_trie_constructor(trie_info, self.dynamic_scope, act_type)))
             register(f'(candidate {act_type})', arg_candidate)
 
 
-@subclass
-class DomainDynamicBinder(DynamicBinder):
-    @implement
-    def bind(self, grammar, example):
-        binding = dict(domain=example['domain'])
-        return binding
+# class TrieConstructor:
+#     def __init__(self, trie_info, dynamic_scope, act_type):
+#         self.trie_info = trie_info
+#         self.dynamic_scope = dynamic_scope
+#         self.act_type = act_type
 
-    @implement
-    def bind_batch(self, grammar, batched_example):
-        bindings = tuple(
-            dict(domain=domain)
-            for domain in batched_example['domain']
-        )
-        return bindings
+#     def __call__(self):
+#         return self.trie_info[self.dynamic_scope.domain][self.act_type]

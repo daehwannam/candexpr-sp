@@ -96,13 +96,26 @@ def _get_device():
     return 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
+ALL_RUN_MODES = [
+    'train-default', 'train-for-multiple-decoding-strategies', 'test-on-val-set', 'test-on-test-set',
+    'oracle-test-on-val-set', 'search-train'
+    # 'retrain', 'finetune',
+]
+
+TRAINING_RUN_MODES = [
+    'train-default', 'train-for-multiple-decoding-strategies', 'search-train'
+]
+
+
 def _is_valid_run_mode(run_mode):
-    return run_mode in domain.configuration.ALL_RUN_MODES
+    # return run_mode in domain.configuration.ALL_RUN_MODES
+    return run_mode in ALL_RUN_MODES
 
 
 def _is_training_run_mode(run_mode):
     assert _is_valid_run_mode(config.run_mode)
-    return run_mode in domain.configuration.TRAINING_RUN_MODES
+    # return run_mode in domain.configuration.TRAINING_RUN_MODES
+    return run_mode in TRAINING_RUN_MODES
 
 
 def _get_git_hash():
@@ -120,8 +133,8 @@ def _get_git_hash():
 @cache
 def _parse_cmd_args():
     parser = argparse.ArgumentParser(description='Semantic parsing')
-    parser.add_argument('--domain', dest='domain_name', help='a domain name', choices=['kqapro'], default=get_default_domain_name())
-    parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.test_general)')
+    parser.add_argument('--domain', dest='domain_name', help='a domain name', choices=['kqapro', 'overnight'], default=get_default_domain_name())
+    parser.add_argument('--config', dest='config_module', help='a config module (e.g. config.kqapro.test_general)')
     parser.add_argument('--extra-config', dest='extra_config_modules', help='an additional config module(s) which can overwrite other configurations. When more than one module is passed, the modules are separated by commas.')
     parser.add_argument('--model-learning-dir', dest='model_learning_dir_path', help='a path to the directory of learning')
     parser.add_argument('--model-path', dest='model_path', help='a path to the directory of a checkpoint')

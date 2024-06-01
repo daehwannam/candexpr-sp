@@ -102,7 +102,8 @@
   :name 'get-domain
   :act-type 'entity-list
   :param-types '(relation)
-  :expr-dict (mapkv :default $( call SW.domain ( string {0} ) )
+  :expr-dict (mapkv :default $( call SW.domain {0}  )
+                    ;; :default $( call SW.domain ( string {0} ) )
                     :visual $(get-domain {0})))
 
 (define-action
@@ -116,7 +117,8 @@
   :name 'get-property
   :act-type 'object-list
   :param-types '(relation object-*)
-  :expr-dict (mapkv :default $( call SW.getProperty {1} ( string {0} ) )
+  :expr-dict (mapkv :default $( call SW.getProperty {1} {0} )
+                    ;; :default $( call SW.getProperty {1} ( string {0} ) )
                     :visual $(get-property {1} {0})))
 
 ;; (define-action
@@ -150,7 +152,7 @@
 (define-action
   :name 'filter-comp
   :act-type 'object-list
-  :param-types '(relation-numeric op-comparison object-* object-list)
+  :param-types '(relation op-comparison object-* object-list)
   :expr-dict (mapkv :default $( call SW.filter {3} {0} {1} {2} )
                     :visual $(filter {3} {0} {1} {2})))
 
@@ -248,13 +250,13 @@
      :name name
      :act-type 'op-comparison
      :param-types '()
-     :expr-dict (mapkv :default (.format "( string {} )" op-expr)
-                       :visual op-expr)))
- '((op-eq  "=" )
-   (op-lt  "<" )
-   (op-gt  ">" )
-   (op-le  "<=")
-   (op-ge  ">=")))
+     :expr-dict (mapkv :default (.format "( string {} )" (demunge op-expr))
+                       :visual (demunge op-expr))))
+ '((op-eq  = )
+   (op-lt  < )
+   (op-gt  > )
+   (op-le  <=)
+   (op-ge  >=)))
 
 (define-action
   :name 'op-ne
@@ -270,10 +272,10 @@
      :param-types '()
      :expr-dict (mapkv :default (.format "( string {} )" op-expr)
                        :visual (.format "'{}" op-expr))))
- '((op-min  op-superative   "min")
-   (op-max  op-superative   "max")
-   (op-avg  op-aggregation  "avg")
-   (op-sum  op-aggregation  "sum")))
+ '((op-min  op-superative   min)
+   (op-max  op-superative   max)
+   (op-avg  op-aggregation  avg)
+   (op-sum  op-aggregation  sum)))
 
 ;;; token-*
 

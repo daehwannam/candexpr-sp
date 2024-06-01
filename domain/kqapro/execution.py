@@ -50,7 +50,7 @@ class KQAProExecResult(InstantExecResult):
                      for value in super().get())
 
 
-class KQAProStricExectResult(KQAProExecResult):
+class KQAProStricExecResult(KQAProExecResult):
     strict = True
 
 
