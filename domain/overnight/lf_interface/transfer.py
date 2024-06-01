@@ -65,6 +65,20 @@ OP_ACTION_INFO = {
 }
 
 
+def typo_to_fixed(domain, expr):
+    if domain == 'socialnetwork' and expr == 'en.city.bejing':
+        return 'en.city.beijing'
+    else:
+        return expr
+
+
+def fixed_to_typo(domain, expr):
+    if domain == 'socialnetwork' and expr == 'en.city.beijing':
+        return 'en.city.bejing'
+    else:
+        return expr
+
+
 def labeled_logical_form_to_action_name_tree(domain, lf_tokenizer, action_name_style, labeled_logical_form):
     RELATION_ACTION_INFO = make_relation_action_info()
 
@@ -97,7 +111,7 @@ def labeled_logical_form_to_action_name_tree(domain, lf_tokenizer, action_name_s
     def process_expr(parse):
         if isinstance(parse, str):
             assert parse.startswith('en.')
-            expr_splits = parse.split('.')
+            expr_splits = typo_to_fixed(domain, parse).split('.')
             if len(expr_splits) == 2:
                 return get_nl_token_action_name_tree('keyword-ent-type', expr_splits[-1])
             else:
@@ -314,7 +328,8 @@ class ExprMapper:
         return self.ent_type_mapper[domain][self.remove_space(ent_type_expr)]
 
     def get_entity(self, domain, entity_expr):
-        return self.entity_mapper[domain][self.remove_space(entity_expr)]
+        mapped_expr = self.entity_mapper[domain][self.remove_space(entity_expr)]
+        return fixed_to_typo(domain, mapped_expr)
 
     def get_unit(self, domain, unit_expr):
         return self.unit_mapper[domain][self.remove_space(unit_expr)]

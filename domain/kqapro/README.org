@@ -49,7 +49,7 @@ MODEL_LEARNING_DIR_PATH=./model-instance/kqapro/learning
 python -m run --domain kqapro --config config.kqapro.train_default --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src
 
-if ~--model-learning-dir~ option is not specified, a directory is automatically created in =./model-instance/kqapro=.
+If ~--model-learning-dir~ option is not specified, a directory is automatically created in =./model-instance/kqapro=.
 
 *** Training for multiple decoding strategies
 #+begin_src sh

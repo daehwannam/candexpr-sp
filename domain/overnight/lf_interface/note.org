@@ -2,4 +2,4 @@
 * Typo in the socialnetwork domain
 The socialnetwork domain has typo in logical forms.
 The labeled logical forms include "en.city.bejing" rather than "en.city.beijing".
-Therfore, [[file:schema.json][schema.json]] also has "en.city.bejing", which is typo.
+In [[file:schema.json][schema.json]], "en.city.beijing" is included instead of the original entity "en.city.bejing", which has typo.

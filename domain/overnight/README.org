@@ -54,10 +54,24 @@ python -m domain.overnight.preprocess --goal shuffled_encoded_train_set
 #+end_src
 
 ** Training
-*** Training with all domains
+*** Training on all domains
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH=./model-instance/overnight/learning
-python -m run --domain overnight --config config.overnight.train_all --model-learning-dir $MODEL_LEARNING_DIR_PATH
+python -m run --domain overnight --config config.overnight.train_default --model-learning-dir $MODEL_LEARNING_DIR_PATH
+#+end_src
+
+If ~--model-learning-dir~ option is not specified, a directory is automatically created in =./model-instance/overnight=.
+
+*** Training on all domains for multiple decoding strategies
+#+begin_src sh
+python -m run --domain overnight --config config.overnight.train_for_multiple_decoding_strategies
+#+end_src
+
+*** Training on a single domain for multiple decoding strategies
+#+begin_src sh
+SINGLE_DOMAIN='calendar'
+# valid domains: 'calendar', 'blocks', 'housing', 'restaurants', 'publications', 'recipes', 'socialnetwork', 'basketball'
+python -m run --domain overnight --config config.overnight.train_for_multiple_decoding_strategies --single-domain $SINGLE_DOMAIN
 #+end_src
 
 ** Testing

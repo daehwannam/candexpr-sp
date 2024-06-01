@@ -38,13 +38,14 @@ _grammar_file_path = './domain/overnight/grammar.lissp'
 _NO_CONTEXT = object()
 
 
-def _make_grammar():
+def _make_grammar(**kwargs):
     from .grammar import OvernightGrammar
     return read_grammar(
         _grammar_file_path,
         grammar_cls=OvernightGrammar,
         grammar_kwargs=dict(
-            pretrained_model_name_or_path=configuration.config.pretrained_model_name_or_path
+            pretrained_model_name_or_path=configuration.config.pretrained_model_name_or_path,
+            **kwargs
         ))
 
 

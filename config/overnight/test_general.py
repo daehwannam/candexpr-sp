@@ -36,10 +36,10 @@ def _get_test_domains():
     return test_domains
 
 
-config = Environment(
-    # run_mode='test',
-    test_dir_path=LazyEval(lambda: get_test_dir_path(_TEST_DIR_ROOT_PATH)),
-    test_domains=LazyEval(_get_test_domains),
-    test_batch_size=64,
-    # test_batch_size=1,
-)
+config = Environment(not_none_valued_dict(
+     # run_mode='test',
+     test_dir_path=LazyEval(lambda: get_test_dir_path(_TEST_DIR_ROOT_PATH)),
+     test_domains=LazyEval(_get_test_domains),
+     test_batch_size=64,
+     # test_batch_size=1,
+ ))

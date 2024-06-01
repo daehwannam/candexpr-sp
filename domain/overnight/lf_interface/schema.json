@@ -106,7 +106,7 @@
             "en.person.alice", "en.person.bob",
             "en.gender.male", "en.gender.female",
             "en.relationship_status.single", "en.relationship_status.married",
-            "en.city.new_york", "en.city.bejing",
+            "en.city.new_york", "en.city.beijing",
             "en.university.brown", "en.university.berkeley", "en.university.ucla",
             "en.field.computer_science", "en.field.economics", "en.field.history",
             "en.company.google", "en.company.mckinsey", "en.company.toyota",
