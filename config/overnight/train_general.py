@@ -1,26 +1,17 @@
-import os
 
 from dhnamlib.pylib.context import Environment
 from dhnamlib.pylib.context import LazyEval
 from dhnamlib.pylib.iteration import not_none_valued_pairs
 
-from configuration import has_model_learning_dir_path
-from utility.time import initial_date_str
+from ..common.train import get_model_learning_dir_path
 
 
 _DOMAIN_NAME = 'overnight'
 _MODEL_LEARNING_DIR_ROOT_PATH = f'./model-instance/{_DOMAIN_NAME}'
 
 
-def get_model_learning_dir_path():
-    if has_model_learning_dir_path():
-        return None
-    else:
-        return os.path.join(_MODEL_LEARNING_DIR_ROOT_PATH, initial_date_str)
-
-
 config = Environment(not_none_valued_pairs(dict(
-    model_learning_dir_path=get_model_learning_dir_path(),
+    model_learning_dir_path=get_model_learning_dir_path(_MODEL_LEARNING_DIR_ROOT_PATH),
 
     learning_rate=3e-5,
     # learning_rate=1e-3,

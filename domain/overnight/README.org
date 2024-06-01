@@ -59,3 +59,14 @@ python -m domain.overnight.preprocess --goal shuffled_encoded_train_set
 MODEL_LEARNING_DIR_PATH=./model-instance/overnight/learning
 python -m run --domain overnight --config config.overnight.train_all --model-learning-dir $MODEL_LEARNING_DIR_PATH
 #+end_src
+
+** Testing
+*** Testing with specifying a model path and test directory path
+#+begin_src sh
+TEST_CONFIG='config.overnight.test_on_test_set'  # or 'config.overnight.test_on_val_set'
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH='model-test/overnight/result'
+# e.g. TEST_DIR_PATH='./model-test/overnight/2023-07-19_01:17:04_094104_full-constraints:best/model'
+
+python -m run --domain overnight --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
+#+end_src

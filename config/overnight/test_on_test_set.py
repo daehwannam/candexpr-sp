@@ -4,14 +4,11 @@ from itertools import chain
 from dhnamlib.pylib.context import Environment, LazyEval
 from dhnamlib.pylib.iteration import distinct_pairs
 
-import configuration
-
-from .train_general import config as _config_general
+from .test_general import config as _config_general
 
 
 _config_specific = Environment(
-    run_mode='train-default',
-    train_domains=LazyEval(lambda: configuration.config.all_domains),
+    run_mode='test-on-test-set',
 )
 
 config = Environment(distinct_pairs(chain(

@@ -121,8 +121,6 @@ def _make_validator():
 
 
 config = Environment(
-    run_mode='train-default',
-
     optim_measures=filemng.optim_measures,
     # search_measures=filemng.search_measures,
 
