@@ -887,7 +887,7 @@ if __name__ == '__main__':
         run_train()
         # from dhnamlib.pylib.cProfiling import run_context
         # run_context('run_train(model_learning_dir_path=config.model_learning_dir_path)', sort='cumtime')
-    if config.run_mode == 'train-for-multiple-decoding-strategies':
+    elif config.run_mode == 'train-for-multiple-decoding-strategies':
         run_train_for_multiple_decoding_strategies()
     elif config.run_mode == 'test-on-val-set':
         run_test(encoded_test_set=config.encoded_val_set, evaluating=True)
