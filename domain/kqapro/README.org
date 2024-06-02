@@ -106,19 +106,19 @@ EXTRA_OPTIONS=''
 ***** Without arg-candidate
 #+begin_src sh
 DECODING=no-arg-candidate
-EXTRA_OPTIONS='--extra-config config.kqapro.extra.using_arg_candidate=False'
+EXTRA_OPTIONS='--extra-config config.common.extra.using_arg_candidate=False'
 #+end_src
 
 ***** Without arg-candidate and without union types
 #+begin_src sh
 DECODING=no-ac-no-dut
-EXTRA_OPTIONS='--extra-config config.kqapro.extra.using_arg_candidate=False|config.kqapro.extra.using_distinctive_union_types=False'
+EXTRA_OPTIONS='--extra-config config.common.extra.using_arg_candidate=False|config.common.extra.using_distinctive_union_types=False'
 #+end_src
 
 ***** Without any constrained decoding
 #+begin_src sh
 DECODING=no-constrained-decoding
-EXTRA_OPTIONS='--extra-config config.kqapro.extra.constrained_decoding=False'
+EXTRA_OPTIONS='--extra-config config.common.extra.constrained_decoding=False'
 #+end_src
 
 **** Training with question-answer pairs on 4 GPUs
@@ -179,7 +179,7 @@ TEST_CONFIG='config.kqapro.test_on_val_set'  # or 'config.kqapro.test_on_test_se
 MODEL_PATH='path/to/model'
 COMMON_TEST_CMD="python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH"
 
-BEAM_CONFIG='config.kqapro.extra.num_prediction_beams=1'
+BEAM_CONFIG='config.common.extra.num_prediction_beams=1'
 
 # full constraints
 TEST_DIR_PATH='model-test/kqapro/result:full-constraints'
@@ -188,17 +188,17 @@ $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate
 TEST_DIR_PATH='model-test/kqapro/result:no-arg-candidate'
-EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.using_arg_candidate=False"
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.using_arg_candidate=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate and union types
 TEST_DIR_PATH='model-test/kqapro/result:no-ac-no-dut'
-EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.using_arg_candidate=False|config.kqapro.extra.using_distinctive_union_types=False"
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.using_arg_candidate=False|config.common.extra.using_distinctive_union_types=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without constrained-decoding
 TEST_DIR_PATH='model-test/kqapro/result:no-constrained-decoding'
-EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.constrained_decoding=False"
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
 
@@ -223,7 +223,7 @@ TEST_CONFIG='config.kqapro.oracle_test_on_val_set'
 MODEL_PATH='path/to/model'
 COMMON_TEST_CMD="python -m run --domain kqapro --config $TEST_CONFIG --model-path $MODEL_PATH"
 
-BEAM_CONFIG='config.kqapro.extra.num_prediction_beams=4'
+BEAM_CONFIG='config.common.extra.num_prediction_beams=4'
 
 # full constraints
 TEST_DIR_PATH='model-test/kqapro/result:full-constraints'
@@ -232,17 +232,17 @@ $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate
 TEST_DIR_PATH='model-test/kqapro/result:no-arg-candidate'
-EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.using_arg_candidate=False"
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.using_arg_candidate=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without arg-candidate and union types
 TEST_DIR_PATH='model-test/kqapro/result:no-ac-no-dut'
-EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.using_arg_candidate=False|config.kqapro.extra.using_distinctive_union_types=False"
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.using_arg_candidate=False|config.common.extra.using_distinctive_union_types=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 
 # without constrained-decoding
 TEST_DIR_PATH='model-test/kqapro/result:no-constrained-decoding'
-EXTRA_CONFIG="${BEAM_CONFIG}|config.kqapro.extra.constrained_decoding=False"
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
 

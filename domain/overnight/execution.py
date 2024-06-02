@@ -1,11 +1,15 @@
 
 from functools import cache
 from itertools import chain
+from io import StringIO
+from contextlib import redirect_stdout, redirect_stderr
 
 from dhnamlib.pylib.klass import override, subclass
 from dhnamlib.pylib.iteration import split_by_lengths
-from dhnamlib.pylib.decoration import construct
+# from dhnamlib.pylib.decoration import construct
+from dhnamlib.pylib.decoration import deprecated
 from dhnamlib.pylib.constant import NO_VALUE
+from dhnamlib.pylib.context import context_nest
 
 from splogic.base.execution import LazyExecResult, LazyExecutor, ContextCreater, INVALID_PROGRAM, NO_DENOTATION
 
@@ -60,10 +64,11 @@ class OvernightExecutor(LazyExecutor):
         denotation_group_dict = {}
         for domain, idx_program_pairs in program_group_dict.items():
             indices, programs = zip(*idx_program_pairs)
-            normalized_prgrams, invalid_program_indices = self._normalize_programs(programs)
-            denotations = self.get_evaluator(domain).execute_logical_forms(normalized_prgrams)
-            for invalid_program_index in invalid_program_indices:
-                denotations[invalid_program_index] = NO_DENOTATION
+            denotations = self._execute_programs(domain, programs)
+            # normalized_prgrams, invalid_program_indices = self._normalize_programs(programs)
+            # denotations = self.get_evaluator(domain).execute_logical_forms(normalized_prgrams)
+            # for invalid_program_index in invalid_program_indices:
+            #     denotations[invalid_program_index] = NO_DENOTATION
             denotation_group_dict[domain] = tuple(zip(indices, denotations))
 
         all_denotations = [None] * len(all_programs)
@@ -71,6 +76,29 @@ class OvernightExecutor(LazyExecutor):
             all_denotations[idx] = denotation
 
         return all_denotations
+
+    def _execute_programs(self, domain, programs):
+        normalized_prgrams, invalid_program_indices = self._normalize_programs(programs)
+        denotations = self.get_evaluator(domain).execute_logical_forms(normalized_prgrams)
+        for invalid_program_index in invalid_program_indices:
+            denotations[invalid_program_index] = NO_DENOTATION
+        return denotations
+
+    @deprecated
+    def _execute_programs_old(self, domain, programs):
+        normalized_prgrams, invalid_program_indices = self._normalize_programs(programs)
+        with StringIO() as sio:
+            with context_nest(redirect_stdout(sio), redirect_stderr(sio)) as (rstdout, rstderr):
+                denotations = self.get_evaluator(domain).execute_logical_forms(normalized_prgrams)
+                for invalid_program_index in invalid_program_indices:
+                    denotations[invalid_program_index] = NO_DENOTATION
+            error_msg = sio.getvalue()
+        error_lines = error_msg.split('\n')
+        num_errors = sum(int(error_line.startswith('java.lang.')) for error_line in error_lines)
+        if num_errors > 0:
+            print(f'The number of execution errors = {num_errors}.')
+
+        return denotations
 
     def _normalize_programs(self, programs):
         normalized_prgrams = []

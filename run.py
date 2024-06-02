@@ -896,7 +896,7 @@ if __name__ == '__main__':
     elif config.run_mode == 'search-train':
         run_search_train()
     elif config.run_mode == 'test-on-test-set':
-        run_test(encoded_test_set=config.encoded_test_set, evaluating=False)
+        run_test(encoded_test_set=config.encoded_test_set, evaluating=config.evaluating_test_set)
     elif config.run_mode == 'oracle-test-on-val-set':
         run_oracle_test(encoded_test_set=config.encoded_val_set, evaluating=True)
     else:

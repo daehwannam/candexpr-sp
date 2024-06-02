@@ -138,6 +138,7 @@ config = Environment(
     make_data_loader_fn=partial(make_data_loader, extra_keys=['domain']),
     save_analysis_fn=save_analysis,
     save_extra_performance_fn=save_extra_performance,
+    evaluating_test_set=True,
 
     # generation_max_length=500,
     generation_max_length=200,

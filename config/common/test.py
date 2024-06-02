@@ -38,7 +38,6 @@ def get_test_dir_path(test_dir_root_path):
             test_dir_path = test_dir_name_to_path(test_dir_name)
 
     if os.path.exists(test_dir_path):
-        breakpoint()
         assert os.path.isdir(test_dir_path), 'The path is to a file rather than a directory'
         assert len(os.listdir(test_dir_path)) == 0, 'A test directory should be empty'
 

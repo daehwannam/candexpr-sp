@@ -74,8 +74,15 @@ SINGLE_DOMAIN='calendar'
 python -m run --domain overnight --config config.overnight.train_for_multiple_decoding_strategies --single-domain $SINGLE_DOMAIN
 #+end_src
 
+*** Training on all domains except one domain for multiple decoding strategies
+#+begin_src sh
+UNUSED_DOMAIN='calendar'
+# valid domains: 'calendar', 'blocks', 'housing', 'restaurants', 'publications', 'recipes', 'socialnetwork', 'basketball'
+python -m run --domain overnight --config config.overnight.train_for_multiple_decoding_strategies --unused-domain $UNUSED_DOMAIN
+#+end_src
+
 ** Testing
-*** Testing with specifying a model path and test directory path
+*** Testing on all domains
 #+begin_src sh
 TEST_CONFIG='config.overnight.test_on_test_set'  # or 'config.overnight.test_on_val_set'
 MODEL_PATH='path/to/model'
@@ -83,4 +90,76 @@ TEST_DIR_PATH='model-test/overnight/result'
 # e.g. TEST_DIR_PATH='./model-test/overnight/2023-07-19_01:17:04_094104_full-constraints:best/model'
 
 python -m run --domain overnight --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
+#+end_src
+
+*** Testing on a single domain
+#+begin_src sh
+TEST_CONFIG='config.overnight.test_on_test_set'  # or 'config.overnight.test_on_val_set'
+SINGLE_DOMAIN='calendar'
+# valid domains: 'calendar', 'blocks', 'housing', 'restaurants', 'publications', 'recipes', 'socialnetwork', 'basketball'
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH='model-test/overnight/result'
+# e.g. TEST_DIR_PATH='./model-test/overnight/2023-07-19_01:17:04_094104_full-constraints:best/model'
+
+python -m run --domain overnight --config $TEST_CONFIG --single-domain $SINGLE_DOMAIN --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
+#+end_src
+
+*** Testing on all domains with a specific decoding strategy
+#+begin_src sh
+TEST_CONFIG='config.overnight.test_on_test_set'  # or 'config.overnight.test_on_val_set'
+MODEL_PATH='path/to/model'
+COMMON_TEST_CMD="python -m run --domain overnight --config $TEST_CONFIG --model-path $MODEL_PATH"
+
+BEAM_CONFIG='config.common.extra.num_prediction_beams=1'
+
+# full constraints
+TEST_DIR_PATH='model-test/overnight/result:full-constraints'
+EXTRA_CONFIG="${BEAM_CONFIG}"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+
+# without arg-candidate
+TEST_DIR_PATH='model-test/overnight/result:no-arg-candidate'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.using_arg_candidate=False"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+
+# without arg-candidate and union types
+TEST_DIR_PATH='model-test/overnight/result:no-ac-no-dut'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.using_arg_candidate=False|config.common.extra.using_distinctive_union_types=False"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+
+# without constrained-decoding
+TEST_DIR_PATH='model-test/overnight/result:no-constrained-decoding'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+#+end_src
+
+*** Testing on a single domain with a specific decoding strategy
+#+begin_src sh
+TEST_CONFIG='config.overnight.test_on_test_set'  # or 'config.overnight.test_on_val_set'
+SINGLE_DOMAIN='calendar'
+# valid domains: 'calendar', 'blocks', 'housing', 'restaurants', 'publications', 'recipes', 'socialnetwork', 'basketball'
+MODEL_PATH='path/to/model'
+COMMON_TEST_CMD="python -m run --domain overnight --config $TEST_CONFIG --single-domain $SINGLE_DOMAIN --model-path $MODEL_PATH"
+
+BEAM_CONFIG='config.common.extra.num_prediction_beams=1'
+
+# full constraints
+TEST_DIR_PATH='model-test/overnight/result:full-constraints'
+EXTRA_CONFIG="${BEAM_CONFIG}"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+
+# without arg-candidate
+TEST_DIR_PATH='model-test/overnight/result:no-arg-candidate'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.using_arg_candidate=False"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+
+# without arg-candidate and union types
+TEST_DIR_PATH='model-test/overnight/result:no-ac-no-dut'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.using_arg_candidate=False|config.common.extra.using_distinctive_union_types=False"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+
+# without constrained-decoding
+TEST_DIR_PATH='model-test/overnight/result:no-constrained-decoding'
+EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
+$COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src

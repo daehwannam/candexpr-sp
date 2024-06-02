@@ -136,6 +136,7 @@ config = Environment(
     using_arg_filter=False,
     make_data_loader_fn=make_data_loader,
     save_analysis_fn=filemng.save_analysis,
+    evaluating_test_set=False,
 
     pretrained_model_name_or_path=_pretrained_model_name_or_path,
 

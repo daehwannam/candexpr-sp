@@ -229,7 +229,7 @@ def _main():
         preprocess_for_augmented_dataset(
             raw_dataset_dir_path=config.raw_dataset_dir_path,
             augmented_dataset_dir_path=config.augmented_dataset_dir_path,
-            adding_action_name_tree=False,
+            adding_action_name_tree=True,
             # adding_answer_by_program=False,
             dataset_split='test',
         )
