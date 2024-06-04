@@ -4,7 +4,7 @@ from dhnamlib.pylib.context import LazyEval
 
 # from utility.time import initial_date_str
 
-from ..base.test import get_test_dir_path
+from ..common.test import get_test_dir_path
 
 
 _TEST_DIR_ROOT_PATH = './model-test/kqapro'

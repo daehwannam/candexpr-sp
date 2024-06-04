@@ -188,6 +188,7 @@ def run_train(
                 model=model,
                 batch=batch,
                 softmax_masking=None if weaksup_learning else softmax_masking,
+                batch_size=train_batch_size,
             ))
 
             assert accelerator.sync_gradients
@@ -255,7 +256,7 @@ def run_train(
 
             filemng.save_status(status, temp_last_dir_path)
             filemng.save_performance(performance, temp_last_dir_path)
-            save_extra_performance_fn(validation['extra_performance'], temp_last_dir_path)
+            save_extra_performance_fn(validation.get('extra_performance', None), temp_last_dir_path)
             save_analysis_fn(validation['analysis'], temp_last_dir_path)
 
             filemng.make_symlink(
@@ -410,6 +411,7 @@ def run_train_for_multiple_decoding_strategies(
                 model=model,
                 batch=batch,
                 softmax_masking=softmax_masking,
+                batch_size=train_batch_size,
             )
 
             assert accelerator.sync_gradients
@@ -482,7 +484,7 @@ def run_train_for_multiple_decoding_strategies(
 
                     filemng.save_status(status, temp_strategy_last_dir_path)
                     filemng.save_performance(performance, temp_strategy_last_dir_path)
-                    save_extra_performance_fn(validation['extra_performance'], temp_strategy_last_dir_path)
+                    save_extra_performance_fn(validation.get('extra_performance', None), temp_strategy_last_dir_path)
                     save_analysis_fn(validation['analysis'], temp_strategy_last_dir_path)
 
                     filemng.copy_symlink(os.path.join(common_last_dir_path, MODEL_SYMLINK_NAME),
@@ -581,7 +583,7 @@ def run_test(
     filemng.save_predictions(validation['predictions'], test_dir_path)
     if evaluating:
         filemng.save_performance(validation['performance'], test_dir_path)
-        save_extra_performance_fn(validation['extra_performance'], test_dir_path)
+        save_extra_performance_fn(validation.get('extra_performance', None), test_dir_path)
     filemng.save_time_info(validation['time_info'], test_dir_path)
 
     logger.info(f'Results are saved in "{test_dir_path}"')
@@ -775,7 +777,7 @@ def run_search_train(
 
             filemng.save_status(search_status, temp_checkpoint_dir_path)
             filemng.save_performance(performance, temp_checkpoint_dir_path)
-            save_extra_performance_fn(validation['extra_performance'], temp_checkpoint_dir_path)
+            save_extra_performance_fn(validation.get('extra_performance', None), temp_checkpoint_dir_path)
             filemng.save_weaksup_dataset(validation['weaksup_examples'], temp_checkpoint_dir_path)
             filemng.save_time_info(validation['time_info'], temp_checkpoint_dir_path)
             filemng.save_predictions(validation['predictions'], temp_checkpoint_dir_path)

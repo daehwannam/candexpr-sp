@@ -42,6 +42,11 @@ The setup code is borrowed from:
 git clone https://github.com/percyliang/sempre.git
 #+end_src
 
+** Java installation (optional)
+#+begin_src sh
+conda install -c conda-forge openjdk
+#+end_src
+
 * Running
 ** Preprocessing
 #+begin_src sh

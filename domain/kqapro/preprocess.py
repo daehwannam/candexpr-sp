@@ -55,7 +55,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, global_context=config.ph
             with tm:
                 action_seq = grammar.token_processing.labeled_logical_form_to_action_seq(
                     labeled_kopl_program,
-                    grammar=grammar, global_context=global_context)
+                    grammar=grammar, context=global_context)
             kopl_to_action_seq_cumtime += tm.interval
 
             action_seqs.append(action_seq)
@@ -269,7 +269,7 @@ def augment_dataset_with_strict_grammar(augmented_dataset, grammar):
     dynamic_binder = UtteranceSpanTrieDynamicBinder()
     for example in tqdm(augmented_dataset):
         utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
-        dynamic_binding = dynamic_binder(grammar, dict(utterance_token_ids=utterance_token_id_seq))
+        dynamic_binding = dynamic_binder.bind_example(dict(utterance_token_ids=utterance_token_id_seq), grammar=grammar)
         # utterance_span_trie = learning.utterance_token_id_seq_to_span_trie(grammar, utterance_token_id_seq)
         action_seq = grammar.strict_type_processing.get_strictly_typed_action_seq(
             grammar,

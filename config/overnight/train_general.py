@@ -48,7 +48,6 @@ config = Environment(not_none_valued_dict(
     train_domains=LazyEval(_get_train_domains),
 
     learning_rate=3e-5,
-    # learning_rate=1e-3,
     adam_epsilon=1e-8,
     weight_decay=1e-5,
     # train_batch_size=16,

@@ -3,7 +3,7 @@ from dhnamlib.pylib.context import Environment
 from dhnamlib.pylib.context import LazyEval
 from dhnamlib.pylib.iteration import not_none_valued_pairs
 
-from ..base.train import get_model_learning_dir_path
+from ..common.train import get_model_learning_dir_path
 
 
 _DOMAIN_NAME = 'kqapro'

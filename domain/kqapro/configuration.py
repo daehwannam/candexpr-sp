@@ -65,13 +65,14 @@ def _make_context():
         return _context_cls(configuration.config.kb)
 
 
-def _make_grammar():
+def _make_grammar(**kwargs):
     from .grammar import KQAProGrammar
     return read_grammar(
         _grammar_file_path,
         grammar_cls=KQAProGrammar,
         grammar_kwargs=dict(
-            pretrained_model_name_or_path=config.pretrained_model_name_or_path
+            pretrained_model_name_or_path=config.pretrained_model_name_or_path,
+            **kwargs
         ))
 
 
