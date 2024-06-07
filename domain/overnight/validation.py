@@ -4,6 +4,7 @@ from accelerate.utils.operations import gather_object
 
 from dhnamlib.pylib.klass import subclass, override
 from dhnamlib.pylib.mllib.learning import get_performance
+from dhnamlib.pylib.iteration import partition, all_same
 
 from splogic.seq2seq.validation import ResultCollector, compute_correctness, DenotationEqual
 
@@ -31,8 +32,12 @@ class OvernightResultCollector(ResultCollector):
 
             self.num_correct += sum(map(int, correctness_values))
 
-            assert len(correctness_values) == len(batch['exec_result'].domains)
-            for correctness_value, domain in zip(correctness_values, batch['exec_result'].domains):
+            domain_groups = partition(batch['exec_result'].domains, self.num_return_sequences)
+            for domain_group in domain_groups:
+                assert all_same(domain_group)
+            representative_domains = tuple(domain_group[0] for domain_group in domain_groups)
+
+            for correctness_value, domain in zip(correctness_values, representative_domains):
                 self.num_domain_correct_dict[domain] = self.num_domain_correct_dict.get(domain, 0) + int(correctness_value)
                 self.num_domain_examples_dict[domain] = self.num_domain_examples_dict.get(domain, 0) + 1
 

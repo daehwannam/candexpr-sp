@@ -6,11 +6,12 @@ from dhnamlib.pylib.context import Environment, LazyEval
 from dhnamlib.pylib.debug import NIE
 from dhnamlib.pylib.filesys import jsonl_load
 from dhnamlib.pylib.decoration import construct
+from dhnamlib.pylib.mllib.dataproc import split_dataset, extract_portion
 
 from splogic.base.grammar import read_grammar
 # from splogic.seq2seq.validation import Validator, ResultCollector
-from splogic.seq2seq.validation import NaiveDenotationEqual, Validator
-from splogic.seq2seq import filemng
+from splogic.seq2seq.validation import NaiveDenotationEqual, Validator, DEFAULT_OPTIM_MEASURES, DEFAULT_SEARCH_MEASURES
+# from splogic.seq2seq import filemng
 from splogic.base.execution import ExprCompiler
 
 import configuration
@@ -50,28 +51,52 @@ def _make_grammar(**kwargs):
 
 
 _TRAIN_SET_RATIO = 0.8
+_WEAKSUP_PRETRAINING_SET_PERCENT = 1
 
 
-@cache
-def _load_train_val_sets():
-    merged_train_set = []
-    merged_val_set = []
+def _iter_domain_train_val_sets():
     dataset_split = 'train'
     for domain in configuration.config.train_domains:
         dataset = jsonl_load(get_preprocessed_dataset_file_path(
             configuration.config.shuffled_encoded_dataset_dir_path, domain, dataset_split))
-        _augment_dataset_with_domains(dataset, domain)
+        train_set, val_set = split_dataset(dataset, ratio=_TRAIN_SET_RATIO, round_fn=int)
+        yield domain, (train_set, val_set)
 
-        train_set_size = int(len(dataset) * _TRAIN_SET_RATIO)
 
-        train_set = dataset[:train_set_size]
-        merged_train_set.extend(train_set)
+def _load_train_set(portion_percent=100, weaksup_search=False):
+    """
+    >>> len(_load_train_set(portion_percent=100)) == 8751  # doctest: +SKIP
+    """
 
-        val_set = dataset[train_set_size:]
+    merged_train_set = []
+    for domain, (train_set, _) in _iter_domain_train_val_sets():
+        _augment_dataset_with_domains(train_set, domain)
+        if weaksup_search:
+            _augment_dataset_with_answers(train_set, domain)
+            for example in train_set:
+                for key in ['logical_form', 'action_ids']:
+                    del example[key]
+
+        assert 0 < portion_percent <= 100
+        _train_set = extract_portion(train_set, percent=portion_percent, round_fn=int) \
+            if portion_percent < 100 else train_set
+
+        merged_train_set.extend(_train_set)
+
+    return merged_train_set
+
+
+def _load_val_set():
+    """
+    >>> len(_load_val_set()) == 2191  # doctest: +SKIP
+    """
+
+    merged_val_set = []
+    for domain, (_, val_set) in _iter_domain_train_val_sets():
+        _augment_dataset_with_domains(val_set, domain)
         _augment_dataset_with_answers(val_set, domain)
         merged_val_set.extend(val_set)
-
-    return merged_train_set, merged_val_set
+    return merged_val_set
 
 
 def _load_test_set():
@@ -122,8 +147,8 @@ def _make_validator():
 
 
 config = Environment(
-    optim_measures=filemng.optim_measures,
-    # search_measures=filemng.search_measures,
+    optim_measures=DEFAULT_OPTIM_MEASURES,
+    search_measures=DEFAULT_SEARCH_MEASURES,
 
     using_arg_candidate=True,
     using_arg_filter=False,
@@ -135,6 +160,7 @@ config = Environment(
     grammar=LazyEval(_make_grammar),
     # compiler=LazyEval(NIE),
     test_validator=LazyEval(_make_validator),
+    search_validator=LazyEval(_make_validator),
     make_data_loader_fn=partial(make_data_loader, extra_keys=['domain']),
     save_analysis_fn=save_analysis,
     save_extra_performance_fn=save_extra_performance,
@@ -157,9 +183,13 @@ config = Environment(
     encoded_dataset_dir_path=_encoded_dataset_dir_path,
     shuffled_encoded_dataset_dir_path=_shuffled_encoded_dataset_dir_path,
 
-    encoded_train_set=LazyEval(lambda: _load_train_val_sets()[0]),
-    encoded_val_set=LazyEval(lambda: _load_train_val_sets()[1]),
+    train_set_portion_percent=100,
+    encoded_train_set=LazyEval(lambda: _load_train_set(portion_percent=configuration.config.train_set_portion_percent)),
+    encoded_val_set=LazyEval(_load_val_set),
     encoded_test_set=LazyEval(_load_test_set),
+
+    encoded_weaksup_pretraining_set=LazyEval(lambda: _load_train_set(portion_percent=_WEAKSUP_PRETRAINING_SET_PERCENT)),
+    encoded_weaksup_search_set=LazyEval(lambda: _load_train_set(weaksup_search=True)),
 
     # context_creator=OvernightContextCreater(),
     # denotation_equal=OvernightDenotationEqual(),

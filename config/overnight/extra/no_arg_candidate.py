@@ -3,20 +3,18 @@ from dhnamlib.pylib.context import Environment
 from dhnamlib.pylib.context import LazyEval
 
 from config.common.extra.no_arg_candidate import update_grammar, get_using_arg_candidate
-from domain.kqapro import configuration
+from domain.overnight import configuration
 
 
 _action_names_for_arg_candidate = set([
-    'keyword-concept',
+    'Keyword-ent-type',
+    'keyword-relation-entity',
+    'keyword-relation-bool',
+    'keyword-relation-numeric',
     'keyword-entity',
-    'keyword-relation',
-    'keyword-attribute-string',
-    'keyword-attribute-number',
-    'keyword-attribute-time',
-    'keyword-qualifier-string',
-    'keyword-qualifier-number',
-    'keyword-qualifier-time',
-    'constant-unit',
+    'constant-month',
+    'constant-day',
+    'constant-unit'
 ])
 
 

@@ -10,7 +10,7 @@ from splogic.utility.acceleration import accelerator
 from splogic.seq2seq import filemng
 from splogic.base.execution import InstantExecutor, SingletonContextCreater
 from splogic.seq2seq.dynamic_bind import UtteranceSpanTrieDynamicBinder, NoDynamicBinder
-from splogic.seq2seq.validation import Validator, ResultCollector
+from splogic.seq2seq.validation import Validator, ResultCollector, DEFAULT_OPTIM_MEASURES, DEFAULT_SEARCH_MEASURES
 from splogic.seq2seq.data_read import make_data_loader
 from .execution import KoPLCompiler
 
@@ -104,8 +104,8 @@ config = Environment(
     # denotation_equal=KQAProDenotationEqual(),
     # dynamic_binder=UtteranceSpanTrieDynamicBinder() if _USING_SPANS_AS_ENTITIES else NoDynamicBinder(),
     max_num_program_iterations=200000,
-    optim_measures=filemng.optim_measures,
-    search_measures=filemng.search_measures,
+    optim_measures=DEFAULT_OPTIM_MEASURES,
+    search_measures=DEFAULT_SEARCH_MEASURES,
     # result_collector_cls=ResultCollector,
 
     raw_train_set=LazyEval(lambda: json_load(_train_set_file_path)),

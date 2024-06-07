@@ -42,4 +42,4 @@ config = Environment(not_none_valued_dict(
      test_domains=LazyEval(_get_test_domains),
      test_batch_size=64,
      # test_batch_size=1,
- ))
+))

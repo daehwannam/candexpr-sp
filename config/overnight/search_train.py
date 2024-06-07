@@ -34,6 +34,8 @@ optim_config = Environment(
     val_batch_size=64,
     using_scheduler=False,
     learning_rate=2e-5,
+
+    extra_weaksup_collection_keys=['domain'],
 )
 
 config = Environment(not_none_valued_pairs(

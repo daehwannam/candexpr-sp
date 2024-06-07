@@ -661,6 +661,7 @@ def run_search_train(
         constrained_decoding=config.ph,
         using_arg_candidate=config.ph,
         using_distinctive_union_types=config.ph,
+        extra_weaksup_collection_keys=config.ph([]),
         model_learning_dir_path=config.ph,
         resuming=config.ph(None),         # New
         # # max_num_iterations=None,  # New
@@ -763,6 +764,7 @@ def run_search_train(
             evaluating=True,
             using_oracle=True,
             collecting_weaksup_examples=True,
+            extra_weaksup_collection_keys=extra_weaksup_collection_keys,
             # strict_postprocessing=True,
         )
 
