@@ -39,7 +39,27 @@ python -m domain.kqapro.preprocess --goal encoded_strict_val_set
 python -m domain.kqapro.preprocess --goal shuffled_augmented_strict_train_set
 python -m domain.kqapro.preprocess --goal shuffled_encoded_strict_train_set
 python -m domain.kqapro.preprocess --goal encoded_weaksup_pretraining_set
-python -m domain.kqapro.preprocess --goal encoded_weaksup_search_set
+
+python -m domain.kqapro.preprocess --goal augmented_ns_train_set
+python -m domain.kqapro.preprocess --goal augmented_ns_val_set
+python -m domain.kqapro.preprocess --goal encoded_ns_train_set
+python -m domain.kqapro.preprocess --goal encoded_ns_val_set
+python -m domain.kqapro.preprocess --goal shuffled_augmented_ns_train_set
+python -m domain.kqapro.preprocess --goal shuffled_encoded_ns_train_set
+
+python -m domain.kqapro.preprocess --goal augmented_cnlts_train_set
+python -m domain.kqapro.preprocess --goal augmented_cnlts_val_set
+python -m domain.kqapro.preprocess --goal encoded_cnlts_train_set
+python -m domain.kqapro.preprocess --goal encoded_cnlts_val_set
+python -m domain.kqapro.preprocess --goal shuffled_augmented_cnlts_train_set
+python -m domain.kqapro.preprocess --goal shuffled_encoded_cnlts_train_set
+
+python -m domain.kqapro.preprocess --goal augmented_ns_cnlts_train_set
+python -m domain.kqapro.preprocess --goal augmented_ns_cnlts_val_set
+python -m domain.kqapro.preprocess --goal encoded_ns_cnlts_train_set
+python -m domain.kqapro.preprocess --goal encoded_ns_cnlts_val_set
+python -m domain.kqapro.preprocess --goal shuffled_augmented_ns_cnlts_train_set
+python -m domain.kqapro.preprocess --goal shuffled_encoded_ns_cnlts_train_set
 #+end_src
 
 ** Specifying a domain
@@ -50,7 +70,7 @@ DOMAIN=kqapro
 ** Training with logical forms
 *** Training for multiple decoding strategies with a portion of the train set where inferencing_subtypes=False
 #+begin_src sh
-PERCENT=5  # between 0 to 100
+PERCENT=3  # between 0 to 100
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.${DOMAIN}.extra.train_set_portion_no_inferencing_subtypes --train-set-percent $PERCENT
 #+end_src
 

@@ -58,13 +58,51 @@ python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_de
 
 *** Training for multiple decoding strategies with a portion of the train set
 #+begin_src sh
-PERCENT=5  # between 0 to 100
+PERCENT=3  # between 0 to 100
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.${DOMAIN}.extra.train_set_portion --train-set-percent $PERCENT
 #+end_src
 
 *** Training for multiple decoding strategies with batch_size=32
 #+begin_src sh
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.${DOMAIN}.batch.size=32
+#+end_src
+
+*** Training for multiple decoding strategies with bart-large
+#+begin_src sh
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.common.extra.bart-large
+#+end_src
+
+*** Training with non-symbolic grammar and no-constrained decoding
+#+begin_src sh
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --extra-config config.${DOMAIN}.extra.ns_grammar
+#+end_src
+
+*** Training with non-symbolic grammar with a portion of the train set
+#+begin_src sh
+PERCENT=3  # between 0 to 100
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --extra-config "config.${DOMAIN}.extra.ns_grammar|config.${DOMAIN}.extra.train_set_portion" --train-set-percent $PERCENT
+#+end_src
+
+*** Training with with common-nl-token-seq grammar and no-constrained decoding
+#+begin_src sh
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --extra-config config.${DOMAIN}.extra.cnlts_grammar
+#+end_src
+
+*** Training with with common-nl-token-seq grammar with a portion of the train set
+#+begin_src sh
+PERCENT=3  # between 0 to 100
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --extra-config "config.${DOMAIN}.extra.cnlts_grammar|config.${DOMAIN}.extra.train_set_portion" --train-set-percent $PERCENT
+#+end_src
+
+*** Training with non-symbolic and common-nl-token-seq grammar and no-constrained decoding
+#+begin_src sh
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --extra-config config.${DOMAIN}.extra.ns_cnlts_grammar
+#+end_src
+
+*** Training with non-symbolic and common-nl-token-seq grammar with a portion of the train set
+#+begin_src sh
+PERCENT=3  # between 0 to 100
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --extra-config "config.${DOMAIN}.extra.ns_cnlts_grammar|config.${DOMAIN}.extra.train_set_portion" --train-set-percent $PERCENT
 #+end_src
 
 ** Training with denotations
@@ -217,4 +255,53 @@ $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 TEST_DIR_PATH="model-test/${DOMAIN}/result:no-constrained-decoding"
 EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+#+end_src
+
+*** Testing with non-symbolic grammar
+#+begin_src sh
+TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH="model-test/${DOMAIN}/result"
+# e.g. TEST_DIR_PATH="./model-test/${DOMAIN}/2023-07-19_01:17:04_094104_full-constraints:best/model"
+
+python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH \
+       --extra-config config.${DOMAIN}.extra.ns_grammar
+#+end_src
+
+*** Testing with common-nl-token-seq grammar
+#+begin_src sh
+TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH="model-test/${DOMAIN}/result"
+# e.g. TEST_DIR_PATH="./model-test/${DOMAIN}/2023-07-19_01:17:04_094104_full-constraints:best/model"
+
+python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH \
+       --extra-config config.${DOMAIN}.extra.cnlts_grammar
+#+end_src
+
+*** Testing with non-symbolic and common-nl-token-seq grammar
+#+begin_src sh
+TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH="model-test/${DOMAIN}/result"
+# e.g. TEST_DIR_PATH="./model-test/${DOMAIN}/2023-07-19_01:17:04_094104_full-constraints:best/model"
+
+python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH \
+       --extra-config config.${DOMAIN}.extra.ns_cnlts_grammar
+#+end_src
+
+** Miscellaneous
+*** Testing without decoding speed optimization
+#+begin_src sh
+TEST_CONFIG="config.${DOMAIN}.test_on_val_set"
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH="model-test/${DOMAIN}/result"
+# e.g. TEST_DIR_PATH="./model-test/${DOMAIN}/2023-07-19_01:17:04_094104_full-constraints:best/model"
+
+if [ "${DOMAIN}" -eq 'overnight']
+then do
+    EXTRA_OPTIONS="--extra-config config.${DOMAIN}.extra.val_5_repeats"
+fi
+
+python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH $EXTRA_OPTIONS
 #+end_src

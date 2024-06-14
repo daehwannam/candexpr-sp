@@ -180,6 +180,7 @@ _default_config = Environment(
     ignoring_parsing_errors=True,
     git_hash=_get_git_hash(),
     debug=_DEBUG,
+    decoding_speed_optimization=True,
 )
 
 

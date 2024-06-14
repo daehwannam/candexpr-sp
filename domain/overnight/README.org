@@ -121,3 +121,7 @@ TEST_DIR_PATH="model-test/${DOMAIN}/result:no-constrained-decoding"
 EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
+
+* Note
+- If candidate expressions or constrained decoding is disabled, error messages can be printed when executing predicated logical forms.
+  The error messages can be neglected as they don't stop training or testing.

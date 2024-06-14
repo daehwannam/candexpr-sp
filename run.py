@@ -79,8 +79,9 @@ def run_train(
         saving_optimizer=config.ph,
         weaksup_learning=config.ph(False),
         make_data_loader_fn=config.ph,
-        save_analysis_fn=config.ph,
-        save_extra_performance_fn=config.ph(filemng.save_extra_performance),
+        file_manager=config.ph,
+        # save_analysis_fn=config.ph,
+        # save_extra_performance_fn=config.ph(filemng.save_extra_performance),
 ):
     if restarting:
         assert filemng.is_finetuned(pretrained_model_name_or_path)
@@ -167,16 +168,16 @@ def run_train(
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
-        # print('---- Remove debug code ----')
-        # debug_batch_idx = -1
+        # print('---- Remove debug code ----')  # COMMENT THIS
+        # debug_batch_idx = -1                  # COMMENT THIS
         # loss = torch.tensor(0.)
         loss = 0
         # for batch in coc.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
         for batch in utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
-            # if debug_batch_idx > 100:
-            #     break
-            # else:
-            #     debug_batch_idx += 1
+            # if debug_batch_idx > 100:  # COMMENT THIS
+            #     break                  # COMMENT THIS
+            # else:                      # COMMENT THIS
+            #     debug_batch_idx += 1   # COMMENT THIS
 
             # - `model.config.decoder_start_token_id` is the first id of output sequences.
             # - the order or decoder output tokens in a sequence: decoder_start_token_id, bos_token_id, others ...
@@ -256,8 +257,8 @@ def run_train(
 
             filemng.save_status(status, temp_last_dir_path)
             filemng.save_performance(performance, temp_last_dir_path)
-            save_extra_performance_fn(validation.get('extra_performance', None), temp_last_dir_path)
-            save_analysis_fn(validation['analysis'], temp_last_dir_path)
+            file_manager.save_extra_performance(validation.get('extra_performance', None), temp_last_dir_path)
+            file_manager.save_analysis(validation['analysis'], temp_last_dir_path)
 
             filemng.make_symlink(
                 new_checkpoint_dir_path,
@@ -322,8 +323,9 @@ def run_train_for_multiple_decoding_strategies(
         num_epoch_repeats=config.ph(1),
 
         make_data_loader_fn=config.ph,
-        save_analysis_fn=config.ph,
-        save_extra_performance_fn=config.ph(filemng.save_extra_performance),
+        # save_analysis_fn=config.ph,
+        # save_extra_performance_fn=config.ph(filemng.save_extra_performance),
+        file_manager=config.ph,
 ):
     assert model_learning_dir_path is not None
     assert patience == float('inf'), 'the feature of patience is not implemented'
@@ -394,15 +396,15 @@ def run_train_for_multiple_decoding_strategies(
         logger.info(f'Epoch {epoch} starts')
         model.train()
 
-        # debug_batch_cnt = -1
+        # debug_batch_cnt = -1    # COMMENT THIS
 
         # loss = torch.tensor(0.)
         loss = 0
         # for batch in coc.xtqdm(train_data_loader, desc_fn=lambda: 'loss: {:7.4f}'.format(loss.item())):
         for batch in utqdm(train_data_loader, unit='loss', update_fn=lambda: loss, repr_format='{:7.4f}'):
-            # debug_batch_cnt += 1
-            # if debug_batch_cnt > 100:
-            #     break
+            # debug_batch_cnt += 1       # COMMENT THIS
+            # if debug_batch_cnt > 100:  # COMMENT THIS
+            #     break                  # COMMENT THIS
 
             optimizer.zero_grad()
 
@@ -484,8 +486,8 @@ def run_train_for_multiple_decoding_strategies(
 
                     filemng.save_status(status, temp_strategy_last_dir_path)
                     filemng.save_performance(performance, temp_strategy_last_dir_path)
-                    save_extra_performance_fn(validation.get('extra_performance', None), temp_strategy_last_dir_path)
-                    save_analysis_fn(validation['analysis'], temp_strategy_last_dir_path)
+                    file_manager.save_extra_performance(validation.get('extra_performance', None), temp_strategy_last_dir_path)
+                    file_manager.save_analysis(validation['analysis'], temp_strategy_last_dir_path)
 
                     filemng.copy_symlink(os.path.join(common_last_dir_path, MODEL_SYMLINK_NAME),
                                          os.path.join(temp_strategy_last_dir_path, MODEL_SYMLINK_NAME))
@@ -531,8 +533,9 @@ def run_test(
         analyzing=True,
         using_oracle=False,
         make_data_loader_fn=config.ph,
-        save_analysis_fn=config.ph,
-        save_extra_performance_fn=config.ph(filemng.save_extra_performance),
+        # save_analysis_fn=config.ph,
+        # save_extra_performance_fn=config.ph(filemng.save_extra_performance),
+        file_manager=config.ph,
 ):
     # if model_path is None:
     #     # Check the default checkpoint path
@@ -579,11 +582,11 @@ def run_test(
     save_config_info(test_dir_path)
 
     if analyzing:
-        save_analysis_fn(validation['analysis'], test_dir_path)
+        file_manager.save_analysis(validation['analysis'], test_dir_path)
     filemng.save_predictions(validation['predictions'], test_dir_path)
     if evaluating:
         filemng.save_performance(validation['performance'], test_dir_path)
-        save_extra_performance_fn(validation.get('extra_performance', None), test_dir_path)
+        file_manager.save_extra_performance(validation.get('extra_performance', None), test_dir_path)
     filemng.save_time_info(validation['time_info'], test_dir_path)
 
     logger.info(f'Results are saved in "{test_dir_path}"')
@@ -676,7 +679,8 @@ def run_search_train(
         # # saving_optimizer=config.ph,
         max_search_optim_loops=config.ph(float('inf')),  # New
         make_data_loader_fn=config.ph,
-        save_extra_performance_fn=config.ph(filemng.save_extra_performance),
+        # save_extra_performance_fn=config.ph(filemng.save_extra_performance),
+        file_manager=config.ph,
 ):
     if resuming:
         logger.info(f'Learning resumes with the directory "{model_learning_dir_path}"')
@@ -779,7 +783,7 @@ def run_search_train(
 
             filemng.save_status(search_status, temp_checkpoint_dir_path)
             filemng.save_performance(performance, temp_checkpoint_dir_path)
-            save_extra_performance_fn(validation.get('extra_performance', None), temp_checkpoint_dir_path)
+            file_manager.save_extra_performance(validation.get('extra_performance', None), temp_checkpoint_dir_path)
             filemng.save_weaksup_dataset(validation['weaksup_examples'], temp_checkpoint_dir_path)
             filemng.save_time_info(validation['time_info'], temp_checkpoint_dir_path)
             filemng.save_predictions(validation['predictions'], temp_checkpoint_dir_path)

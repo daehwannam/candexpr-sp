@@ -1,7 +1,12 @@
 
 import os
 from dhnamlib.pylib import filesys
+from dhnamlib.pylib.klass import subclass, override
+from dhnamlib.pylib.decoration import curry
+
 from splogic.utility.acceleration import accelerator
+from splogic.seq2seq import filemng
+from splogic.seq2seq.filemng import BaseFileManager
 
 
 @accelerator.within_local_main_process
@@ -29,3 +34,10 @@ def save_extra_performance(extra_performance, dir_path, file_name='extra_perform
     name, extension = os.path.splitext(file_name)
     new_file_name = f'{name}-visual{extension}'
     filesys.extended_json_pretty_save(updated_performance, os.path.join(dir_path, new_file_name))
+
+
+@subclass
+class OvernightFileManager(BaseFileManager):
+    save_analysis = staticmethod(override(save_analysis))
+    save_extra_performance = staticmethod(override(save_extra_performance))
+    save_performance = staticmethod(curry(filemng.save_performance(value_format='{:4.1f}')))

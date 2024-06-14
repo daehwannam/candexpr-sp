@@ -14,7 +14,7 @@ from splogic.seq2seq.token_pattern import is_bart_digit_seq_token
 from dhnamlib.pylib.context import block
 from dhnamlib.pylib.decoration import construct, curry, variable, id_cache, deprecated
 from dhnamlib.pylib.function import compose
-from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, finditer
+from dhnamlib.pylib.iteration import distinct_pairs, unique, merge_pairs, finditer, flatten
 
 from . import read as kopl_read
 from . import kb_analysis as kopl_kb_analysis
@@ -142,23 +142,49 @@ with block:
 
 
 with block:
-    def kopl_to_action_seq(grammar, context, labeled_kopl_program):
-        action_seq = []
+    def kopl_to_action_tree(grammar, context, labeled_kopl_program):
         recursive_kopl_form = kopl_read.kopl_to_recursive_form(labeled_kopl_program)
 
         def parse(form):
             function_action = _kopl_function_to_action(grammar, form['function'])
-            action_seq.append(function_action)
+            # yield function_action
             prev_kopl_input = None
+            sub_trees = []
             for idx, kopl_input in enumerate(form['inputs']):
-                action_seq.extend(_kopl_input_to_action_seq(
-                    grammar, context, kopl_input, function_action.param_types[idx], prev_kopl_input))
+                sub_tree = _kopl_input_to_action_seq_or_action(
+                    grammar, context, kopl_input, function_action.param_types[idx], prev_kopl_input)
+                sub_trees.append(sub_tree)
                 prev_kopl_input = kopl_input
             for sub_form in form['dependencies']:
-                parse(sub_form)
+                sub_trees.append(parse(sub_form))
 
-        parse(recursive_kopl_form)
-        return action_seq
+            if len(sub_trees) == 0:
+                return function_action
+            else:
+                return tuple([function_action] + sub_trees)
+
+        return parse(recursive_kopl_form)
+
+    def kopl_to_action_seq(grammar, context, labeled_kopl_program):
+        return flatten(kopl_to_action_tree(grammar, context, labeled_kopl_program))
+
+    # def kopl_to_action_seq(grammar, context, labeled_kopl_program):
+    #     action_seq = []
+    #     recursive_kopl_form = kopl_read.kopl_to_recursive_form(labeled_kopl_program)
+
+    #     def parse(form):
+    #         function_action = _kopl_function_to_action(grammar, form['function'])
+    #         action_seq.append(function_action)
+    #         prev_kopl_input = None
+    #         for idx, kopl_input in enumerate(form['inputs']):
+    #             action_seq.extend(_kopl_input_to_action_seq_or_action(
+    #                 grammar, context, kopl_input, function_action.param_types[idx], prev_kopl_input))
+    #             prev_kopl_input = kopl_input
+    #         for sub_form in form['dependencies']:
+    #             parse(sub_form)
+
+    #     parse(recursive_kopl_form)
+    #     return action_seq
 
     def _kopl_function_to_action(grammar, kopl_function):
         if kopl_function == 'What':
@@ -176,7 +202,7 @@ with block:
                 if kopl_function is not None:
                     yield kopl_function, action
 
-    def _kopl_input_to_action_seq(grammar, context, kopl_input, act_type, prev_kopl_input):
+    def _kopl_input_to_action_seq_or_action(grammar, context, kopl_input, act_type, prev_kopl_input):
         def text_to_nl_token_actions(text):
             return tuple(
                 chain(
@@ -186,6 +212,9 @@ with block:
 
         def is_type_of(act_type, super_type):
             return grammar.sub_and_super(act_type, super_type)
+
+        output_action_seq = None
+        output_action = None
 
         kw_to_type_dict = make_kw_to_type_dict(context.raw_kb)
 
@@ -199,7 +228,7 @@ with block:
             else:
                 new_act_type = act_type
             keyword_action = unique(_act_type_to_actions(grammar, new_act_type))
-            action_seq = tuple(chain([keyword_action], text_to_nl_token_actions(kopl_input)))
+            output_action_seq = tuple(chain([keyword_action], text_to_nl_token_actions(kopl_input)))
         elif is_type_of(act_type, 'operator'):
             candidate_actions = _act_type_to_actions(grammar, act_type)
             if kopl_input == '=':
@@ -208,32 +237,37 @@ with block:
                 operator_action = unique(finditer(
                     candidate_actions, kopl_input,
                     test=lambda action, kopl_input: (kopl_input in action.expr_dict[grammar.formalism.default_expr_key])))
-            action_seq = [operator_action]
+            # output_action_seq = [operator_action]
+            output_action = operator_action
         elif is_type_of(act_type, 'value'):
             if act_type == 'value':
                 new_act_type = 'v-{}'.format(kopl_read.classify_value_type(context, prev_kopl_input, kopl_input))
             else:
                 new_act_type = act_type
             value_action = unique(_act_type_to_actions(grammar, new_act_type))
-            action_seq = [value_action]
+            output_action_seq = [value_action]
             if is_type_of(new_act_type, 'v-number'):
                 assert value_action.name == 'constant-number'
                 quantity_part, unit_part = kopl_read.number_to_quantity_and_unit(kopl_input)
                 # quantity
-                action_seq.append(grammar.name_to_action('constant-quantity'))
-                action_seq.extend(text_to_nl_token_actions(quantity_part))
+                output_action_seq.append(grammar.name_to_action('constant-quantity'))
+                output_action_seq.extend(text_to_nl_token_actions(quantity_part))
                 # unit
-                action_seq.append(grammar.name_to_action('constant-unit'))
+                output_action_seq.append(grammar.name_to_action('constant-unit'))
                 if unit_part == '1':
-                    action_seq.extend([grammar.reduce_action])
+                    output_action_seq.extend([grammar.reduce_action])
                 else:
-                    action_seq.extend(text_to_nl_token_actions(unit_part))
+                    output_action_seq.extend(text_to_nl_token_actions(unit_part))
             else:
-                action_seq.extend(text_to_nl_token_actions(kopl_input))
+                output_action_seq.extend(text_to_nl_token_actions(kopl_input))
         else:
             raise Exception(f'unexpected type "{act_type}"')
 
-        return action_seq
+        if output_action_seq is not None:
+            assert output_action is None
+            return output_action_seq
+        else:
+            return output_action
 
     @cache
     def _get_act_type_to_actions_dict(grammar):

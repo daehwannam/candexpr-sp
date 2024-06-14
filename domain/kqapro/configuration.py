@@ -8,11 +8,15 @@ from dhnamlib.pylib.klass import subclass, implement
 from splogic.base.grammar import read_grammar
 from splogic.utility.acceleration import accelerator
 from splogic.seq2seq import filemng
+from splogic.base.formalism import Formalism
 from splogic.base.execution import InstantExecutor, SingletonContextCreater
 from splogic.seq2seq.dynamic_bind import UtteranceSpanTrieDynamicBinder, NoDynamicBinder
 from splogic.seq2seq.validation import Validator, ResultCollector, DEFAULT_OPTIM_MEASURES, DEFAULT_SEARCH_MEASURES
 from splogic.seq2seq.data_read import make_data_loader
+from splogic.seq2seq.ablation_grammar import make_ablation_grammar_cls
+
 from .execution import KoPLCompiler
+from .ablation_grammar import is_symbolic_action, is_nl_token_seq_action, make_common_nl_token_seq_expr_dict
 
 # from configuration import config as global_config
 import configuration
@@ -46,6 +50,27 @@ _shuffled_encoded_strict_train_set_file_path = './preprocessed/kqapro/shuffled_e
 _encoded_weaksup_pretraining_set_file_path = './preprocessed/kqapro/encoded_weaksup_pretraining.jsonl'
 _encoded_weaksup_search_set_file_path = './preprocessed/kqapro/encoded_weaksup_search.jsonl'
 
+_augmented_ns_train_set_file_path = './preprocessed/kqapro/augmented_ns_train.jsonl'
+_augmented_ns_val_set_file_path = './preprocessed/kqapro/augmented_ns_val.jsonl'
+_encoded_ns_train_set_file_path = './preprocessed/kqapro/encoded_ns_train.jsonl'
+_encoded_ns_val_set_file_path = './preprocessed/kqapro/encoded_ns_val.jsonl'
+_shuffled_augmented_ns_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_ns_train.jsonl'
+_shuffled_encoded_ns_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_ns_train.jsonl'
+
+_augmented_cnlts_train_set_file_path = './preprocessed/kqapro/augmented_cnlts_train.jsonl'
+_augmented_cnlts_val_set_file_path = './preprocessed/kqapro/augmented_cnlts_val.jsonl'
+_encoded_cnlts_train_set_file_path = './preprocessed/kqapro/encoded_cnlts_train.jsonl'
+_encoded_cnlts_val_set_file_path = './preprocessed/kqapro/encoded_cnlts_val.jsonl'
+_shuffled_augmented_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_cnlts_train.jsonl'
+_shuffled_encoded_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_cnlts_train.jsonl'
+
+_augmented_ns_cnlts_train_set_file_path = './preprocessed/kqapro/augmented_ns_cnlts_train.jsonl'
+_augmented_ns_cnlts_val_set_file_path = './preprocessed/kqapro/augmented_ns_cnlts_val.jsonl'
+_encoded_ns_cnlts_train_set_file_path = './preprocessed/kqapro/encoded_ns_cnlts_train.jsonl'
+_encoded_ns_cnlts_val_set_file_path = './preprocessed/kqapro/encoded_ns_cnlts_val.jsonl'
+_shuffled_augmented_ns_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_ns_cnlts_train.jsonl'
+_shuffled_encoded_ns_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_ns_cnlts_train.jsonl'
+
 # _KQAPRO_TRAN_SET_SIZE = 94376
 _USING_SPANS_AS_ENTITIES = False
 
@@ -65,15 +90,40 @@ def _make_context():
         return _context_cls(configuration.config.kb)
 
 
-def _make_grammar(**kwargs):
-    from .grammar import KQAProGrammar
+def _make_grammar(grammar_cls=None, **kwargs):
+    if grammar_cls is None:
+        from .grammar import KQAProGrammar
+        grammar_cls = KQAProGrammar
+
     return read_grammar(
         _grammar_file_path,
-        grammar_cls=KQAProGrammar,
+        formalism=Formalism(decoding_speed_optimization=configuration.config.decoding_speed_optimization),
+        grammar_cls=grammar_cls,
         grammar_kwargs=dict(
             pretrained_model_name_or_path=config.pretrained_model_name_or_path,
             **kwargs
         ))
+
+
+def _make_ablation_grammar(
+        non_symbolic=False,
+        using_common_nl_token_seq=False,
+        **kwargs
+):
+    from .grammar import KQAProGrammar
+
+    ablation_grammar_cls = make_ablation_grammar_cls(KQAProGrammar)
+
+    return _make_grammar(
+        grammar_cls=ablation_grammar_cls,
+        non_symbolic=non_symbolic,
+        is_symbolic_action=is_symbolic_action,
+        using_common_nl_token_seq=using_common_nl_token_seq,
+        is_nl_token_seq_action=is_nl_token_seq_action,
+        common_nl_token_seq_expr_dict=make_common_nl_token_seq_expr_dict(
+            lambda: configuration.config.grammar
+        ),
+        **kwargs)
 
 
 def _make_validator(strict):
@@ -129,6 +179,27 @@ config = Environment(
     encoded_weaksup_pretraining_set=LazyEval(lambda: jsonl_load(_encoded_weaksup_pretraining_set_file_path)),
     encoded_weaksup_search_set=LazyEval(lambda: jsonl_load(_encoded_weaksup_search_set_file_path)),
 
+    augmented_ns_train_set=LazyEval(lambda: jsonl_load(_augmented_ns_train_set_file_path)),
+    augmented_ns_val_set=LazyEval(lambda: jsonl_load(_augmented_ns_val_set_file_path)),
+    encoded_ns_train_set=LazyEval(lambda: jsonl_load(_encoded_ns_train_set_file_path)),
+    encoded_ns_val_set=LazyEval(lambda: jsonl_load(_encoded_ns_val_set_file_path)),
+    shuffled_augmented_ns_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_ns_train_set_file_path)),
+    shuffled_encoded_ns_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_ns_train_set_file_path)),
+
+    augmented_cnlts_train_set=LazyEval(lambda: jsonl_load(_augmented_cnlts_train_set_file_path)),
+    augmented_cnlts_val_set=LazyEval(lambda: jsonl_load(_augmented_cnlts_val_set_file_path)),
+    encoded_cnlts_train_set=LazyEval(lambda: jsonl_load(_encoded_cnlts_train_set_file_path)),
+    encoded_cnlts_val_set=LazyEval(lambda: jsonl_load(_encoded_cnlts_val_set_file_path)),
+    shuffled_augmented_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_cnlts_train_set_file_path)),
+    shuffled_encoded_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_cnlts_train_set_file_path)),
+
+    augmented_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_augmented_ns_cnlts_train_set_file_path)),
+    augmented_ns_cnlts_val_set=LazyEval(lambda: jsonl_load(_augmented_ns_cnlts_val_set_file_path)),
+    encoded_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_encoded_ns_cnlts_train_set_file_path)),
+    encoded_ns_cnlts_val_set=LazyEval(lambda: jsonl_load(_encoded_ns_cnlts_val_set_file_path)),
+    shuffled_augmented_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_ns_cnlts_train_set_file_path)),
+    shuffled_encoded_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_ns_cnlts_train_set_file_path)),
+
     grammar=LazyEval(_make_grammar),
     test_validator=LazyEval(lambda: _make_validator(strict=False)),
     search_validator=LazyEval(lambda: _make_validator(strict=True)),
@@ -136,7 +207,8 @@ config = Environment(
     using_arg_candidate=True,
     using_arg_filter=False,
     make_data_loader_fn=make_data_loader,
-    save_analysis_fn=filemng.save_analysis,
+    # save_analysis_fn=filemng.save_analysis,
+    file_manager=filemng.BaseFileManager(),
     evaluating_test_set=False,
 
     pretrained_model_name_or_path=_pretrained_model_name_or_path,
@@ -157,6 +229,27 @@ config = Environment(
     shuffled_encoded_strict_train_set_file_path=_shuffled_encoded_strict_train_set_file_path,
     encoded_weaksup_pretraining_set_file_path=_encoded_weaksup_pretraining_set_file_path,
     encoded_weaksup_search_set_file_path=_encoded_weaksup_search_set_file_path,
+
+    augmented_ns_train_set_file_path=_augmented_ns_train_set_file_path,
+    augmented_ns_val_set_file_path=_augmented_ns_val_set_file_path,
+    encoded_ns_train_set_file_path=_encoded_ns_train_set_file_path,
+    encoded_ns_val_set_file_path=_encoded_ns_val_set_file_path,
+    shuffled_augmented_ns_train_set_file_path=_shuffled_augmented_ns_train_set_file_path,
+    shuffled_encoded_ns_train_set_file_path=_shuffled_encoded_ns_train_set_file_path,
+
+    augmented_cnlts_train_set_file_path=_augmented_cnlts_train_set_file_path,
+    augmented_cnlts_val_set_file_path=_augmented_cnlts_val_set_file_path,
+    encoded_cnlts_train_set_file_path=_encoded_cnlts_train_set_file_path,
+    encoded_cnlts_val_set_file_path=_encoded_cnlts_val_set_file_path,
+    shuffled_augmented_cnlts_train_set_file_path=_shuffled_augmented_cnlts_train_set_file_path,
+    shuffled_encoded_cnlts_train_set_file_path=_shuffled_encoded_cnlts_train_set_file_path,
+
+    augmented_ns_cnlts_train_set_file_path=_augmented_ns_cnlts_train_set_file_path,
+    augmented_ns_cnlts_val_set_file_path=_augmented_ns_cnlts_val_set_file_path,
+    encoded_ns_cnlts_train_set_file_path=_encoded_ns_cnlts_train_set_file_path,
+    encoded_ns_cnlts_val_set_file_path=_encoded_ns_cnlts_val_set_file_path,
+    shuffled_augmented_ns_cnlts_train_set_file_path=_shuffled_augmented_ns_cnlts_train_set_file_path,
+    shuffled_encoded_ns_cnlts_train_set_file_path=_shuffled_encoded_ns_cnlts_train_set_file_path,
 
     # generation_max_length=500,
     generation_max_length=200,

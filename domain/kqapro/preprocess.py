@@ -9,11 +9,11 @@ import random
 from meta_configuration import set_default_domain_name
 set_default_domain_name('kqapro')  # Call `set_default_domain_name` before the `configuration` module is loaded.
 from configuration import config
-from .configuration import _make_grammar
+from .configuration import _make_grammar, _make_ablation_grammar
 
 from dhnamlib.pylib.filesys import jsonl_save, pickle_save, mkpdirs_unless_exist
 from dhnamlib.pylib.time import TimeMeasure
-from dhnamlib.pylib.iteration import rcopy
+from dhnamlib.pylib.iteration import rcopy, flatten, rmap
 from dhnamlib.pylib.decoration import construct
 
 from splogic.seq2seq import learning
@@ -26,20 +26,20 @@ from .kopl_interface.original import execute_kopl_program
 
 
 @config
-def extract_action_seqs(raw_dataset, grammar=config.ph, global_context=config.ph, verbose=1, verifying=True, verifying_grammar=True):
+def extract_action_tree(raw_dataset, grammar=config.ph, global_context=config.ph, verbose=1, verifying=True, verifying_grammar=True):
     compiler = KoPLCompiler()
 
     tm = TimeMeasure()
 
-    kopl_to_action_seq_cumtime = 0
+    kopl_to_action_tree_cumtime = 0
     get_last_state_cumtime = 0
     compile_tree_cumtime = 0
     program_cumtime = 0
     postprocess_prediction_cumtime = 0
 
-    action_seqs = []
+    action_trees = []
     extraction_info_list = []
-    num_incompatible_action_seqs = 0
+    num_incompatible_action_trees = 0
 
     with TimeMeasure() as total_tm:
         # debug_cnt = 0
@@ -53,17 +53,18 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, global_context=config.ph
             answer = example['answer']
 
             with tm:
-                action_seq = grammar.token_processing.labeled_logical_form_to_action_seq(
+                action_tree = grammar.token_processing.labeled_logical_form_to_action_tree(
                     labeled_kopl_program,
                     grammar=grammar, context=global_context)
-            kopl_to_action_seq_cumtime += tm.interval
+            kopl_to_action_tree_cumtime += tm.interval
 
-            action_seqs.append(action_seq)
+            action_trees.append(action_tree)
 
             if not verifying:
                 continue
 
             dynamic_binder = UtteranceSpanTrieDynamicBinder()
+            action_seq = flatten(action_tree)
 
             with tm:
                 if verifying_grammar:
@@ -72,7 +73,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, global_context=config.ph
                     except InvalidCandidateActionError as error:
                         extraction_info = dict(compatible_with_grammar=False,
                                                action_extraction_error_msg=error.args[0])
-                        num_incompatible_action_seqs += 1
+                        num_incompatible_action_trees += 1
 
                         utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
                         dynamic_binding = dynamic_binder.bind_example(dict(utterance_token_ids=utterance_token_id_seq), grammar=grammar)
@@ -114,7 +115,7 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, global_context=config.ph
                         print(f'Incorrect prediction for an example of index {example_idx}')
 
     cum_time_dict = dict(
-        kopl_to_action_seq = kopl_to_action_seq_cumtime,
+        kopl_to_action_tree = kopl_to_action_tree_cumtime,
         get_last_state     = get_last_state_cumtime,
         compile_tree       = compile_tree_cumtime,
         program            = program_cumtime,
@@ -128,9 +129,9 @@ def extract_action_seqs(raw_dataset, grammar=config.ph, global_context=config.ph
             if v > 0:
                 print(f'- {k}: {v}')
 
-    print('# incompatible action sequences = {}'.format(num_incompatible_action_seqs))
+    print('# incompatible action trees = {}'.format(num_incompatible_action_trees))
 
-    return action_seqs, extraction_info_list
+    return action_trees, extraction_info_list
 
 
 def action_seq_to_name_seq(action_seq):
@@ -141,19 +142,19 @@ def name_seq_to_action_seq(grammar, action_name_seq):
     return list(map(grammar.name_to_action, action_name_seq))
 
 
-def augment_dataset(raw_dataset, adding_action_name_seq=False, adding_answer_by_program=False, global_context=None):
-    if adding_action_name_seq:
-        print('Extracting action sequences from a dataset')
-        action_seqs, extraction_info_list = extract_action_seqs(raw_dataset, verbose=0, verifying=True)
-        assert len(raw_dataset) == len(action_seqs) == len(extraction_info_list)
+def augment_dataset(raw_dataset, adding_action_name_tree=False, adding_answer_by_program=False, global_context=None):
+    if adding_action_name_tree:
+        print('Extracting action trees from a dataset')
+        action_trees, extraction_info_list = extract_action_tree(raw_dataset, verbose=0, verifying=True)
+        assert len(raw_dataset) == len(action_trees) == len(extraction_info_list)
     print('Augmenting the dataset')
     augmented_dataset = rcopy(raw_dataset)
     for example_idx, example in tqdm(enumerate(augmented_dataset), total=len(augmented_dataset)):
         example['example_id'] = example_idx
-        if adding_action_name_seq:
-            action_seq = action_seqs[example_idx]
-            action_name_seq = [action.name for action in action_seq]
-            example['action_name_seq'] = action_name_seq
+        if adding_action_name_tree:
+            action_tree = action_trees[example_idx]
+            action_name_tree = rmap(lambda action: action.name, action_tree)
+            example['action_name_tree'] = action_name_tree
 
             extraction_info = extraction_info_list[example_idx]
             example.update(**extraction_info)
@@ -169,13 +170,13 @@ def preprocess_for_augmented_dataset(
         *,
         raw_dataset,
         augmented_dataset_file_path,
-        adding_action_name_seq,
+        adding_action_name_tree,
         adding_answer_by_program,
         global_context=config.ph):
 
     augmented_dataset = augment_dataset(
         raw_dataset=raw_dataset,
-        adding_action_name_seq=adding_action_name_seq,
+        adding_action_name_tree=adding_action_name_tree,
         adding_answer_by_program=adding_answer_by_program,
         global_context=global_context)
     mkpdirs_unless_exist(augmented_dataset_file_path)
@@ -195,10 +196,17 @@ def encode_dataset(grammar, augmented_dataset, example_idx_as_id=False):
         if 'answer' in example:
             encoded_example.update(answer=example['answer'])
 
-        if 'action_name_seq' in example:
+        if 'action_name_tree' in example:
+            action_name_seq = flatten(example['action_name_tree'])
+        elif 'action_name_seq' in example:
+            action_name_seq = example['action_name_seq']
+        else:
+            action_name_seq = None
+
+        if action_name_seq is not None:
             action_ids = list(chain(
                 [grammar.lf_tokenizer.bos_token_id],
-                map(grammar.name_to_id, example['action_name_seq']),
+                map(grammar.name_to_id, action_name_seq),
                 [grammar.lf_tokenizer.eos_token_id]))
             encoded_example.update(action_ids=action_ids)
 
@@ -218,7 +226,7 @@ def preprocess_for_encoded_dataset(
     encoded_dataset = encode_dataset(grammar, augmented_dataset, example_idx_as_id=example_idx_as_id)
     mkpdirs_unless_exist(encoded_dataset_file_path)
     jsonl_save(encoded_dataset, encoded_dataset_file_path)
-    print(f'The augmented dataset was saved as {encoded_dataset_file_path}')
+    print(f'The encoded dataset was saved as {encoded_dataset_file_path}')
 
 
 @construct(list)
@@ -271,14 +279,14 @@ def augment_dataset_with_strict_grammar(augmented_dataset, grammar):
         utterance_token_id_seq = grammar.utterance_tokenizer(example['question'])['input_ids']
         dynamic_binding = dynamic_binder.bind_example(dict(utterance_token_ids=utterance_token_id_seq), grammar=grammar)
         # utterance_span_trie = learning.utterance_token_id_seq_to_span_trie(grammar, utterance_token_id_seq)
-        action_seq = grammar.strict_type_processing.get_strictly_typed_action_seq(
+        action_tree = grammar.strict_type_processing.get_strictly_typed_action_tree(
             grammar,
-            action_name_seq=example['action_name_seq'],
+            action_name_tree=example['action_name_tree'],
             dynamic_binding=dynamic_binding)
-        action_name_seq = [action.name for action in action_seq]
+        action_name_tree = rmap(lambda action: action.name, action_tree)
 
         new_example = dict(example)
-        new_example['action_name_seq'] = action_name_seq  # update 'action_name_seq'
+        new_example['action_name_tree'] = action_name_tree
         yield new_example
 
 
@@ -286,24 +294,26 @@ def preprocess_for_augmented_strict_dataset(
         *,
         augmented_dataset,
         augmented_strict_dataset_file_path):
-    with config.let(inferencing_subtypes=False):
-        grammar = _make_grammar()
-        assert grammar.inferencing_subtypes is False
+    grammar = _make_grammar(inferencing_subtypes=False)
+    # with config.let(inferencing_subtypes=False):
+    #     grammar = _make_grammar()
+    #     assert grammar.inferencing_subtypes is False
 
     augmented_strict_dataset = augment_dataset_with_strict_grammar(augmented_dataset, grammar)
     jsonl_save(augmented_strict_dataset, augmented_strict_dataset_file_path)
     print(f'The augmented dataset with strict grammar was saved as {augmented_strict_dataset_file_path}')
 
 
-def process_for_encoded_strict_dataset(
+def preprocess_for_encoded_strict_dataset(
         *,
         augmented_dataset,
         encoded_dataset_file_path,
         example_idx_as_id=False
 ):
-    with config.let(inferencing_subtypes=False):
-        grammar = _make_grammar()
-        assert grammar.inferencing_subtypes is False
+    grammar = _make_grammar(inferencing_subtypes=False)
+    # with config.let(inferencing_subtypes=False):
+    #     grammar = _make_grammar()
+    #     assert grammar.inferencing_subtypes is False
 
     preprocess_for_encoded_dataset(
         grammar=grammar,
@@ -320,7 +330,7 @@ def extract_dataset_portion(dataset, percent, expected_dataset_size=None):
     return dataset[:num_examples]
 
 
-def prepare_encoded_weaksup_pretraining_set(
+def preprocess_for_encoded_weaksup_pretraining_set(
         *,
         full_dataset,
         weaksup_pretraining_set_file_path
@@ -341,7 +351,7 @@ def prepare_encoded_weaksup_pretraining_set(
     print(f'The weaksup pretraining dataset was saved as {weaksup_pretraining_set_file_path}')
 
 
-def prepare_encoded_weaksup_search_set(
+def preprocess_for_encoded_weaksup_search_set(
         *,
         full_dataset,
         weaksup_search_set_file_path
@@ -352,6 +362,44 @@ def prepare_encoded_weaksup_search_set(
 
     jsonl_save(search_dataset, weaksup_search_set_file_path)
     print(f'The weaksup search dataset was saved as {weaksup_search_set_file_path}')
+
+
+def preprocess_for_augmented_ablation_dataset(
+        *,
+        non_symbolic=False,
+        using_common_nl_token_seq=False,
+        augmented_original_dataset,
+        ablation_dataset_file_path,
+):
+    grammar = _make_ablation_grammar(non_symbolic=non_symbolic, using_common_nl_token_seq=using_common_nl_token_seq)
+    ablation_augmented_dataset = rcopy(augmented_original_dataset)
+    for example in tqdm(ablation_augmented_dataset):
+        original_action_name_tree = example['action_name_tree']
+        # symbolic_action_seq = tuple(grammar.name_to_action(action_name) for action_name in symbolic_action_name_seq)
+        original_action_tree = rmap(grammar.name_to_action, original_action_name_tree)
+        ablation_action_tree = grammar.convert_to_ablation_action_tree(original_action_tree)
+        # non_symbolic_action_name_seq = tuple(action.name for action in non_symbolic_action_seq)
+        ablation_action_name_tree = rmap(lambda action: action.name, ablation_action_tree)
+        # example['action_name_seq'] = non_symbolic_action_name_seq
+        example['action_name_tree'] = ablation_action_name_tree
+    jsonl_save(ablation_augmented_dataset, ablation_dataset_file_path)
+
+
+def preprocess_for_encoded_ablation_dataset(
+        *,
+        non_symbolic=False,
+        using_common_nl_token_seq=False,
+        augmented_dataset,
+        encoded_dataset_file_path,
+        example_idx_as_id=False
+):
+    grammar = _make_ablation_grammar(non_symbolic=non_symbolic, using_common_nl_token_seq=using_common_nl_token_seq)
+
+    preprocess_for_encoded_dataset(
+        grammar=grammar,
+        augmented_dataset=augmented_dataset,
+        encoded_dataset_file_path=encoded_dataset_file_path,
+        example_idx_as_id=example_idx_as_id)
 
 
 def _main():
@@ -375,6 +423,27 @@ def _main():
             'shuffled_encoded_strict_train_set',
             'encoded_weaksup_pretraining_set',
             'encoded_weaksup_search_set',
+
+            'augmented_ns_train_set',
+            'augmented_ns_val_set',
+            'encoded_ns_train_set',
+            'encoded_ns_val_set',
+            'shuffled_augmented_ns_train_set',
+            'shuffled_encoded_ns_train_set',
+
+            'augmented_cnlts_train_set',
+            'augmented_cnlts_val_set',
+            'encoded_cnlts_train_set',
+            'encoded_cnlts_val_set',
+            'shuffled_augmented_cnlts_train_set',
+            'shuffled_encoded_cnlts_train_set',
+
+            'augmented_ns_cnlts_train_set',
+            'augmented_ns_cnlts_val_set',
+            'encoded_ns_cnlts_train_set',
+            'encoded_ns_cnlts_val_set',
+            'shuffled_augmented_ns_cnlts_train_set',
+            'shuffled_encoded_ns_cnlts_train_set'
         ])
 
     args = parser.parse_args(config.remaining_cmd_args)
@@ -383,13 +452,13 @@ def _main():
         preprocess_for_augmented_dataset(
             raw_dataset=config.raw_train_set,
             augmented_dataset_file_path=config.augmented_train_set_file_path,
-            adding_action_name_seq=True,
+            adding_action_name_tree=True,
             adding_answer_by_program=True)
     elif args.goal == 'augmented_val_set':
         preprocess_for_augmented_dataset(
             raw_dataset=config.raw_val_set,
             augmented_dataset_file_path=config.augmented_val_set_file_path,
-            adding_action_name_seq=True,
+            adding_action_name_tree=True,
             adding_answer_by_program=True)
     elif args.goal == 'encoded_train_set':
         preprocess_for_encoded_dataset(
@@ -426,11 +495,11 @@ def _main():
             augmented_dataset=config.augmented_val_set,
             augmented_strict_dataset_file_path=config.augmented_strict_val_set_file_path)
     elif args.goal == 'encoded_strict_train_set':
-        process_for_encoded_strict_dataset(
+        preprocess_for_encoded_strict_dataset(
             augmented_dataset=config.augmented_strict_train_set,
             encoded_dataset_file_path=config.encoded_strict_train_set_file_path)
     elif args.goal == 'encoded_strict_val_set':
-        process_for_encoded_strict_dataset(
+        preprocess_for_encoded_strict_dataset(
             augmented_dataset=config.augmented_strict_val_set,
             encoded_dataset_file_path=config.encoded_strict_val_set_file_path)
     elif args.goal == 'shuffled_augmented_strict_train_set':
@@ -442,13 +511,101 @@ def _main():
             dataset=config.encoded_strict_train_set,
             shuffled_dataset_file_path=config.shuffled_encoded_strict_train_set_file_path)
     elif args.goal == 'encoded_weaksup_pretraining_set':
-        prepare_encoded_weaksup_pretraining_set(
+        preprocess_for_encoded_weaksup_pretraining_set(
             full_dataset=config.encoded_train_set,
             weaksup_pretraining_set_file_path=config.encoded_weaksup_pretraining_set_file_path)
     elif args.goal == 'encoded_weaksup_search_set':
-        prepare_encoded_weaksup_search_set(
+        preprocess_for_encoded_weaksup_search_set(
             full_dataset=config.encoded_train_set,
             weaksup_search_set_file_path=config.encoded_weaksup_search_set_file_path)
+    elif args.goal == 'augmented_ns_train_set':
+        preprocess_for_augmented_ablation_dataset(
+            non_symbolic=True,
+            augmented_original_dataset=config.augmented_train_set,
+            ablation_dataset_file_path=config.augmented_ns_train_set_file_path)
+    elif args.goal == 'augmented_ns_val_set':
+        preprocess_for_augmented_ablation_dataset(
+            non_symbolic=True,
+            augmented_original_dataset=config.augmented_val_set,
+            ablation_dataset_file_path=config.augmented_ns_val_set_file_path)
+    elif args.goal == 'encoded_ns_train_set':
+        preprocess_for_encoded_ablation_dataset(
+            non_symbolic=True,
+            augmented_dataset=config.augmented_ns_train_set,
+            encoded_dataset_file_path=config.encoded_ns_train_set_file_path)
+    elif args.goal == 'encoded_ns_val_set':
+        preprocess_for_encoded_ablation_dataset(
+            non_symbolic=True,
+            augmented_dataset=config.augmented_ns_val_set,
+            encoded_dataset_file_path=config.encoded_ns_val_set_file_path)
+    elif args.goal == 'shuffled_augmented_ns_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.augmented_ns_train_set,
+            shuffled_dataset_file_path=config.shuffled_augmented_ns_train_set_file_path)
+    elif args.goal == 'shuffled_encoded_ns_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.encoded_ns_train_set,
+            shuffled_dataset_file_path=config.shuffled_encoded_ns_train_set_file_path)
+    elif args.goal == 'augmented_cnlts_train_set':
+        preprocess_for_augmented_ablation_dataset(
+            using_common_nl_token_seq=True,
+            augmented_original_dataset=config.augmented_train_set,
+            ablation_dataset_file_path=config.augmented_cnlts_train_set_file_path)
+    elif args.goal == 'augmented_cnlts_val_set':
+        preprocess_for_augmented_ablation_dataset(
+            using_common_nl_token_seq=True,
+            augmented_original_dataset=config.augmented_val_set,
+            ablation_dataset_file_path=config.augmented_cnlts_val_set_file_path)
+    elif args.goal == 'encoded_cnlts_train_set':
+        preprocess_for_encoded_ablation_dataset(
+            using_common_nl_token_seq=True,
+            augmented_dataset=config.augmented_cnlts_train_set,
+            encoded_dataset_file_path=config.encoded_cnlts_train_set_file_path)
+    elif args.goal == 'encoded_cnlts_val_set':
+        preprocess_for_encoded_ablation_dataset(
+            using_common_nl_token_seq=True,
+            augmented_dataset=config.augmented_cnlts_val_set,
+            encoded_dataset_file_path=config.encoded_cnlts_val_set_file_path)
+    elif args.goal == 'shuffled_augmented_cnlts_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.augmented_cnlts_train_set,
+            shuffled_dataset_file_path=config.shuffled_augmented_cnlts_train_set_file_path)
+    elif args.goal == 'shuffled_encoded_cnlts_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.encoded_cnlts_train_set,
+            shuffled_dataset_file_path=config.shuffled_encoded_cnlts_train_set_file_path)
+    elif args.goal == 'augmented_ns_cnlts_train_set':
+        preprocess_for_augmented_ablation_dataset(
+            non_symbolic=True,
+            using_common_nl_token_seq=True,
+            augmented_original_dataset=config.augmented_train_set,
+            ablation_dataset_file_path=config.augmented_ns_cnlts_train_set_file_path)
+    elif args.goal == 'augmented_ns_cnlts_val_set':
+        preprocess_for_augmented_ablation_dataset(
+            non_symbolic=True,
+            using_common_nl_token_seq=True,
+            augmented_original_dataset=config.augmented_val_set,
+            ablation_dataset_file_path=config.augmented_ns_cnlts_val_set_file_path)
+    elif args.goal == 'encoded_ns_cnlts_train_set':
+        preprocess_for_encoded_ablation_dataset(
+            non_symbolic=True,
+            using_common_nl_token_seq=True,
+            augmented_dataset=config.augmented_ns_cnlts_train_set,
+            encoded_dataset_file_path=config.encoded_ns_cnlts_train_set_file_path)
+    elif args.goal == 'encoded_ns_cnlts_val_set':
+        preprocess_for_encoded_ablation_dataset(
+            non_symbolic=True,
+            using_common_nl_token_seq=True,
+            augmented_dataset=config.augmented_ns_cnlts_val_set,
+            encoded_dataset_file_path=config.encoded_ns_cnlts_val_set_file_path)
+    elif args.goal == 'shuffled_augmented_ns_cnlts_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.augmented_ns_cnlts_train_set,
+            shuffled_dataset_file_path=config.shuffled_augmented_ns_cnlts_train_set_file_path)
+    elif args.goal == 'shuffled_encoded_ns_cnlts_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.encoded_ns_cnlts_train_set,
+            shuffled_dataset_file_path=config.shuffled_encoded_ns_cnlts_train_set_file_path)
     else:
         raise Exception('Unexpected goal')
 

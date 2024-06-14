@@ -8,6 +8,7 @@ from dhnamlib.pylib.filesys import jsonl_load
 from dhnamlib.pylib.decoration import construct
 from dhnamlib.pylib.mllib.dataproc import split_dataset, extract_portion
 
+from splogic.base.formalism import Formalism
 from splogic.base.grammar import read_grammar
 # from splogic.seq2seq.validation import Validator, ResultCollector
 from splogic.seq2seq.validation import NaiveDenotationEqual, Validator, DEFAULT_OPTIM_MEASURES, DEFAULT_SEARCH_MEASURES
@@ -22,7 +23,8 @@ from .lf_interface.transfer import OVERNIGHT_DOMAINS
 from .execution import OvernightContextCreater, OvernightExecutor
 from .validation import OvernightResultCollector
 # from .validation import OvernightDenotationEqual
-from .filemng import save_analysis, save_extra_performance
+# from .filemng import save_analysis, save_extra_performance
+from .filemng import OvernightFileManager
 from .dynamic_bind import DomainDynamicBinder
 from splogic.seq2seq.data_read import make_data_loader
 
@@ -43,6 +45,7 @@ def _make_grammar(**kwargs):
     from .grammar import OvernightGrammar
     return read_grammar(
         _grammar_file_path,
+        formalism=Formalism(decoding_speed_optimization=configuration.config.decoding_speed_optimization),
         grammar_cls=OvernightGrammar,
         grammar_kwargs=dict(
             pretrained_model_name_or_path=configuration.config.pretrained_model_name_or_path,
@@ -162,8 +165,9 @@ config = Environment(
     test_validator=LazyEval(_make_validator),
     search_validator=LazyEval(_make_validator),
     make_data_loader_fn=partial(make_data_loader, extra_keys=['domain']),
-    save_analysis_fn=save_analysis,
-    save_extra_performance_fn=save_extra_performance,
+    # save_analysis_fn=save_analysis,
+    # save_extra_performance_fn=save_extra_performance,
+    file_manager=OvernightFileManager(),
     evaluating_test_set=True,
 
     # generation_max_length=500,
