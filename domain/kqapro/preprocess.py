@@ -368,10 +368,15 @@ def preprocess_for_augmented_ablation_dataset(
         *,
         non_symbolic=False,
         using_common_nl_token_seq=False,
+        naive_arg_ordering=False,
         augmented_original_dataset,
         ablation_dataset_file_path,
 ):
-    grammar = _make_ablation_grammar(non_symbolic=non_symbolic, using_common_nl_token_seq=using_common_nl_token_seq)
+    grammar = _make_ablation_grammar(
+        non_symbolic=non_symbolic,
+        using_common_nl_token_seq=using_common_nl_token_seq,
+        naive_arg_ordering=naive_arg_ordering)
+
     ablation_augmented_dataset = rcopy(augmented_original_dataset)
     for example in tqdm(ablation_augmented_dataset):
         original_action_name_tree = example['action_name_tree']
@@ -389,11 +394,15 @@ def preprocess_for_encoded_ablation_dataset(
         *,
         non_symbolic=False,
         using_common_nl_token_seq=False,
+        naive_arg_ordering=False,
         augmented_dataset,
         encoded_dataset_file_path,
         example_idx_as_id=False
 ):
-    grammar = _make_ablation_grammar(non_symbolic=non_symbolic, using_common_nl_token_seq=using_common_nl_token_seq)
+    grammar = _make_ablation_grammar(
+        non_symbolic=non_symbolic,
+        using_common_nl_token_seq=using_common_nl_token_seq,
+        naive_arg_ordering=naive_arg_ordering)
 
     preprocess_for_encoded_dataset(
         grammar=grammar,
@@ -443,7 +452,14 @@ def _main():
             'encoded_ns_cnlts_train_set',
             'encoded_ns_cnlts_val_set',
             'shuffled_augmented_ns_cnlts_train_set',
-            'shuffled_encoded_ns_cnlts_train_set'
+            'shuffled_encoded_ns_cnlts_train_set',
+
+            'augmented_nao_train_set',
+            'augmented_nao_val_set',
+            'encoded_nao_train_set',
+            'encoded_nao_val_set',
+            'shuffled_augmented_nao_train_set',
+            'shuffled_encoded_nao_train_set',
         ])
 
     args = parser.parse_args(config.remaining_cmd_args)
@@ -518,6 +534,7 @@ def _main():
         preprocess_for_encoded_weaksup_search_set(
             full_dataset=config.encoded_train_set,
             weaksup_search_set_file_path=config.encoded_weaksup_search_set_file_path)
+
     elif args.goal == 'augmented_ns_train_set':
         preprocess_for_augmented_ablation_dataset(
             non_symbolic=True,
@@ -546,6 +563,7 @@ def _main():
         preprocess_for_shuffled_dataset(
             dataset=config.encoded_ns_train_set,
             shuffled_dataset_file_path=config.shuffled_encoded_ns_train_set_file_path)
+
     elif args.goal == 'augmented_cnlts_train_set':
         preprocess_for_augmented_ablation_dataset(
             using_common_nl_token_seq=True,
@@ -574,6 +592,7 @@ def _main():
         preprocess_for_shuffled_dataset(
             dataset=config.encoded_cnlts_train_set,
             shuffled_dataset_file_path=config.shuffled_encoded_cnlts_train_set_file_path)
+
     elif args.goal == 'augmented_ns_cnlts_train_set':
         preprocess_for_augmented_ablation_dataset(
             non_symbolic=True,
@@ -606,6 +625,35 @@ def _main():
         preprocess_for_shuffled_dataset(
             dataset=config.encoded_ns_cnlts_train_set,
             shuffled_dataset_file_path=config.shuffled_encoded_ns_cnlts_train_set_file_path)
+
+    elif args.goal == 'augmented_nao_train_set':
+        preprocess_for_augmented_ablation_dataset(
+            naive_arg_ordering=True,
+            augmented_original_dataset=config.augmented_train_set,
+            ablation_dataset_file_path=config.augmented_nao_train_set_file_path)
+    elif args.goal == 'augmented_nao_val_set':
+        preprocess_for_augmented_ablation_dataset(
+            naive_arg_ordering=True,
+            augmented_original_dataset=config.augmented_val_set,
+            ablation_dataset_file_path=config.augmented_nao_val_set_file_path)
+    elif args.goal == 'encoded_nao_train_set':
+        preprocess_for_encoded_ablation_dataset(
+            naive_arg_ordering=True,
+            augmented_dataset=config.augmented_nao_train_set,
+            encoded_dataset_file_path=config.encoded_nao_train_set_file_path)
+    elif args.goal == 'encoded_nao_val_set':
+        preprocess_for_encoded_ablation_dataset(
+            naive_arg_ordering=True,
+            augmented_dataset=config.augmented_nao_val_set,
+            encoded_dataset_file_path=config.encoded_nao_val_set_file_path)
+    elif args.goal == 'shuffled_augmented_nao_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.augmented_nao_train_set,
+            shuffled_dataset_file_path=config.shuffled_augmented_nao_train_set_file_path)
+    elif args.goal == 'shuffled_encoded_nao_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset=config.encoded_nao_train_set,
+            shuffled_dataset_file_path=config.shuffled_encoded_nao_train_set_file_path)
     else:
         raise Exception('Unexpected goal')
 

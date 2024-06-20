@@ -60,6 +60,13 @@ python -m domain.kqapro.preprocess --goal encoded_ns_cnlts_train_set
 python -m domain.kqapro.preprocess --goal encoded_ns_cnlts_val_set
 python -m domain.kqapro.preprocess --goal shuffled_augmented_ns_cnlts_train_set
 python -m domain.kqapro.preprocess --goal shuffled_encoded_ns_cnlts_train_set
+
+python -m domain.kqapro.preprocess --goal augmented_nao_train_set
+python -m domain.kqapro.preprocess --goal augmented_nao_val_set
+python -m domain.kqapro.preprocess --goal encoded_nao_train_set
+python -m domain.kqapro.preprocess --goal encoded_nao_val_set
+python -m domain.kqapro.preprocess --goal shuffled_augmented_nao_train_set
+python -m domain.kqapro.preprocess --goal shuffled_encoded_nao_train_set
 #+end_src
 
 ** Specifying a domain

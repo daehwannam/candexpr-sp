@@ -71,6 +71,13 @@ _encoded_ns_cnlts_val_set_file_path = './preprocessed/kqapro/encoded_ns_cnlts_va
 _shuffled_augmented_ns_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_ns_cnlts_train.jsonl'
 _shuffled_encoded_ns_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_ns_cnlts_train.jsonl'
 
+_augmented_nao_train_set_file_path = './preprocessed/kqapro/augmented_nao_train.jsonl'
+_augmented_nao_val_set_file_path = './preprocessed/kqapro/augmented_nao_val.jsonl'
+_encoded_nao_train_set_file_path = './preprocessed/kqapro/encoded_nao_train.jsonl'
+_encoded_nao_val_set_file_path = './preprocessed/kqapro/encoded_nao_val.jsonl'
+_shuffled_augmented_nao_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_nao_train.jsonl'
+_shuffled_encoded_nao_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_nao_train.jsonl'
+
 # _KQAPRO_TRAN_SET_SIZE = 94376
 _USING_SPANS_AS_ENTITIES = False
 
@@ -108,6 +115,7 @@ def _make_grammar(grammar_cls=None, **kwargs):
 def _make_ablation_grammar(
         non_symbolic=False,
         using_common_nl_token_seq=False,
+        naive_arg_ordering=False,
         **kwargs
 ):
     from .grammar import KQAProGrammar
@@ -123,6 +131,7 @@ def _make_ablation_grammar(
         common_nl_token_seq_expr_dict=make_common_nl_token_seq_expr_dict(
             lambda: configuration.config.grammar
         ),
+        naive_arg_ordering=naive_arg_ordering,
         **kwargs)
 
 
@@ -200,6 +209,13 @@ config = Environment(
     shuffled_augmented_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_ns_cnlts_train_set_file_path)),
     shuffled_encoded_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_ns_cnlts_train_set_file_path)),
 
+    augmented_nao_train_set=LazyEval(lambda: jsonl_load(_augmented_nao_train_set_file_path)),
+    augmented_nao_val_set=LazyEval(lambda: jsonl_load(_augmented_nao_val_set_file_path)),
+    encoded_nao_train_set=LazyEval(lambda: jsonl_load(_encoded_nao_train_set_file_path)),
+    encoded_nao_val_set=LazyEval(lambda: jsonl_load(_encoded_nao_val_set_file_path)),
+    shuffled_augmented_nao_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_nao_train_set_file_path)),
+    shuffled_encoded_nao_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_nao_train_set_file_path)),
+
     grammar=LazyEval(_make_grammar),
     test_validator=LazyEval(lambda: _make_validator(strict=False)),
     search_validator=LazyEval(lambda: _make_validator(strict=True)),
@@ -250,6 +266,13 @@ config = Environment(
     encoded_ns_cnlts_val_set_file_path=_encoded_ns_cnlts_val_set_file_path,
     shuffled_augmented_ns_cnlts_train_set_file_path=_shuffled_augmented_ns_cnlts_train_set_file_path,
     shuffled_encoded_ns_cnlts_train_set_file_path=_shuffled_encoded_ns_cnlts_train_set_file_path,
+
+    augmented_nao_train_set_file_path=_augmented_nao_train_set_file_path,
+    augmented_nao_val_set_file_path=_augmented_nao_val_set_file_path,
+    encoded_nao_train_set_file_path=_encoded_nao_train_set_file_path,
+    encoded_nao_val_set_file_path=_encoded_nao_val_set_file_path,
+    shuffled_augmented_nao_train_set_file_path=_shuffled_augmented_nao_train_set_file_path,
+    shuffled_encoded_nao_train_set_file_path=_shuffled_encoded_nao_train_set_file_path,
 
     # generation_max_length=500,
     generation_max_length=200,
