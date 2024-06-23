@@ -7,6 +7,8 @@ from dhnamlib.pylib.context import LazyEval
 from dhnamlib.pylib.iteration import not_none_valued_dict
 
 import configuration
+# from domain.overnight import configuration as overnight_configuration
+# from domain.overnight.lf_interface.transfer import OVERNIGHT_DOMAINS
 
 from ..common.train import get_model_learning_dir_path
 
@@ -46,6 +48,9 @@ def _get_train_domains():
 config = Environment(not_none_valued_dict(
     model_learning_dir_path=get_model_learning_dir_path(_MODEL_LEARNING_DIR_ROOT_PATH),
     train_domains=LazyEval(_get_train_domains),
+    # num_epoch_repeats=(LazyEval(lambda: overnight_configuration.NUM_ALL_DOMAIN_TRAIN_EXAMPLES / len(configuration.config.encoded_train_set))
+    #                    if len(configuration.config.train_domains) != len(OVERNIGHT_DOMAINS) else None),
+    # num_epoch_repeats=LazyEval(lambda: overnight_configuration.NUM_ALL_DOMAIN_TRAIN_EXAMPLES / len(configuration.config.encoded_train_set)),
 
     learning_rate=3e-5,
     adam_epsilon=1e-8,
@@ -56,6 +61,7 @@ config = Environment(not_none_valued_dict(
     val_batch_size=LazyEval(lambda: config.train_batch_size),
     # val_batch_size=1,
     num_train_epochs=25,
+    # num_train_epochs=40,
     using_scheduler=True,
     num_warmup_epochs=LazyEval(lambda: config.num_train_epochs / 10),
     max_grad_norm=1,

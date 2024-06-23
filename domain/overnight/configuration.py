@@ -40,6 +40,10 @@ _grammar_file_path = './domain/overnight/grammar.lissp'
 
 _NO_CONTEXT = object()
 
+NUM_ALL_DOMAIN_TRAIN_EXAMPLES = 8751
+# `NUM_ALL_DOMAIN_TRAIN_EXAMPLES` is the number of training examples of all domains.
+# The examples used for validation are not counted.
+
 
 def _make_grammar(**kwargs):
     from .grammar import OvernightGrammar
@@ -66,9 +70,9 @@ def _iter_domain_train_val_sets():
         yield domain, (train_set, val_set)
 
 
-def _load_train_set(portion_percent=100, weaksup_search=False):
+def _load_train_set(portion_percent=100, num_examples=None, weaksup_search=False):
     """
-    >>> len(_load_train_set(portion_percent=100)) == 8751  # doctest: +SKIP
+    >>> len(_load_train_set(portion_percent=100)) == NUM_ALL_DOMAIN_TRAIN_EXAMPLES  # doctest: +SKIP
     """
 
     merged_train_set = []
@@ -80,9 +84,15 @@ def _load_train_set(portion_percent=100, weaksup_search=False):
                 for key in ['logical_form', 'action_ids']:
                     del example[key]
 
-        assert 0 < portion_percent <= 100
-        _train_set = extract_portion(train_set, percent=portion_percent, round_fn=int) \
-            if portion_percent < 100 else train_set
+        if portion_percent is None:
+            assert num_examples is not None
+            assert num_examples <= len(train_set)
+            _train_set = train_set[:num_examples]
+        else:
+            assert portion_percent is not None
+            assert 0 < portion_percent <= 100
+            _train_set = extract_portion(train_set, percent=portion_percent, round_fn=int) \
+                if portion_percent < 100 else train_set
 
         merged_train_set.extend(_train_set)
 
@@ -103,6 +113,10 @@ def _load_val_set():
 
 
 def _load_test_set():
+    """2740
+    >>> len(_load_test_set()) == 2740  # doctest: +SKIP
+    """
+
     merged_test_set = []
     dataset_split = 'test'
     for domain in configuration.config.test_domains:
@@ -188,11 +202,18 @@ config = Environment(
     shuffled_encoded_dataset_dir_path=_shuffled_encoded_dataset_dir_path,
 
     train_set_portion_percent=100,
-    encoded_train_set=LazyEval(lambda: _load_train_set(portion_percent=configuration.config.train_set_portion_percent)),
+    num_used_train_examples=None,
+    encoded_train_set=LazyEval(lambda: _load_train_set(
+        portion_percent=configuration.config.train_set_portion_percent,
+        num_examples=configuration.config.num_used_train_examples,
+    )),
     encoded_val_set=LazyEval(_load_val_set),
     encoded_test_set=LazyEval(_load_test_set),
 
-    encoded_weaksup_pretraining_set=LazyEval(lambda: _load_train_set(portion_percent=_WEAKSUP_PRETRAINING_SET_PERCENT)),
+    encoded_weaksup_pretraining_set=LazyEval(lambda: _load_train_set(
+        portion_percent=_WEAKSUP_PRETRAINING_SET_PERCENT,
+        # num_examples=configuration.config.num_used_train_examples,
+    )),
     encoded_weaksup_search_set=LazyEval(lambda: _load_train_set(weaksup_search=True)),
 
     # context_creator=OvernightContextCreater(),

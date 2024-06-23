@@ -40,4 +40,4 @@ def save_extra_performance(extra_performance, dir_path, file_name='extra_perform
 class OvernightFileManager(BaseFileManager):
     save_analysis = staticmethod(override(save_analysis))
     save_extra_performance = staticmethod(override(save_extra_performance))
-    save_performance = staticmethod(curry(filemng.save_performance(value_format='{:4.1f}')))
+    save_performance = staticmethod(curry(filemng.save_performance)(value_format='{:4.1f}'))

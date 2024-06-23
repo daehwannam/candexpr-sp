@@ -78,6 +78,14 @@ UNUSED_DOMAIN='calendar'
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --unused-domain $UNUSED_DOMAIN
 #+end_src
 
+*** Training with a few examples
+#+begin_src sh
+SINGLE_DOMAIN='calendar'
+# valid sub-domains: 'calendar', 'blocks', 'housing', 'restaurants', 'publications', 'recipes', 'socialnetwork', 'basketball'
+NUM_TRAIN_EXAMPLES=200
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --single-domain $SINGLE_DOMAIN --extra-config config.${DOMAIN}.extra.train_set_size --num-train-examples $NUM_TRAIN_EXAMPLES
+#+end_src
+
 ** Testing
 *** Testing on a single sub-domain
 #+begin_src sh

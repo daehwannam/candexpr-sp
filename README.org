@@ -64,7 +64,7 @@ python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_de
 
 *** Training for multiple decoding strategies with batch_size=32
 #+begin_src sh
-python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.${DOMAIN}.batch.size=32
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.common.extra.batch.size=32
 #+end_src
 
 *** Training for multiple decoding strategies with bart-large

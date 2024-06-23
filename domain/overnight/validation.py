@@ -32,7 +32,7 @@ class OvernightResultCollector(ResultCollector):
 
             self.num_correct += sum(map(int, correctness_values))
 
-            domain_groups = partition(batch['exec_result'].domains, self.num_return_sequences)
+            domain_groups = tuple(partition(batch['exec_result'].domains, self.num_return_sequences))
             for domain_group in domain_groups:
                 assert all_same(domain_group)
             representative_domains = tuple(domain_group[0] for domain_group in domain_groups)
@@ -63,6 +63,8 @@ class OvernightResultCollector(ResultCollector):
             overall_accuracy_fraction = Fraction(overall_num_correct, overall_num_answers)
             measure_kv_list.append([accuracy_measure_name, overall_accuracy])
             measure_kv_list.append([f'{accuracy_measure_name}_fraction', overall_accuracy_fraction])
+            # measure_kv_list.append(['num_correct', overall_num_correct])
+            # measure_kv_list.append(['num_examples', overall_num_answers])
 
             for domain in self.num_domain_correct_dict:
                 overall_num_domain_correct = sum(gather_object([self.num_domain_correct_dict[domain]]))
@@ -75,6 +77,8 @@ class OvernightResultCollector(ResultCollector):
                     [accuracy_measure_name, overall_domain_accuracy])
                 domain_measure_kv_list_dict.setdefault(domain, []).append(
                     [f'{accuracy_measure_name}_fraction', overall_domain_accuracy_fraction])
+                domain_measure_kv_list_dict.setdefault(domain, []).append(['num_correct', overall_num_correct])
+                domain_measure_kv_list_dict.setdefault(domain, []).append(['num_examples', overall_num_answers])
 
         assert len(measure_names) == measure_cnt
 

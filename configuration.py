@@ -15,7 +15,7 @@ from dhnamlib.pylib.lazy import LazyProxy
 from dhnamlib.pylib.decoration import variable  # , deprecated
 from dhnamlib.pylib.filesys import json_skip_types
 from dhnamlib.pylib.filesys import (
-    json_save, InvalidObjectSkippingJSONEncoder,
+    json_pretty_save, InvalidObjectSkippingJSONEncoder,
     mkpdirs_unless_exist, make_logger, NoLogger, mkloc_unless_exist, get_new_path_with_number)
 # from dhnamlib.pylib.filesys import pickle_load
 # from dhnamlib.pylib.iteration import rcopy
@@ -239,8 +239,8 @@ def save_config_info(dir_path):
         starting_num=1, no_first_num=True
     )
     mkloc_unless_exist(config_info_path)
-    json_save(json_dict, os.path.join(config_info_path, 'config.json'), cls=InvalidObjectSkippingJSONEncoder)
-    json_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
+    json_pretty_save(json_dict, os.path.join(config_info_path, 'config.json'), cls=InvalidObjectSkippingJSONEncoder)
+    json_pretty_save(config_path_dict, os.path.join(config_info_path, 'config-path.json'))
     shutil.copytree('./config', os.path.join(config_info_path, 'config'))
     shutil.copyfile('./configuration.py', os.path.join(config_info_path, 'configuration.py'))
     shutil.copyfile(f'./domain/{config.domain_name}/configuration.py',

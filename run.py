@@ -77,6 +77,7 @@ def run_train(
         num_prediction_beams=config.ph,
         generation_max_length=config.ph,
         saving_optimizer=config.ph,
+        num_epoch_repeats=config.ph(1),
         weaksup_learning=config.ph(False),
         make_data_loader_fn=config.ph,
         file_manager=config.ph,
@@ -121,6 +122,7 @@ def run_train(
         pad_token_id=grammar.lf_tokenizer.pad_token_id,
         batch_size=train_batch_size,
         shuffle=True,
+        num_epoch_repeats=num_epoch_repeats,
         max_num_action_seqs=train_max_num_action_seqs,
     )
     val_data_loader = make_data_loader_fn(
