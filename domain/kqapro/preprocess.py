@@ -14,7 +14,7 @@ from .configuration import _make_grammar, _make_ablation_grammar
 from dhnamlib.pylib.filesys import jsonl_save, pickle_save, mkpdirs_unless_exist
 from dhnamlib.pylib.time import TimeMeasure
 from dhnamlib.pylib.iteration import rcopy, flatten, rmap
-from dhnamlib.pylib.decoration import construct
+from dhnamlib.pylib.decoration import construct, deprecated
 
 from splogic.seq2seq import learning
 from splogic.seq2seq.dynamic_bind import UtteranceSpanTrieDynamicBinder
@@ -197,13 +197,16 @@ def encode_dataset(grammar, augmented_dataset, example_idx_as_id=False):
             encoded_example.update(answer=example['answer'])
 
         if 'action_name_tree' in example:
-            action_name_seq = flatten(example['action_name_tree'])
+            assert 'action_name_seq' not in example
+            action_name_tree = example['action_name_tree']
+            # assert action_name_tree[0] is the first action's name
+            action_id_tree = list(chain(
+                [grammar.lf_tokenizer.bos_token_id],
+                rmap(grammar.name_to_id, action_name_tree, coll_fn=list),
+                [grammar.lf_tokenizer.eos_token_id]))
+            encoded_example.update(action_id_tree=action_id_tree)
         elif 'action_name_seq' in example:
             action_name_seq = example['action_name_seq']
-        else:
-            action_name_seq = None
-
-        if action_name_seq is not None:
             action_ids = list(chain(
                 [grammar.lf_tokenizer.bos_token_id],
                 map(grammar.name_to_id, action_name_seq),
@@ -229,6 +232,7 @@ def preprocess_for_encoded_dataset(
     print(f'The encoded dataset was saved as {encoded_dataset_file_path}')
 
 
+@deprecated
 @construct(list)
 def encode_mask(grammar, encoded_dataset):
     for example in tqdm(encoded_dataset):
@@ -242,6 +246,7 @@ def encode_mask(grammar, encoded_dataset):
                    nll_mask=nll_mask)
 
 
+@deprecated
 @config
 def preprocess_for_encoded_mask(
         *,

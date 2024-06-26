@@ -1,0 +1,28 @@
+
+* Running
+** Training with logical forms
+*** Training with grammar ablation
+#+begin_src sh
+ABLATION=ns  # ns, cnlts, nao, ...
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --extra-config config.${DOMAIN}.extra.grammar.${ABLATION}
+#+end_src
+
+*** Training with grammar ablation and with a portion of the train set
+#+begin_src sh
+ABLATION=ns  # ns, cnlts, nao, ...
+PERCENT=3  # between 0 to 100
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --extra-config "config.${DOMAIN}.extra.grammar.${ABLATION}|config.${DOMAIN}.extra.train_set_portion" --train-set-percent $PERCENT
+#+end_src
+
+** Testing
+*** Testing with grammar ablation
+#+begin_src sh
+ABLATION=ns  # ns, cnlts, nao, ...
+TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH="model-test/${DOMAIN}/result"
+# e.g. TEST_DIR_PATH="./model-test/${DOMAIN}/2023-07-19_01:17:04_094104_full-constraints:best/model"
+
+python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH \
+       --extra-config config.${DOMAIN}.extra.grammar.${ABLATION}
+#+end_src

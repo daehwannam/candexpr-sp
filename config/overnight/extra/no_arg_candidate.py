@@ -7,7 +7,7 @@ from domain.overnight import configuration
 
 
 _action_names_for_arg_candidate = set([
-    'Keyword-ent-type',
+    'keyword-ent-type',
     'keyword-relation-entity',
     'keyword-relation-bool',
     'keyword-relation-numeric',

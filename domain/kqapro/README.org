@@ -39,34 +39,6 @@ python -m domain.kqapro.preprocess --goal encoded_strict_val_set
 python -m domain.kqapro.preprocess --goal shuffled_augmented_strict_train_set
 python -m domain.kqapro.preprocess --goal shuffled_encoded_strict_train_set
 python -m domain.kqapro.preprocess --goal encoded_weaksup_pretraining_set
-
-python -m domain.kqapro.preprocess --goal augmented_ns_train_set
-python -m domain.kqapro.preprocess --goal augmented_ns_val_set
-python -m domain.kqapro.preprocess --goal encoded_ns_train_set
-python -m domain.kqapro.preprocess --goal encoded_ns_val_set
-python -m domain.kqapro.preprocess --goal shuffled_augmented_ns_train_set
-python -m domain.kqapro.preprocess --goal shuffled_encoded_ns_train_set
-
-python -m domain.kqapro.preprocess --goal augmented_cnlts_train_set
-python -m domain.kqapro.preprocess --goal augmented_cnlts_val_set
-python -m domain.kqapro.preprocess --goal encoded_cnlts_train_set
-python -m domain.kqapro.preprocess --goal encoded_cnlts_val_set
-python -m domain.kqapro.preprocess --goal shuffled_augmented_cnlts_train_set
-python -m domain.kqapro.preprocess --goal shuffled_encoded_cnlts_train_set
-
-python -m domain.kqapro.preprocess --goal augmented_ns_cnlts_train_set
-python -m domain.kqapro.preprocess --goal augmented_ns_cnlts_val_set
-python -m domain.kqapro.preprocess --goal encoded_ns_cnlts_train_set
-python -m domain.kqapro.preprocess --goal encoded_ns_cnlts_val_set
-python -m domain.kqapro.preprocess --goal shuffled_augmented_ns_cnlts_train_set
-python -m domain.kqapro.preprocess --goal shuffled_encoded_ns_cnlts_train_set
-
-python -m domain.kqapro.preprocess --goal augmented_nao_train_set
-python -m domain.kqapro.preprocess --goal augmented_nao_val_set
-python -m domain.kqapro.preprocess --goal encoded_nao_train_set
-python -m domain.kqapro.preprocess --goal encoded_nao_val_set
-python -m domain.kqapro.preprocess --goal shuffled_augmented_nao_train_set
-python -m domain.kqapro.preprocess --goal shuffled_encoded_nao_train_set
 #+end_src
 
 ** Specifying a domain

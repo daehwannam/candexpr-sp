@@ -52,7 +52,7 @@ def main():
 """
 Example
   BASE_DIR_PATH=model-test/overnight/some-result
-  DECODING_TYPE=full-constraints
+  DECODING_TYPE=full-constraints:best  # full-constraints:best, no-arg-candidate:best, no-ac-no-dut:best, no-constrained-decoding:best
   python -m domain.overnight.merge_result $BASE_DIR_PATH/*/$DECODING_TYPE/extra_performance.json
 """
 
