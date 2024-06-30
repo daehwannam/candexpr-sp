@@ -69,7 +69,12 @@ python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_de
 
 *** Training for multiple decoding strategies with bart-large
 #+begin_src sh
-python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.common.extra.bart-large
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.common.extra.bart_large
+#+end_src
+
+*** Training with the re-split dataset
+#+begin_src sh
+python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.${DOMAIN}.extra.resplit_dataset
 #+end_src
 
 ** Training with denotations
@@ -222,6 +227,16 @@ $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 TEST_DIR_PATH="model-test/${DOMAIN}/result:no-constrained-decoding"
 EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
+#+end_src
+
+*** Testing on a re-split test set
+#+begin_src sh
+TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH="model-test/${DOMAIN}/result"
+# e.g. TEST_DIR_PATH="./model-test/${DOMAIN}/2023-07-19_01:17:04_094104_full-constraints:best/model"
+
+python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH --extra-config config.${DOMAIN}.extra.resplit_dataset
 #+end_src
 
 ** Miscellaneous

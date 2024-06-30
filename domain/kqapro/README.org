@@ -39,6 +39,8 @@ python -m domain.kqapro.preprocess --goal encoded_strict_val_set
 python -m domain.kqapro.preprocess --goal shuffled_augmented_strict_train_set
 python -m domain.kqapro.preprocess --goal shuffled_encoded_strict_train_set
 python -m domain.kqapro.preprocess --goal encoded_weaksup_pretraining_set
+python -m domain.kqapro.preprocess --goal encoded_weaksup_search_set
+python -m domain.kqapro.preprocess --goal encoded_resplit_datasets
 #+end_src
 
 ** Specifying a domain

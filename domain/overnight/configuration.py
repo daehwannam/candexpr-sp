@@ -6,7 +6,7 @@ from dhnamlib.pylib.context import Environment, LazyEval
 from dhnamlib.pylib.debug import NIE
 from dhnamlib.pylib.filesys import jsonl_load
 from dhnamlib.pylib.decoration import construct
-from dhnamlib.pylib.mllib.dataproc import split_dataset, extract_portion
+from dhnamlib.pylib.mllib.dataproc import split_train_val, extract_portion
 
 from splogic.base.formalism import Formalism
 from splogic.base.grammar import read_grammar
@@ -66,7 +66,7 @@ def _iter_domain_train_val_sets():
     for domain in configuration.config.train_domains:
         dataset = jsonl_load(get_preprocessed_dataset_file_path(
             configuration.config.shuffled_encoded_dataset_dir_path, domain, dataset_split))
-        train_set, val_set = split_dataset(dataset, ratio=_TRAIN_SET_RATIO, round_fn=int)
+        train_set, val_set = split_train_val(dataset, ratio=_TRAIN_SET_RATIO, round_fn=int)
         yield domain, (train_set, val_set)
 
 

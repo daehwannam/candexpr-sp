@@ -10,7 +10,7 @@ from meta_configuration import set_default_domain_name
 set_default_domain_name('overnight')  # Call `set_default_domain_name` before the `configuration` module is loaded.
 from configuration import config
 
-from dhnamlib.pylib.iteration import rmap, flatten, dropfirst
+from dhnamlib.pylib.iteration import rmap, flatten
 from dhnamlib.pylib.filesys import jsonl_save, jsonl_load, mkpdirs_unless_exist, pandas_tsv_load
 # from dhnamlib.pylib.filesys import jsonl_save, pickle_save, mkpdirs_unless_exist, pandas_tsv_load
 # from dhnamlib.pylib.time import TimeMeasure
@@ -140,11 +140,13 @@ def encode_dataset(grammar, augmented_dataset):
             encoded_example.update(logical_form=example['logical_form'])
 
         if 'action_name_tree' in example:
-            action_ids = list(chain(
+            _action_name_tree = example['action_name_tree']
+            assert _action_name_tree[0] == grammar.start_action.name
+            action_id_tree = list(chain(
                 [grammar.lf_tokenizer.bos_token_id],
-                map(grammar.name_to_id, dropfirst(flatten(example['action_name_tree']), 1)),
+                rmap(grammar.name_to_id, _action_name_tree[1:], coll_fn=list),
                 [grammar.lf_tokenizer.eos_token_id]))
-            encoded_example.update(action_ids=action_ids)
+            encoded_example.update(action_id_tree=action_id_tree)
 
         yield encoded_example
 

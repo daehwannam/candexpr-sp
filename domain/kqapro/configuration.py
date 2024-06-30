@@ -3,7 +3,7 @@ from functools import cache
 
 from dhnamlib.pylib.context import Environment, LazyEval, suppress_stdout, suppress_stderr, contextless, context_nest
 from dhnamlib.pylib.filesys import json_load, jsonl_load
-from dhnamlib.pylib.klass import subclass, implement
+# from dhnamlib.pylib.klass import subclass, implement
 
 from splogic.base.grammar import read_grammar
 from splogic.utility.acceleration import accelerator
@@ -50,33 +50,12 @@ _shuffled_encoded_strict_train_set_file_path = './preprocessed/kqapro/shuffled_e
 _encoded_weaksup_pretraining_set_file_path = './preprocessed/kqapro/encoded_weaksup_pretraining.jsonl'
 _encoded_weaksup_search_set_file_path = './preprocessed/kqapro/encoded_weaksup_search.jsonl'
 
-_augmented_ns_train_set_file_path = './preprocessed/kqapro/augmented_ns_train.jsonl'
-_augmented_ns_val_set_file_path = './preprocessed/kqapro/augmented_ns_val.jsonl'
-_encoded_ns_train_set_file_path = './preprocessed/kqapro/encoded_ns_train.jsonl'
-_encoded_ns_val_set_file_path = './preprocessed/kqapro/encoded_ns_val.jsonl'
-_shuffled_augmented_ns_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_ns_train.jsonl'
-_shuffled_encoded_ns_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_ns_train.jsonl'
+_encoded_resplit_train_set_file_path = './preprocessed/kqapro/encoded_resplit_train.jsonl'
+_encoded_resplit_val_set_file_path = './preprocessed/kqapro/encoded_resplit_val.jsonl'
+_encoded_resplit_test_set_file_path = './preprocessed/kqapro/encoded_resplit_test.jsonl'
 
-_augmented_cnlts_train_set_file_path = './preprocessed/kqapro/augmented_cnlts_train.jsonl'
-_augmented_cnlts_val_set_file_path = './preprocessed/kqapro/augmented_cnlts_val.jsonl'
-_encoded_cnlts_train_set_file_path = './preprocessed/kqapro/encoded_cnlts_train.jsonl'
-_encoded_cnlts_val_set_file_path = './preprocessed/kqapro/encoded_cnlts_val.jsonl'
-_shuffled_augmented_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_cnlts_train.jsonl'
-_shuffled_encoded_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_cnlts_train.jsonl'
+# Miscellaneous file paths
 
-_augmented_ns_cnlts_train_set_file_path = './preprocessed/kqapro/augmented_ns_cnlts_train.jsonl'
-_augmented_ns_cnlts_val_set_file_path = './preprocessed/kqapro/augmented_ns_cnlts_val.jsonl'
-_encoded_ns_cnlts_train_set_file_path = './preprocessed/kqapro/encoded_ns_cnlts_train.jsonl'
-_encoded_ns_cnlts_val_set_file_path = './preprocessed/kqapro/encoded_ns_cnlts_val.jsonl'
-_shuffled_augmented_ns_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_ns_cnlts_train.jsonl'
-_shuffled_encoded_ns_cnlts_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_ns_cnlts_train.jsonl'
-
-_augmented_nao_train_set_file_path = './preprocessed/kqapro/augmented_nao_train.jsonl'
-_augmented_nao_val_set_file_path = './preprocessed/kqapro/augmented_nao_val.jsonl'
-_encoded_nao_train_set_file_path = './preprocessed/kqapro/encoded_nao_train.jsonl'
-_encoded_nao_val_set_file_path = './preprocessed/kqapro/encoded_nao_val.jsonl'
-_shuffled_augmented_nao_train_set_file_path = './preprocessed/kqapro/shuffled_augmented_nao_train.jsonl'
-_shuffled_encoded_nao_train_set_file_path = './preprocessed/kqapro/shuffled_encoded_nao_train.jsonl'
 
 # _KQAPRO_TRAN_SET_SIZE = 94376
 _USING_SPANS_AS_ENTITIES = False
@@ -187,34 +166,9 @@ config = Environment(
     shuffled_encoded_strict_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_strict_train_set_file_path)),
     encoded_weaksup_pretraining_set=LazyEval(lambda: jsonl_load(_encoded_weaksup_pretraining_set_file_path)),
     encoded_weaksup_search_set=LazyEval(lambda: jsonl_load(_encoded_weaksup_search_set_file_path)),
-
-    augmented_ns_train_set=LazyEval(lambda: jsonl_load(_augmented_ns_train_set_file_path)),
-    augmented_ns_val_set=LazyEval(lambda: jsonl_load(_augmented_ns_val_set_file_path)),
-    encoded_ns_train_set=LazyEval(lambda: jsonl_load(_encoded_ns_train_set_file_path)),
-    encoded_ns_val_set=LazyEval(lambda: jsonl_load(_encoded_ns_val_set_file_path)),
-    shuffled_augmented_ns_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_ns_train_set_file_path)),
-    shuffled_encoded_ns_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_ns_train_set_file_path)),
-
-    augmented_cnlts_train_set=LazyEval(lambda: jsonl_load(_augmented_cnlts_train_set_file_path)),
-    augmented_cnlts_val_set=LazyEval(lambda: jsonl_load(_augmented_cnlts_val_set_file_path)),
-    encoded_cnlts_train_set=LazyEval(lambda: jsonl_load(_encoded_cnlts_train_set_file_path)),
-    encoded_cnlts_val_set=LazyEval(lambda: jsonl_load(_encoded_cnlts_val_set_file_path)),
-    shuffled_augmented_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_cnlts_train_set_file_path)),
-    shuffled_encoded_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_cnlts_train_set_file_path)),
-
-    augmented_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_augmented_ns_cnlts_train_set_file_path)),
-    augmented_ns_cnlts_val_set=LazyEval(lambda: jsonl_load(_augmented_ns_cnlts_val_set_file_path)),
-    encoded_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_encoded_ns_cnlts_train_set_file_path)),
-    encoded_ns_cnlts_val_set=LazyEval(lambda: jsonl_load(_encoded_ns_cnlts_val_set_file_path)),
-    shuffled_augmented_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_ns_cnlts_train_set_file_path)),
-    shuffled_encoded_ns_cnlts_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_ns_cnlts_train_set_file_path)),
-
-    augmented_nao_train_set=LazyEval(lambda: jsonl_load(_augmented_nao_train_set_file_path)),
-    augmented_nao_val_set=LazyEval(lambda: jsonl_load(_augmented_nao_val_set_file_path)),
-    encoded_nao_train_set=LazyEval(lambda: jsonl_load(_encoded_nao_train_set_file_path)),
-    encoded_nao_val_set=LazyEval(lambda: jsonl_load(_encoded_nao_val_set_file_path)),
-    shuffled_augmented_nao_train_set=LazyEval(lambda: jsonl_load(_shuffled_augmented_nao_train_set_file_path)),
-    shuffled_encoded_nao_train_set=LazyEval(lambda: jsonl_load(_shuffled_encoded_nao_train_set_file_path)),
+    encoded_resplit_train_set=LazyEval(lambda: jsonl_load(_encoded_resplit_train_set_file_path)),
+    encoded_resplit_val_set=LazyEval(lambda: jsonl_load(_encoded_resplit_val_set_file_path)),
+    encoded_resplit_test_set=LazyEval(lambda: jsonl_load(_encoded_resplit_test_set_file_path)),
 
     grammar=LazyEval(_make_grammar),
     test_validator=LazyEval(lambda: _make_validator(strict=False)),
@@ -245,34 +199,9 @@ config = Environment(
     shuffled_encoded_strict_train_set_file_path=_shuffled_encoded_strict_train_set_file_path,
     encoded_weaksup_pretraining_set_file_path=_encoded_weaksup_pretraining_set_file_path,
     encoded_weaksup_search_set_file_path=_encoded_weaksup_search_set_file_path,
-
-    augmented_ns_train_set_file_path=_augmented_ns_train_set_file_path,
-    augmented_ns_val_set_file_path=_augmented_ns_val_set_file_path,
-    encoded_ns_train_set_file_path=_encoded_ns_train_set_file_path,
-    encoded_ns_val_set_file_path=_encoded_ns_val_set_file_path,
-    shuffled_augmented_ns_train_set_file_path=_shuffled_augmented_ns_train_set_file_path,
-    shuffled_encoded_ns_train_set_file_path=_shuffled_encoded_ns_train_set_file_path,
-
-    augmented_cnlts_train_set_file_path=_augmented_cnlts_train_set_file_path,
-    augmented_cnlts_val_set_file_path=_augmented_cnlts_val_set_file_path,
-    encoded_cnlts_train_set_file_path=_encoded_cnlts_train_set_file_path,
-    encoded_cnlts_val_set_file_path=_encoded_cnlts_val_set_file_path,
-    shuffled_augmented_cnlts_train_set_file_path=_shuffled_augmented_cnlts_train_set_file_path,
-    shuffled_encoded_cnlts_train_set_file_path=_shuffled_encoded_cnlts_train_set_file_path,
-
-    augmented_ns_cnlts_train_set_file_path=_augmented_ns_cnlts_train_set_file_path,
-    augmented_ns_cnlts_val_set_file_path=_augmented_ns_cnlts_val_set_file_path,
-    encoded_ns_cnlts_train_set_file_path=_encoded_ns_cnlts_train_set_file_path,
-    encoded_ns_cnlts_val_set_file_path=_encoded_ns_cnlts_val_set_file_path,
-    shuffled_augmented_ns_cnlts_train_set_file_path=_shuffled_augmented_ns_cnlts_train_set_file_path,
-    shuffled_encoded_ns_cnlts_train_set_file_path=_shuffled_encoded_ns_cnlts_train_set_file_path,
-
-    augmented_nao_train_set_file_path=_augmented_nao_train_set_file_path,
-    augmented_nao_val_set_file_path=_augmented_nao_val_set_file_path,
-    encoded_nao_train_set_file_path=_encoded_nao_train_set_file_path,
-    encoded_nao_val_set_file_path=_encoded_nao_val_set_file_path,
-    shuffled_augmented_nao_train_set_file_path=_shuffled_augmented_nao_train_set_file_path,
-    shuffled_encoded_nao_train_set_file_path=_shuffled_encoded_nao_train_set_file_path,
+    encoded_resplit_train_set_file_path=_encoded_resplit_train_set_file_path,
+    encoded_resplit_val_set_file_path=_encoded_resplit_val_set_file_path,
+    encoded_resplit_test_set_file_path=_encoded_resplit_test_set_file_path,
 
     # generation_max_length=500,
     generation_max_length=200,
