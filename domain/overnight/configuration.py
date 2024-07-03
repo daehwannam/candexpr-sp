@@ -35,6 +35,9 @@ _raw_dataset_dir_path = './dataset/overnight'
 _augmented_dataset_dir_path = './preprocessed/overnight/augmented'
 _encoded_dataset_dir_path = './preprocessed/overnight/encoded'
 _shuffled_encoded_dataset_dir_path = './preprocessed/overnight/shuffled_encoded'
+_augmented_strict_dataset_dir_path = './preprocessed/overnight/augmented_strict'
+_encoded_strict_dataset_dir_path = './preprocessed/overnight/encoded_strict'
+_shuffled_encoded_strict_dataset_dir_path = './preprocessed/overnight/shuffled_encoded_strict'
 
 _grammar_file_path = './domain/overnight/grammar.lissp'
 
@@ -64,6 +67,7 @@ _WEAKSUP_PRETRAINING_SET_PERCENT = 1
 def _iter_domain_train_val_sets():
     dataset_split = 'train'
     for domain in configuration.config.train_domains:
+        assert 'shuffled' in configuration.config.shuffled_encoded_dataset_dir_path
         dataset = jsonl_load(get_preprocessed_dataset_file_path(
             configuration.config.shuffled_encoded_dataset_dir_path, domain, dataset_split))
         train_set, val_set = split_train_val(dataset, ratio=_TRAIN_SET_RATIO, round_fn=int)
@@ -113,7 +117,7 @@ def _load_val_set():
 
 
 def _load_test_set():
-    """2740
+    """
     >>> len(_load_test_set()) == 2740  # doctest: +SKIP
     """
 
@@ -200,6 +204,9 @@ config = Environment(
     augmented_dataset_dir_path=_augmented_dataset_dir_path,
     encoded_dataset_dir_path=_encoded_dataset_dir_path,
     shuffled_encoded_dataset_dir_path=_shuffled_encoded_dataset_dir_path,
+    augmented_strict_dataset_dir_path=_augmented_strict_dataset_dir_path,
+    encoded_strict_dataset_dir_path=_encoded_strict_dataset_dir_path,
+    shuffled_encoded_strict_dataset_dir_path=_shuffled_encoded_strict_dataset_dir_path,
 
     train_set_portion_percent=100,
     num_used_train_examples=None,

@@ -288,7 +288,8 @@ def augment_dataset_with_strict_grammar(augmented_dataset, grammar):
         action_tree = grammar.strict_type_processing.get_strictly_typed_action_tree(
             grammar,
             action_name_tree=example['action_name_tree'],
-            dynamic_binding=dynamic_binding)
+            dynamic_binding=dynamic_binding,
+            including_start_action=False)
         action_name_tree = rmap(lambda action: action.name, action_tree)
 
         new_example = dict(example)

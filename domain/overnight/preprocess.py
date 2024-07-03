@@ -21,7 +21,7 @@ from splogic.base.execution import ExprCompiler
 # from splogic.seq2seq.dynamic_bind import UtteranceSpanTrieDynamicBinder
 # from splogic.base.formalism import InvalidCandidateActionError
 
-# from .configuration import _make_grammar
+from .configuration import _make_grammar
 from .dynamic_bind import DomainDynamicBinder
 from .execution import OvernightExecutor
 from .path import get_original_dataset_file_path, get_preprocessed_dataset_file_path
@@ -203,6 +203,64 @@ def preprocess_for_shuffled_dataset(
         print(f'The shuffled dataset was saved as {shuffled_dataset_file_path}')
 
 
+@construct(list)
+def augment_dataset_with_strict_grammar(domain, augmented_dataset, grammar):
+    assert grammar.inferencing_subtypes is False
+    dynamic_binder = DomainDynamicBinder()
+    dynamic_binding = dynamic_binder.bind_example(dict(domain=domain), grammar=grammar)
+    for example in tqdm(augmented_dataset):
+        old_action_name_tree = example['action_name_tree']
+        assert old_action_name_tree[0] == grammar.start_action.name
+        action_tree = grammar.strict_type_processing.get_strictly_typed_action_tree(
+            grammar,
+            action_name_tree=old_action_name_tree[1:],
+            dynamic_binding=dynamic_binding,
+            including_start_action=True)
+
+        new_action_name_tree = rmap(lambda action: action.name, action_tree)
+
+        new_example = dict(example)
+        new_example['action_name_tree'] = new_action_name_tree
+        yield new_example
+
+
+def preprocess_for_augmented_strict_dataset(
+        *,
+        augmented_dataset_dir_path,
+        augmented_strict_dataset_dir_path,
+        all_domains=config.ph,
+        dataset_split
+):
+    grammar = _make_grammar(inferencing_subtypes=False)
+
+    for domain in all_domains:
+        augmented_dataset_file_path = get_preprocessed_dataset_file_path(augmented_dataset_dir_path, domain, dataset_split)
+        augmented_strict_dataset_file_path = get_preprocessed_dataset_file_path(augmented_strict_dataset_dir_path, domain, dataset_split)
+
+        augmented_dataset = jsonl_load(augmented_dataset_file_path)
+        augmented_strict_dataset = augment_dataset_with_strict_grammar(domain, augmented_dataset, grammar)
+
+        mkpdirs_unless_exist(augmented_strict_dataset_file_path)
+        jsonl_save(augmented_strict_dataset, augmented_strict_dataset_file_path)
+        print(f'The augmented strict dataset was saved as {augmented_strict_dataset_file_path}')
+
+
+def preprocess_for_encoded_strict_dataset(
+        *,
+        augmented_strict_dataset_dir_path,
+        encoded_strict_dataset_dir_path,
+        dataset_split,
+):
+    grammar = _make_grammar(inferencing_subtypes=False)
+
+    preprocess_for_encoded_dataset(
+        grammar=grammar,
+        augmented_dataset_dir_path=augmented_strict_dataset_dir_path,
+        encoded_dataset_dir_path=encoded_strict_dataset_dir_path,
+        dataset_split=dataset_split,
+    )
+
+
 def _main():
     parser = ArgumentParser(description='Preprocess KoPL dataset',)
     parser.add_argument(
@@ -212,7 +270,13 @@ def _main():
             'augmented_test_set',
             'encoded_train_set',
             'encoded_test_set',
-            'shuffled_encoded_train_set'
+            'shuffled_encoded_train_set',
+
+            'augmented_strict_train_set',
+            'augmented_strict_test_set',
+            'encoded_strict_train_set',
+            'encoded_strict_test_set',
+            'shuffled_encoded_strict_train_set',
         ])
 
     args = parser.parse_args(config.remaining_cmd_args)
@@ -251,6 +315,36 @@ def _main():
         preprocess_for_shuffled_dataset(
             dataset_dir_path=config.encoded_dataset_dir_path,
             shuffled_dataset_dir_path=config.shuffled_encoded_dataset_dir_path,
+            dataset_split='train'
+        )
+    elif args.goal == 'augmented_strict_train_set':
+        preprocess_for_augmented_strict_dataset(
+            augmented_dataset_dir_path=config.augmented_dataset_dir_path,
+            augmented_strict_dataset_dir_path=config.augmented_strict_dataset_dir_path,
+            dataset_split='train'
+        )
+    elif args.goal == 'augmented_strict_test_set':
+        preprocess_for_augmented_strict_dataset(
+            augmented_dataset_dir_path=config.augmented_dataset_dir_path,
+            augmented_strict_dataset_dir_path=config.augmented_strict_dataset_dir_path,
+            dataset_split='test'
+        )
+    elif args.goal == 'encoded_strict_train_set':
+        preprocess_for_encoded_strict_dataset(
+            augmented_strict_dataset_dir_path=config.augmented_strict_dataset_dir_path,
+            encoded_strict_dataset_dir_path=config.encoded_strict_dataset_dir_path,
+            dataset_split='train'
+        )
+    elif args.goal == 'encoded_strict_test_set':
+        preprocess_for_encoded_strict_dataset(
+            augmented_strict_dataset_dir_path=config.augmented_strict_dataset_dir_path,
+            encoded_strict_dataset_dir_path=config.encoded_strict_dataset_dir_path,
+            dataset_split='test'
+        )
+    elif args.goal == 'shuffled_encoded_strict_train_set':
+        preprocess_for_shuffled_dataset(
+            dataset_dir_path=config.encoded_strict_dataset_dir_path,
+            shuffled_dataset_dir_path=config.shuffled_encoded_strict_dataset_dir_path,
             dataset_split='train'
         )
     else:

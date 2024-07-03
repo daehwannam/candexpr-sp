@@ -82,8 +82,11 @@ def predict(args, model, data, device, tokenizer, executor, postprocessing_answe
 
             all_outputs.extend(outputs.cpu().numpy())
 
+        logger = register.retrieve('logger')
         if verbose:
-            print('Total decoding time: {} second'.format(total_decoding_time))
+            logger.info('Total decoding time: {} second'.format(total_decoding_time))
+            logger.info('Average decoding time: {} second'.format(total_decoding_time / len(data.dataset)))
+            logger.info('Average decoding time: {:.2f} millisecond'.format((total_decoding_time * 1000) / len(data.dataset)))
 
         outputs = [tokenizer.decode(output_id, skip_special_tokens = True, clean_up_tokenization_spaces = True) for output_id in all_outputs]
         with open(os.path.join(args.save_dir, 'predict.txt'), 'w') as f:
@@ -139,8 +142,11 @@ def validate(model, data, device, tokenizer, executor, postprocessing_answer: bo
             all_outputs.extend(batch_outputs.cpu().numpy())
             all_answers.extend(answer.cpu().numpy())
 
+        logger = register.retrieve('logger')
         if verbose:
-            print('Total decoding time: {} second'.format(total_decoding_time))
+            logger.info('Total decoding time: {} second'.format(total_decoding_time))
+            logger.info('Average decoding time: {} second'.format(total_decoding_time / len(data.dataset)))
+            logger.info('Average decoding time: {:.2f} millisecond'.format((total_decoding_time * 1000) / len(data.dataset)))
         
         outputs = [tokenizer.decode(output_id, skip_special_tokens = True, clean_up_tokenization_spaces = True) for output_id in all_outputs]
         given_answer = [data.vocab['answer_idx_to_token'][a] for a in all_answers]

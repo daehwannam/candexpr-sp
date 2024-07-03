@@ -56,6 +56,12 @@ python -m domain.overnight.preprocess --goal augmented_test_set
 python -m domain.overnight.preprocess --goal encoded_train_set
 python -m domain.overnight.preprocess --goal encoded_test_set
 python -m domain.overnight.preprocess --goal shuffled_encoded_train_set
+
+python -m domain.overnight.preprocess --goal augmented_strict_train_set
+python -m domain.overnight.preprocess --goal augmented_strict_test_set
+python -m domain.overnight.preprocess --goal encoded_strict_train_set
+python -m domain.overnight.preprocess --goal encoded_strict_test_set
+python -m domain.overnight.preprocess --goal shuffled_encoded_strict_train_set
 #+end_src
 
 ** Specifying a domain
