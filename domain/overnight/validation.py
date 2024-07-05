@@ -8,6 +8,8 @@ from dhnamlib.pylib.iteration import partition, all_same
 
 from splogic.seq2seq.validation import ResultCollector, compute_correctness, DenotationEqual
 
+from .lf_interface.transfer import OVERNIGHT_DOMAINS
+
 
 @subclass
 class OvernightResultCollector(ResultCollector):
@@ -66,9 +68,37 @@ class OvernightResultCollector(ResultCollector):
             # measure_kv_list.append(['num_correct', overall_num_correct])
             # measure_kv_list.append(['num_examples', overall_num_answers])
 
-            for domain in self.num_domain_correct_dict:
-                overall_num_domain_correct = sum(gather_object([self.num_domain_correct_dict[domain]]))
-                overall_num_domain_examples = sum(gather_object([self.num_domain_examples_dict[domain]]))
+            # DEBUG_CNT = 0
+            for domain in OVERNIGHT_DOMAINS:
+                # DEBUG_CNT += 1
+                # if DEBUG_CNT == 8:
+                #     from splogic.utility.acceleration import accelerator; from remote_pdb import RemotePdb; RemotePdb('127.0.0.1', 60000 + accelerator.process_index).set_trace()
+
+                # # from splogic.utility.acceleration import accelerator; from remote_pdb import RemotePdb; RemotePdb('127.0.0.1', 60000 + accelerator.process_index).set_trace()
+                # try:            # debug
+                #     overall_num_domain_correct = sum(gather_object([self.num_domain_correct_dict[domain]]))
+                # except Exception as e:         # debug
+                #     print('Error occured')
+                #     from splogic.utility.acceleration import accelerator; from remote_pdb import RemotePdb; RemotePdb('127.0.0.1', 60000 + accelerator.process_index).set_trace()
+                #     print(e)
+                #     # overall_num_domain_correct = sum(gather_object([self.num_domain_correct_dict[domain]]))  # debug
+                # else:
+                #     # from splogic.utility.acceleration import accelerator; from remote_pdb import RemotePdb; RemotePdb('127.0.0.1', 60000 + accelerator.process_index).set_trace()
+                #     print(overall_num_domain_correct)
+
+                # ============================================================================================================
+                # Note
+                #
+                # When multiple GPUs and processes are used,
+                # `self.num_domain_correct_dict` and `self.num_domain_examples_dict` may not include all 8 domains.
+                # Because the test examples are merged before spread to multiple processes,
+                # each process has a different number of examples.
+                # Therefore, the for loop should repeat on all domains in `OVERNIGHT_DOMAINS`,
+                # and `dict.get` should be used for `self.num_domain_correct_dict` and `self.num_domain_examples_dict`
+                # where the default value of `dict.get` should be 0.
+                # ============================================================================================================
+                overall_num_domain_correct = sum(gather_object([self.num_domain_correct_dict.get(domain, 0)]))
+                overall_num_domain_examples = sum(gather_object([self.num_domain_examples_dict.get(domain, 0)]))
 
                 overall_domain_accuracy = overall_num_domain_correct / overall_num_domain_examples
                 overall_domain_accuracy_fraction = Fraction(overall_num_domain_correct, overall_num_domain_examples)

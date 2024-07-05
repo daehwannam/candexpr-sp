@@ -101,28 +101,21 @@ ACCELERATE_CONFIG="accelerate/${NUM_GPUS}gpus.yaml"
 #+end_src
 
 **** Configuration for a decoding method
-***** Fully-constrained decoding
 #+begin_src sh
-DECODING=full-constraints
-EXTRA_OPTIONS=''
-#+end_src
+DECODING='full-constraints'  # one of full-constraints, no-arg-candidate, no-ac-no-dut, no-constrained-decoding
 
-***** Without arg-candidate
-#+begin_src sh
-DECODING=no-arg-candidate
-EXTRA_OPTIONS='--extra-config config.common.extra.using_arg_candidate=False'
-#+end_src
-
-***** Without arg-candidate and without union types
-#+begin_src sh
-DECODING=no-ac-no-dut
-EXTRA_OPTIONS='--extra-config config.common.extra.using_arg_candidate=False|config.common.extra.using_distinctive_union_types=False'
-#+end_src
-
-***** Without any constrained decoding
-#+begin_src sh
-DECODING=no-constrained-decoding
-EXTRA_OPTIONS='--extra-config config.common.extra.constrained_decoding=False'
+if [ "$DECODING" == 'full-constraints' ]; then
+    EXTRA_CONFIG='config.common.extra.none'
+elif [ "$DECODING" == 'no-arg-candidate' ]; then
+    EXTRA_CONFIG='config.common.extra.using_arg_candidate=False'
+elif [ "$DECODING" == 'no-ac-no-dut' ]; then
+    EXTRA_CONFIG='config.common.extra.using_arg_candidate=False|config.common.extra.using_distinctive_union_types=False'
+elif [ "$DECODING" == 'no-constrained-decoding' ]; then
+    EXTRA_CONFIG='config.common.extra.constrained_decoding=False'
+else
+    echo 'Unknown decoding method'
+    exit 1
+fi
 #+end_src
 
 **** Training with question-answer pairs on 4 GPUs
@@ -142,7 +135,7 @@ accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG \
            --model-learning-dir $WS_MODEL_LEARNING_DIR_PATH \
            --pretrained-model-path $PRETRAINED_MODEL_PATH \
            --resuming false \
-           $EXTRA_OPTIONS
+           --extra-config $EXTRA_CONFIG
 #+end_src
 
 ** Testing

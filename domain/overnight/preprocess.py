@@ -224,6 +224,7 @@ def augment_dataset_with_strict_grammar(domain, augmented_dataset, grammar):
         yield new_example
 
 
+@config
 def preprocess_for_augmented_strict_dataset(
         *,
         augmented_dataset_dir_path,

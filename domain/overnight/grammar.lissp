@@ -33,14 +33,14 @@
      (:object
       entity
       number
-      (:num-component                   ; conceptual
-       quantity
-       unit)
-      date
-      (:date-component
-       year
-       month
-       day)))
+      date))
+    (:num-component                     ; conceptual
+     quantity
+     unit)
+    (:date-component                    ; conceptual
+     year
+     month
+     day)
     (:operator                          ; conceptual
      op-comparison
      op-superative
@@ -62,11 +62,17 @@
     part-day
 ))
 
-;;; TODO: modify types
 (define-types
   '(:result
     object-list
     size
+    ))
+
+(declare-conceptual-types
+  '(type
+    num-component
+    date-component
+    operator
     ))
 
 

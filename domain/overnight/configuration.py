@@ -85,8 +85,10 @@ def _load_train_set(portion_percent=100, num_examples=None, weaksup_search=False
         if weaksup_search:
             _augment_dataset_with_answers(train_set, domain)
             for example in train_set:
-                for key in ['logical_form', 'action_ids']:
-                    del example[key]
+                del example['logical_form']
+                for key in ['action_ids', 'action_id_tree']:
+                    if key in example:
+                        del example[key]
 
         if portion_percent is None:
             assert num_examples is not None
