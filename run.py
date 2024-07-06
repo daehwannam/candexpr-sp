@@ -715,8 +715,8 @@ def run_search_train(
         search_status = filemng.load_status(os.path.join(search_dir_path, 'last'), default=get_init_search_status())
         optim_status = filemng.load_status(os.path.join(optim_dir_path, 'last'), default=get_init_optim_status())
 
-        assert search_status['last_update_num'] == search_status['best_update_num']
-        assert optim_status['last_update_num'] == optim_status['best_update_num']
+        # assert search_status['last_update_num'] == search_status['best_update_num']  # early stopping condition
+        # assert optim_status['last_update_num'] == optim_status['best_update_num']  # early stopping condition
 
         assert search_status['last_update_num'] - 1 <= optim_status['last_update_num'] <= search_status['last_update_num']
         optim_first = optim_status['last_update_num'] + 1 == search_status['last_update_num']

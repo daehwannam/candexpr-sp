@@ -97,18 +97,20 @@ class OvernightResultCollector(ResultCollector):
                 # and `dict.get` should be used for `self.num_domain_correct_dict` and `self.num_domain_examples_dict`
                 # where the default value of `dict.get` should be 0.
                 # ============================================================================================================
-                overall_num_domain_correct = sum(gather_object([self.num_domain_correct_dict.get(domain, 0)]))
+
                 overall_num_domain_examples = sum(gather_object([self.num_domain_examples_dict.get(domain, 0)]))
+                if overall_num_domain_examples > 0:
+                    overall_num_domain_correct = sum(gather_object([self.num_domain_correct_dict.get(domain, 0)]))
 
-                overall_domain_accuracy = overall_num_domain_correct / overall_num_domain_examples
-                overall_domain_accuracy_fraction = Fraction(overall_num_domain_correct, overall_num_domain_examples)
+                    overall_domain_accuracy = overall_num_domain_correct / overall_num_domain_examples
+                    overall_domain_accuracy_fraction = Fraction(overall_num_domain_correct, overall_num_domain_examples)
 
-                domain_measure_kv_list_dict.setdefault(domain, []).append(
-                    [accuracy_measure_name, overall_domain_accuracy])
-                domain_measure_kv_list_dict.setdefault(domain, []).append(
-                    [f'{accuracy_measure_name}_fraction', overall_domain_accuracy_fraction])
-                domain_measure_kv_list_dict.setdefault(domain, []).append(['num_correct', overall_num_correct])
-                domain_measure_kv_list_dict.setdefault(domain, []).append(['num_examples', overall_num_answers])
+                    domain_measure_kv_list_dict.setdefault(domain, []).append(
+                        [accuracy_measure_name, overall_domain_accuracy])
+                    domain_measure_kv_list_dict.setdefault(domain, []).append(
+                        [f'{accuracy_measure_name}_fraction', overall_domain_accuracy_fraction])
+                    domain_measure_kv_list_dict.setdefault(domain, []).append(['num_correct', overall_num_correct])
+                    domain_measure_kv_list_dict.setdefault(domain, []).append(['num_examples', overall_num_answers])
 
         assert len(measure_names) == measure_cnt
 
