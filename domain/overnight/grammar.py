@@ -156,7 +156,7 @@ class OvernightGrammar(Seq2SeqGrammar):
 
         @register('(visual-expr-fn number)')
         def get_visual_expr_of_number(quantity_expr, unit_expr):
-            return '{}-{}'.format(quantity_expr, unit_expr)
+            return '{}~{}'.format(quantity_expr, unit_expr)
 
         @register('(default-expr-fn date)')
         def get_default_expr_of_date(year_expr, month_expr, day_expr=None):

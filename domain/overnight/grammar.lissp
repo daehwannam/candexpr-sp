@@ -73,6 +73,7 @@
     num-component
     date-component
     operator
+    part
     ))
 
 
