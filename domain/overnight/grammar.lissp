@@ -18,7 +18,6 @@
 ;;; The types that have "conceptual" as comments are not used for `act-type' or `param-types'.
 ;;; The conceptual types are only used for categorizing types.
 
-;;; TODO: modify types
 (define-types
   '(:type                               ; conceptual
     ent-type
@@ -49,7 +48,7 @@
     size))
 
 (define-types
-  '(:part
+  '(:part                               ; conceptual
     part-ent-type
     part-relation-entity
     part-relation-bool
@@ -110,7 +109,6 @@
   :act-type 'entity-list
   :param-types '(relation)
   :expr-dict (mapkv :default $( call SW.domain {0}  )
-                    ;; :default $( call SW.domain ( string {0} ) )
                     :visual $(get-domain {0})))
 
 (define-action
@@ -125,7 +123,6 @@
   :act-type 'object-list
   :param-types '(relation object-*)
   :expr-dict (mapkv :default $( call SW.getProperty {1} {0} )
-                    ;; :default $( call SW.getProperty {1} ( string {0} ) )
                     :visual $(get-property {1} {0})))
 
 ;; (define-action
@@ -296,63 +293,58 @@
 
 
 
-;;; Transfering
+;;; Lambda DCS syntax
+;;;
+;;; Functions of the form of (call SW.{name} ...)
+;;;
+;;; - listValue(Object obj)
+;;; - singleton(Value value)
+;;; - domain(String relation)
+;;; - reverse(String relation)
+;;; - concat(Value v1, Value v2)
+;;; - concat(List<Value> l1, List<Value> l2)
+;;; - ensureNumericProperty(String relation)
+;;; - ensureNumericEntity(Value value)
+;;; - ensureNumericEntity(List<Value> list)
+;;; - filter(List<Value> entities, String relation)
+;;; - filter(List<Value> entities, String relation, String compare, Value refValue)
+;;; - filter(List<Value> entities, String relation, String compare, List<Value> refValues)
+;;; - superlative(List<Value> entities, String mode, String relation)
+;;; - countSuperlative(List<Value> entities, String mode, String relation)
+;;; - countSuperlative(List<Value> entities, String mode, String relation, List<Value> restrictors)
+;;; - countComparative(List<Value> entities, String relation, String mode, NumberValue thresholdValue)
+;;; - countComparative(List<Value> entities, String relation, String mode, NumberValue thresholdValue, List<Value> restrictors)
+;;; - aggregate(String mode, List<Value> values)
+;;; - getProperty(Value inObject, String relation)
+;;; - getProperty(List<Value> inObjects, String relation)
+;;;
+;;; Note about functions
 ;;;
 ;;; - singleton
 ;;;   - singleton is always used with SW.getProperty and ( string ! type ).
-;;;      e.g. ( call SW.getProperty en.player ( string ! type ) )
+;;;     e.g. ( call SW.getProperty en.player ( string ! type ) )
 ;;;   - The combination is used to get all object of a relation.
-;;;   - output: get-all-objects
+;;;   - action: get-all-objects
 ;;; - domain
-;;;   - output: get-all-subjects
+;;;   - action: get-all-subjects
 ;;; - SW.getProperty
-;;;   - output: get-objects, get-subjects
+;;;   - action: get-objects, get-subjects
 ;;; - ensureNumericEntity and ensureNumericProperty
 ;;;   - they are unnecessary
-
-
-;;; Functions of the form of (call SW.{name} ...)
 ;;;
-;;; listValue(Object obj)
-;;; singleton(Value value)
-;;; domain(String relation)
-;;; reverse(String relation)
-;;; concat(Value v1, Value v2)
-;;; concat(List<Value> l1, List<Value> l2)
-;;; ensureNumericProperty(String relation)
-;;; ensureNumericEntity(Value value)
-;;; ensureNumericEntity(List<Value> list)
-;;; filter(List<Value> entities, String relation)
-;;; filter(List<Value> entities, String relation, String compare, Value refValue)
-;;; filter(List<Value> entities, String relation, String compare, List<Value> refValues)
-;;; superlative(List<Value> entities, String mode, String relation)
-;;; countSuperlative(List<Value> entities, String mode, String relation)
-;;; countSuperlative(List<Value> entities, String mode, String relation, List<Value> restrictors)
-;;; countComparative(List<Value> entities, String relation, String mode, NumberValue thresholdValue)
-;;; countComparative(List<Value> entities, String relation, String mode, NumberValue thresholdValue, List<Value> restrictors)
-;;; aggregate(String mode, List<Value> values)
-;;; getProperty(Value inObject, String relation)
-;;; getProperty(List<Value> inObjects, String relation)
-
 ;;; Constant
 ;;;
-;;; (string content)
-;;; (number quantity &optional unit) ;; e.g. ( number 2 ), ( number 3 en.inch )
-;;; (date year month day) --> date, year
-;;; (time hour minute) --> hour --> number with a.m. p.m.
-;;; default-year = 2015
+;;; - (string content)
+;;; - (number quantity &optional unit)
+;;;   - e.g. ( number 2 ), ( number 3 en.inch )
+;;; - (date year month day)
+;;;   - default-year = 2015
+;;; - (time hour minute)
+;;;   - minute is always 0, so we consider time is a hour, which is a number with a.m. or p.m. as an unit
 ;;;
-;;; relation
-
 ;;; Special forms
 ;;;
-;;; ((lambda s ...) {arg})
-;;; (var s)
-;;; (call .size ...)
-
-
-
-;;; TODO
-;;; - count arguments of some functions
-;;;   - filter, countSuperlative, countComparative,
-;;; - names of units for "number"
+;;; - ((lambda s ...) {arg})
+;;; - (var s)
+;;; - (call .size ...)
+;;;
