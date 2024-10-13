@@ -1,15 +1,18 @@
 
-* Base directory
-All commands should be run in the project root.
+** Repository
+*** Base directory
+All commands should be run in the repository root.
 
 #+begin_src sh
-if [ ! -d '.git' ] || [ ! -d '.submodules' ] || [ ! -d 'domain' ]; then
-    echo 'The current directory is NOT the project root.'
+if [ -d '.git' ] && [ -d '.submodules' ]; then
+    echo 'The current directory is the repository root.'
+else
+    echo 'The current directory is NOT the repository root.'
 fi
 #+end_src
 
-* Setup
-** Dataset and executtion environment
+** Setup
+*** Dataset and execution environment
 #+begin_src sh
 DOWNLOAD_PATH=../download
 DATA_PATH=../data
@@ -37,18 +40,18 @@ The setup code is borrowed from:
 - [[https://github.com/rhythmcao/semantic-parsing-dual][pull_dependency.sh]]
 - [[https://github.com/Flitternie/GraphQ_IR][pull_dependency_overnight.sh]]
 
-** Code reference
-#+begin_src sh
-git clone https://github.com/percyliang/sempre.git
-#+end_src
-
-** Java installation (optional)
+*** Java installation (optional)
 #+begin_src sh
 conda install -c conda-forge openjdk
 #+end_src
 
-* Running
-** Preprocessing
+*** Code reference (optional)
+#+begin_src sh
+git clone https://github.com/percyliang/sempre.git
+#+end_src
+
+** Running
+*** Preprocessing
 #+begin_src sh
 set -e
 python -m domain.overnight.preprocess --goal augmented_train_set
@@ -64,27 +67,27 @@ python -m domain.overnight.preprocess --goal encoded_strict_test_set
 python -m domain.overnight.preprocess --goal shuffled_encoded_strict_train_set
 #+end_src
 
-** Specifying a domain
+*** Specifying a domain
 #+begin_src sh
 DOMAIN=overnight
 #+end_src
 
-** Training with logical forms
-*** Training on a single sub-domain for multiple decoding strategies
+*** Training with logical forms
+**** Training on a single sub-domain for multiple decoding strategies
 #+begin_src sh
 SINGLE_DOMAIN='calendar'
 # valid sub-domains: 'calendar', 'blocks', 'housing', 'restaurants', 'publications', 'recipes', 'socialnetwork', 'basketball'
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --single-domain $SINGLE_DOMAIN
 #+end_src
 
-*** Training on all sub-domains except one sub-domain for multiple decoding strategies
+**** Training on all sub-domains except one sub-domain for multiple decoding strategies
 #+begin_src sh
 UNUSED_DOMAIN='calendar'
 # valid sub-domains: 'calendar', 'blocks', 'housing', 'restaurants', 'publications', 'recipes', 'socialnetwork', 'basketball'
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --unused-domain $UNUSED_DOMAIN
 #+end_src
 
-*** Training with a few examples
+**** Training with a few examples
 #+begin_src sh
 SINGLE_DOMAIN='calendar'
 # valid sub-domains: 'calendar', 'blocks', 'housing', 'restaurants', 'publications', 'recipes', 'socialnetwork', 'basketball'
@@ -92,8 +95,8 @@ NUM_TRAIN_EXAMPLES=200
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --single-domain $SINGLE_DOMAIN --extra-config config.${DOMAIN}.extra.train_set_size --num-train-examples $NUM_TRAIN_EXAMPLES
 #+end_src
 
-** Testing
-*** Testing on a single sub-domain
+*** Testing
+**** Testing on a single sub-domain
 #+begin_src sh
 TEST_CONFIG="config.${DOMAIN}.test_on_test_set"  # or "config.${DOMAIN}.test_on_val_set"
 SINGLE_DOMAIN='calendar'
@@ -105,7 +108,7 @@ TEST_DIR_PATH="model-test/${DOMAIN}/result"
 python -m run --domain ${DOMAIN} --config $TEST_CONFIG --single-domain $SINGLE_DOMAIN --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
 #+end_src
 
-*** Testing on a single sub-domain with a specific decoding strategy
+**** Testing on a single sub-domain with a specific decoding strategy
 #+begin_src sh
 TEST_CONFIG="config.${DOMAIN}.test_on_test_set"  # or "config.${DOMAIN}.test_on_val_set"
 SINGLE_DOMAIN='calendar'
@@ -136,6 +139,6 @@ EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
 
-* Note
+** Note
 - If candidate expressions or constrained decoding is disabled, error messages can be printed when executing predicated logical forms.
   The error messages can be neglected as they don't stop training or testing.

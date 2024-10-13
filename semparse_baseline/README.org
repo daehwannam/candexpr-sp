@@ -1,14 +1,16 @@
 
-* Project
-Initialize the project by:
+* Repository
+Initialize the repository by:
 #+begin_src sh
 git submodule update --init --recursive
 #+end_src
 
 * Base directory
 #+begin_src sh
-if [ ! -d '.git' ]; then
-    echo 'The current directory is NOT the project root.'
+if [ -d '.git' ] && [ -d '.submodules' ]; then
+    echo 'The current directory is the repository root.'
+else
+    echo 'The current directory is NOT the repository root.'
 fi
 #+end_src
 
@@ -111,5 +113,5 @@ python -m $MODULE.predict --input_dir $PROCESSED_PATH --save_dir $PREDICT_LOG_PA
        --batch_size $BATCH_SIZE --num_beams $BEAM_SIZE --verbose
 #+end_src
 
-* Acknowledgements
-We thank to the authors of [[https://github.com/shijx12/][KQA Pro]] dataset. Our code also exploits the [[https://github.com/shijx12/KQAPro_Baselines][BART seq2seq program parser]] they released.
+* Reference
+This code is modified version of the [[https://github.com/shijx12/KQAPro_Baselines][BART seq2seq program parser]] for [[https://github.com/shijx12/][KQA Pro]] dataset.

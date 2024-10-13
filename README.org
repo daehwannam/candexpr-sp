@@ -1,21 +1,38 @@
 
-* Project
-Initialize the project by:
+* Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering
+
+This repository is the implementation of the paper [[https://arxiv.org/abs/2410.00414][Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering]].
+
+If this repository is helpful, please cite the paper as follows:
+#+begin_src bibtex
+@article{nam2024candexpr,
+  title={Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering},
+  author={Daehwan Nam and Gary Geunbae Lee},
+  journal={arXiv preprint arXiv:2410.00414}
+  year={2024},
+}
+#+end_src
+
+** Repository
+*** Initialization
+Initialize the repository by:
 #+begin_src sh
 git submodule update --init --recursive
 #+end_src
 
-* Base directory
-All commands should be run in the project root.
+*** Base directory
+All commands should be run in the repository root.
 
 #+begin_src sh
-if [ ! -d '.git' ] || [ ! -d '.submodules' ]; then
-    echo 'The current directory is NOT the project root.'
+if [ -d '.git' ] && [ -d '.submodules' ]; then
+    echo 'The current directory is the repository root.'
+else
+    echo 'The current directory is NOT the repository root.'
 fi
 #+end_src
 
-* Setup
-** Environment
+** Setup
+*** Environment
 #+begin_src sh
 ENV_NAME=candexpr
 conda create -y -n $ENV_NAME python=3.10.9
@@ -26,24 +43,24 @@ pip install torch==1.12.0+cu116 torchvision==0.13.0+cu116 torchaudio==0.12.0 --e
 pip install -r requirements.txt
 #+end_src
 
-** Domain specific setup
+*** Domain specific setup
 - [[file:domain/kqapro/README.org::*Setup][domain/kqapro/README.org::*Setup]]
 - [[file:domain/overnight/README.org::*Setup][domain/overnight/README.org::*Setup]]
 
-* Running
-** Preprocessing
+** Running
+*** Preprocessing
 - [[file:domain/kqapro/README.org::*Preprocessing][domain/kqapro/README.org::*Preprocessing]]
 - [[file:domain/overnight/README.org::*Preprocessing][domain/overnight/README.org::*Preprocessing]]
 
-** Specifying a domain
+*** Specifying a domain
 Set the ~DOMAIN~ variable with ~kqapro~ or ~overnight~.
 #+begin_src sh
 DOMAIN=kqapro
 # DOMAIN=overnight
 #+end_src
 
-** Training with logical forms
-*** Training with the default options
+*** Training with logical forms
+**** Training with the default options
 #+begin_src sh
 MODEL_LEARNING_DIR_PATH=./model-instance/${DOMAIN}/learning
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --model-learning-dir $MODEL_LEARNING_DIR_PATH
@@ -51,48 +68,50 @@ python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_default --model
 
 If ~--model-learning-dir~ option is not specified, a directory is automatically created in =./model-instance/${DOMAIN}=.
 
-*** Training for multiple decoding strategies
+**** Training for multiple decoding strategies
 #+begin_src sh
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies
 #+end_src
 
-*** Training for multiple decoding strategies with a portion of the train set
+**** Training for multiple decoding strategies with a portion of the train set
 #+begin_src sh
 PERCENT=3  # between 0 to 100
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.${DOMAIN}.extra.train_set_portion --train-set-percent $PERCENT
 #+end_src
 
-*** Training for multiple decoding strategies with batch_size=32
+**** Training for multiple decoding strategies with batch_size=32
 #+begin_src sh
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.common.extra.batch.size=32
 #+end_src
 
-*** Training for multiple decoding strategies with bart-large
+**** Training for multiple decoding strategies with bart-large
 #+begin_src sh
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.common.extra.bart_large
 #+end_src
 
-*** Training for multiple decoding strategies with inferencing_subtypes=False
+**** Training for multiple decoding strategies with inferencing_subtypes=False
 #+begin_src sh
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.${DOMAIN}.extra.inferencing_subtypes=False
 #+end_src
 
-** Training with denotations
-*** Learning from strong supervision with a small subset of dataset
-**** Configuration
+To evaluate the trained model, 
+
+*** Training with denotations
+**** Learning from strong supervision with a small subset of dataset
+***** Configuration
 #+begin_src sh
 SS_MODEL_LEARNING_DIR_PATH=./model-instance/${DOMAIN}/strongly-supervised-models
 #+end_src
 
-**** Training with a small subset of the trainin set
+***** Training with a small subset of the trainin set
 #+begin_src sh
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies \
        --model-learning-dir $SS_MODEL_LEARNING_DIR_PATH \
        --extra-config config.${DOMAIN}.extra.weaksup_pretraining
 #+end_src
 
-*** Learning from weak supervision
-**** Configuration for Multiple GPUs
+**** Learning from weak supervision
+***** Configuration for Multiple GPUs
 #+begin_src sh
 # 4 GPUs
 export CUDA_VISIBLE_DEVICES=$(seq -s , 0 3)  # 0,1,2,3
@@ -100,7 +119,7 @@ NUM_GPUS=$(($(echo $CUDA_VISIBLE_DEVICES | tr -cd , | wc -c) + 1))  # 4
 ACCELERATE_CONFIG="accelerate/${NUM_GPUS}gpus.yaml"
 #+end_src
 
-**** Configuration for a decoding method
+***** Configuration for a decoding method
 #+begin_src sh
 DECODING='full-constraints'  # one of full-constraints, no-arg-candidate, no-ac-no-dut, no-constrained-decoding
 
@@ -118,7 +137,7 @@ else
 fi
 #+end_src
 
-**** Training with question-answer pairs on 4 GPUs
+***** Training with question-answer pairs on multiple GPUs
 #+begin_src sh
 export NCCL_P2P_LEVEL=NVL
 
@@ -138,8 +157,8 @@ accelerate launch --num_processes $NUM_GPUS --config_file $ACCELERATE_CONFIG \
            --extra-config $EXTRA_CONFIG
 #+end_src
 
-** Testing
-*** Testing with specifying a model path and test directory path
+*** Testing
+**** Testing with specifying a model path and test directory path
 #+begin_src sh
 TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
 MODEL_PATH='path/to/model'
@@ -149,7 +168,7 @@ TEST_DIR_PATH="model-test/${DOMAIN}/result"
 python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH
 #+end_src
 
-*** Testing with a specific decoding strategy
+**** Testing with a specific decoding strategy
 #+begin_src sh
 TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
 MODEL_PATH='path/to/model'
@@ -178,7 +197,7 @@ EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
 
-*** Testing with disabling arg-candidate for an action
+**** Testing with disabling arg-candidate for an action
 #+begin_src sh
 TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
 MODEL_PATH='path/to/model'
@@ -193,7 +212,7 @@ Example of ~MODEL_PATH~
 - =./model-instance-keep/${DOMAIN}/multiple-decoding-strategies/full-constraints:best/model/=
 - =./model-instance/${DOMAIN}/weakly-supervised-models/full-constraints/optim/best/best/model=
 
-*** Testing with oracle on the validation set
+**** Testing with oracle on the validation set
 #+begin_src sh
 TEST_CONFIG="config.${DOMAIN}.oracle_test_on_val_set"
 MODEL_PATH='path/to/model'
@@ -222,18 +241,37 @@ EXTRA_CONFIG="${BEAM_CONFIG}|config.common.extra.constrained_decoding=False"
 $COMMON_TEST_CMD --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
 
-** Miscellaneous
-*** Testing without decoding speed optimization
+**** Testing with inferencing_subtypes=False
+#+begin_src sh
+TEST_CONFIG="config.${DOMAIN}.test_on_val_set"  # or "config.${DOMAIN}.test_on_test_set"
+MODEL_PATH='path/to/model'
+TEST_DIR_PATH="model-test/${DOMAIN}/result"
+# e.g. TEST_DIR_PATH="./model-test/${DOMAIN}/2023-07-19_01:17:04_094104_full-constraints:best/model"
+
+python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH --extra-config config.${DOMAIN}.extra.inferencing_subtypes=False
+#+end_src
+
+**** Testing without mask caching
 #+begin_src sh
 TEST_CONFIG="config.${DOMAIN}.test_on_val_set"
 MODEL_PATH='path/to/model'
 TEST_DIR_PATH="model-test/${DOMAIN}/result"
 # e.g. TEST_DIR_PATH="./model-test/${DOMAIN}/2023-07-19_01:17:04_094104_full-constraints:best/model"
 
-if [ "${DOMAIN}" -eq 'overnight']
-then do
-    EXTRA_OPTIONS="--extra-config config.${DOMAIN}.extra.val_5_repeats"
+EXTRA_CONFIG='config.common.extra.no_decoding_speed_optimization'  # disable mask caching
+
+if [ "${DOMAIN}" == 'overnight' ]; then
+    EXTRA_CONFIG="${EXTRA_CONFIG}|config.${DOMAIN}.extra.val_5_repeats"
 fi
 
-python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH $EXTRA_OPTIONS
+python -m run --domain ${DOMAIN} --config $TEST_CONFIG --model-path $MODEL_PATH --test-dir $TEST_DIR_PATH --extra-config $EXTRA_CONFIG
 #+end_src
+
+** Related Work
+The following papers with open source code are helpful for us to implment our method:
+
+- [[https://github.com/shijx12/KQAPro_Baselines][KQA Pro: A Dataset with Explicit Compositional Programs for Complex Question Answering over Knowledge Base]]
+- [[https://github.com/Flitternie/GraphQ_IR][GraphQ IR: Unifying the Semantic Parsing of Graph Query Languages with One Intermediate Representation]]
+- [[https://github.com/Flitternie/Semantic_Anchor][Unveiling the Black Box of PLMs with Semantic Anchors: Towards Interpretable Neural Semantic Parsing]]
+- [[https://github.com/rhythmcao/semantic-parsing-dual][Semantic Parsing with Dual Learning]]
+- [[https://github.com/percyliang/sempre][Building a Semantic Parser Overnight]]

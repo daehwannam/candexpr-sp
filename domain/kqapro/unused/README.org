@@ -30,4 +30,6 @@ python -m domain.kqapro.unused.preprocess --goal encoded_nao_train_set
 python -m domain.kqapro.unused.preprocess --goal encoded_nao_val_set
 python -m domain.kqapro.unused.preprocess --goal shuffled_augmented_nao_train_set
 python -m domain.kqapro.unused.preprocess --goal shuffled_encoded_nao_train_set
+
+python -m domain.kqapro.preprocess --goal encoded_resplit_datasets
 #+end_src

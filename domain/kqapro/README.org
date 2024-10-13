@@ -1,15 +1,18 @@
 
-* Base directory
-All commands should be run in the project root.
+** Repository
+*** Base directory
+All commands should be run in the repository root.
 
 #+begin_src sh
-if [ ! -d '.git' ] || [ ! -d '.submodules' ] || [ ! -d 'domain' ]; then
-    echo 'The current directory is NOT the project root.'
+if [ -d '.git' ] && [ -d '.submodules' ]; then
+    echo 'The current directory is the repository root.'
+else
+    echo 'The current directory is NOT the repository root.'
 fi
 #+end_src
 
-* Setup
-** Dataset
+** Setup
+*** Dataset
 #+begin_src sh
 DOWNLOAD_PATH=../download
 DATA_PATH=../data
@@ -21,8 +24,8 @@ mkdir -p ./dataset
 ln -s $(realpath $DATA_PATH/KQAPro.IID) ./dataset/kqapro
 #+end_src
 
-* Running
-** Preprocessing
+** Running
+*** Preprocessing
 #+begin_src sh
 set -e
 python -m domain.kqapro.preprocess --goal augmented_train_set
@@ -40,28 +43,27 @@ python -m domain.kqapro.preprocess --goal shuffled_augmented_strict_train_set
 python -m domain.kqapro.preprocess --goal shuffled_encoded_strict_train_set
 python -m domain.kqapro.preprocess --goal encoded_weaksup_pretraining_set
 python -m domain.kqapro.preprocess --goal encoded_weaksup_search_set
-python -m domain.kqapro.preprocess --goal encoded_resplit_datasets
 #+end_src
 
-** Specifying a domain
+*** Specifying a domain
 #+begin_src sh
 DOMAIN=kqapro
 #+end_src
 
-** Training with logical forms
-*** Training for multiple decoding strategies with a portion of the train set where inferencing_subtypes=False
+*** Training with logical forms
+**** Training for multiple decoding strategies with a portion of the train set where inferencing_subtypes=False
 #+begin_src sh
 PERCENT=3  # between 0 to 100
 python -m run --domain ${DOMAIN} --config config.${DOMAIN}.train_for_multiple_decoding_strategies --extra-config config.${DOMAIN}.extra.train_set_portion_no_inferencing_subtypes --train-set-percent $PERCENT
 #+end_src
 
-** Testing
+*** Testing
 [[file:../../README.org::*Testing][../../README.org::*Testing]]
 
 - Testing on the validation set make a prediction file and an evaluation result.
 - Testing on the test set makes a prediction file without evaluation.
 
-** Evaluation with the official code
+*** Evaluation with the official code
 The evaluation code is slightly modified from [[https://github.com/shijx12/KQAPro_Baselines/blob/7cea2738fd095a2c17594d492923ee80a212ac0f/evaluate.py][KQAPro_Baselines/evaluate.py]].
 The evaluation code requires a prediction file, which is the output from testing.
 
@@ -72,7 +74,7 @@ PREDICTION_FILE_PATH='path/to/predictions.txt'
 python -m kqapro.evaluate --train $TRAIN_DATA_SET_PATH --test $TEST_DATA_SET_PATH --pred $PREDICTION_FILE_PATH
 #+end_src
 
-*** Example: evaluation on the validation set with the official code
+**** Example: evaluation on the validation set with the official code
 #+begin_src sh
 TRAIN_DATA_SET_PATH="./dataset/${DOMAIN}/train.json"
 TEST_DATA_SET_PATH="./dataset/${DOMAIN}/val.json"
@@ -81,6 +83,3 @@ TEST_DIR_NAME='YOUR-TEST-DIRECTORY-NAME'
 PREDICTION_FILE_PATH="./model-test/${DOMAIN}/$TEST_DIR_NAME/predictions.txt"
 python -m kqapro.evaluate --train $TRAIN_DATA_SET_PATH --test $TEST_DATA_SET_PATH --pred $PREDICTION_FILE_PATH
 #+end_src
-
-* Acknowledgements
-We thank to the authors of [[https://github.com/shijx12/][KQA Pro]] dataset. Our code also exploits the [[https://github.com/shijx12/KQAPro_Baselines][BART seq2seq program parser]] they released.
