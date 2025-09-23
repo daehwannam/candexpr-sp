@@ -1,7 +1,7 @@
 
 * Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering
 
-This repository is the implementation of the paper "Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering" ([[https://arxiv.org/abs/2410.00414][arXiv]])
+This repository is the implementation of the paper "Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering" ([[https://arxiv.org/abs/2410.00414][arXiv]]).
 The grammars used in the paper are written in [[file:domain/kqapro/grammar.lissp][domain/kqapro/grammar.lissp]] and [[file:domain/overnight/grammar.lissp][domain/overnight/grammar.lissp]].
 
 If this repository is helpful, please cite the paper as follows:
