@@ -1,16 +1,20 @@
 
 * Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering
 
-This repository is the implementation of the paper "Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering" ([[https://arxiv.org/abs/2410.00414][arXiv]]).
+This repository is the implementation of the paper "Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering" ([[https://doi.org/10.1016/j.eswa.2025.130564][ESWA]], [[https://arxiv.org/abs/2410.00414][arXiv]]).
 The grammars used in the paper are written in [[file:domain/kqapro/grammar.lissp][domain/kqapro/grammar.lissp]] and [[file:domain/overnight/grammar.lissp][domain/overnight/grammar.lissp]].
 
 If this repository is helpful, please cite the paper as follows:
 #+begin_src bibtex
-@article{nam2024candexpr,
-  title={Semantic Parsing with Candidate Expressions for Knowledge Base Question Answering},
-  author={Daehwan Nam and Gary Geunbae Lee},
-  journal={arXiv preprint arXiv:2410.00414}
-  year={2024},
+@article{nam2025candexpr,
+  title = {Semantic parsing with candidate expressions for knowledge base question answering},
+  author = {Daehwan Nam and Gary Geunbae Lee},
+  journal = {Expert Systems with Applications},
+  volume = {306},
+  pages = {130564},
+  issn = {0957-4174},
+  year = {2026},
+  doi = {10.1016/j.eswa.2025.130564},
 }
 #+end_src
 
